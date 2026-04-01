@@ -1,0 +1,35 @@
+{
+  "v": "ACDC10JSON00039a_",
+  "d": "EPIRsje6P7Y2gzlRWz4oqGkrIzXPaVJIghyILx2SjtZc",
+  "i": "EI_FTeKDGPKVxNzQT4A7I2KZ3WsL2b-xXTiR2Hioy5e8",
+  "ri": "ECpRGfY0Kfvc-95DmKEyAxzDi6vQ5kizSO5xHWNEzMSK",
+  "s": "EFiYsVADHXcn1BZirDRH301Rm12301povihg5UMIYkfc",
+  "a": {
+    "d": "EH8BN4CyoOHG-sP2hLy45JR1G1-0nS12TERhSg8dSQDu",
+    "i": "EDiRogF6HnCw35tZ_lbGxGPQr527od6D_Uc6LNr6Xi_d",
+    "dt": "2026-04-01T01:20:35.323209+00:00",
+    "AID": "EI_FTeKDGPKVxNzQT4A7I2KZ3WsL2b-xXTiR2Hioy5e8",
+    "DID": "did:webs:127.0.0.1%3A59160:dws:EI_FTeKDGPKVxNzQT4A7I2KZ3WsL2b-xXTiR2Hioy5e8",
+    "HeadquartersAddress": "1 Market St, San Francisco, CA, US",
+    "LegalName": "Example Legal Entity LLC"
+  },
+  "e": {
+    "d": "EOrUdTDlRuy5DqshgBU60GNuWTvqihxYryULj9lP8XFE",
+    "le": {
+      "n": "EBugt3kU_mKtBxt3l75s5kkFE2i2ov3PzDnQpT3xYFjm",
+      "s": "ENPXp1vQzRF6JwIuS-mp2U8Uf1MoADoP_GqQ62VsDZWY"
+    }
+  },
+  "r": {
+    "d": "EAU19ld9joWluglfF24t9ZrS8Gjk4NlvB0_ct6Knz8qi",
+    "usageDisclaimer": {
+      "l": ""
+    },
+    "issuanceDisclaimer": {
+      "l": ""
+    },
+    "privacyDisclaimer": {
+      "l": ""
+    }
+  }
+}

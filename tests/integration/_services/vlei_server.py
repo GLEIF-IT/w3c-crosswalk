@@ -1,0 +1,39 @@
+"""Launch the crosswalk integration vLEI helper server."""
+
+from __future__ import annotations
+
+import argparse
+import signal
+
+from vlei.server import VLEIConfig, launch
+
+
+def parse_args() -> argparse.Namespace:
+    """Parse runtime asset directories and the HTTP port for the helper server."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--schema-dir", required=True)
+    parser.add_argument("--cred-dir", required=True)
+    parser.add_argument("--oobi-dir", required=True)
+    parser.add_argument("--http-port", required=True, type=int)
+    return parser.parse_args()
+
+
+def main() -> None:
+    """Launch the local vLEI helper server and exit cleanly on SIGTERM."""
+    args = parse_args()
+    config = VLEIConfig(
+        http=args.http_port,
+        schemaDir=args.schema_dir,
+        credDir=args.cred_dir,
+        oobiDir=args.oobi_dir,
+        logLevel="INFO",
+    )
+    signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
+    try:
+        launch(config)
+    except KeyboardInterrupt:
+        pass
+
+
+if __name__ == "__main__":
+    main()
