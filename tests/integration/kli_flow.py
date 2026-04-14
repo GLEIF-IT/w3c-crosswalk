@@ -621,36 +621,54 @@ def init_habery(live_stack: dict, actor: Actor) -> None:
     if _habery_exists(live_stack, actor):
         return
 
+    # Change KERI home dir to test temp dir.
     with patched_home(Path(live_stack["home"])):
         with _common_config(live_stack) as cf:
             hby = habbing.Habery(name=actor.name, base="", temp=False, cf=cf, salt=actor.salt, bran=actor.passcode)
             rgy = credentialing.Regery(hby=hby, name=actor.name, base="", temp=False)
+            obi = oobiing.Oobiery(hby=hby)
+            authn = oobiing.Authenticator(hby=hby)
+
+            # Read OOBIs present based on read in config.
+            configured_oobis = hby.db.oobis.cntAll()
+            well_knowns = [oobi for (oobi,), _ in hby.db.woobi.getItemIter()]
+
+            # Only run OOBI resolution if OOBIs are present, otherwise return early
+            if not configured_oobis and not well_knowns:
+                rgy.close()
+                hby.close(clear=hby.temp)
+                return
+
+            # How to know if well knowns have all been resolved
+            def _well_knowns_ready(hby, well_knowns: list[str]) -> bool:
+                if not well_knowns:
+                    return True
+                authenticated = {wk.url for (_,), wk in hby.db.wkas.getItemIter(keys=b"")}
+                return set(well_knowns).issubset(authenticated)
+
+            # Terminal state signal for the Doist recur loop below.
+            def ready() -> bool:
+                return hby.db.roobi.cntAll() >= configured_oobis and _well_knowns_ready(hby, well_knowns)
+
+            # debugging facts to be refreshed after each Doist recur cycle.
+            def observe() -> dict[str, object]:
+                return {
+                    "actor": actor.alias,
+                    "configured_oobis": configured_oobis,
+                    "resolved_oobis": hby.db.roobi.cntAll(),
+                    "well_knowns": len(well_knowns),
+                }
+
             try:
-                configured_oobis = hby.db.oobis.cntAll()
-                well_knowns = [oobi for (oobi,), _ in hby.db.woobi.getItemIter()]
-                if configured_oobis or well_knowns:
-                    obi = oobiing.Oobiery(hby=hby)
-                    authn = oobiing.Authenticator(hby=hby)
-                    run_doers_until(
-                        f"bootstrap configured oobis for {actor.alias}",
-                        [habbing.HaberyDoer(habery=hby), *obi.doers, *authn.doers],
-                        timeout=90.0,
-                        tock=WORKFLOW_TOCK,
-                        ready=lambda: (
-                            hby.db.roobi.cntAll() >= configured_oobis
-                            and (
-                                not well_knowns
-                                or set(well_knowns).issubset({wk.url for (_,), wk in hby.db.wkas.getItemIter(keys=b"")})
-                            )
-                        ),
-                        observe=lambda: {
-                            "actor": actor.alias,
-                            "configured_oobis": configured_oobis,
-                            "resolved_oobis": hby.db.roobi.cntAll(),
-                            "well_knowns": len(well_knowns),
-                        },
-                    )
-            finally:
+                run_doers_until(
+                    f"bootstrap configured oobis for {actor.alias}",
+                    [habbing.HaberyDoer(habery=hby), *obi.doers, *authn.doers],
+                    timeout=90.0,
+                    tock=WORKFLOW_TOCK,
+                    ready=ready,
+                    observe=observe,
+                )
+            finally:  # clean up LMDB resources used by Habery init
                 rgy.close()
                 hby.close(clear=hby.temp)
 

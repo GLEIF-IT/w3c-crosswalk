@@ -147,6 +147,35 @@ def run_doers_until(
     This is the core harness seam that lets the integration layer treat KERIpy
     ``Doer`` and ``DoDoer`` objects as deterministic workflow steps instead of
     shelling out to ``kli`` and scraping stdout.
+
+    Parameters:
+        step: Human-readable label for the workflow step. Included in timeout
+            errors so failures point at the domain action, not just a helper.
+        doers: The KERIpy ``Doer`` or ``DoDoer`` instances to enter and drive.
+            These are the objects that actually mutate protocol state while the
+            polling loop runs.
+        timeout: Maximum wall-clock time to drive the doers before raising a
+            ``TimeoutError``.
+        tock: Polling cadence passed to the underlying ``Doist``.
+        ready: Optional zero-argument predicate returning ``True`` once the
+            workflow step has reached its success condition. This callable
+            usually closes over mutable external state such as ``hby.db`` that
+            the doers update over time. When omitted, readiness defaults to all
+            supplied doers reporting ``done``.
+        observe: Optional zero-argument callable returning a diagnostic snapshot
+            of current state. Like ``ready``, this usually closes over mutable
+            external state that the doers are changing. ``observe`` does not
+            drive progress; it exists only so timeout errors can report what the
+            world looked like while the step was running.
+        cleanup: Optional callable receiving the original ``doers`` list after
+            ``doist.exit(...)``. Use this to close resources that the doers own
+            but do not release deterministically on their own, such as hidden
+            LMDB-backed notifier or registry handles.
+
+    Returns:
+        The last value returned by ``observe()`` when the step becomes ready.
+        When no custom observer is supplied, returns the default doer ``done``
+        snapshot.
     """
     doist = doing.Doist(limit=timeout, tock=tock, real=True)
     deeds = doist.enter(doers=doers)
