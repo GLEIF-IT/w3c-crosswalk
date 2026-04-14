@@ -25,6 +25,23 @@ from .status import JsonFileStatusStore
 from .verifier import CrosswalkVerifier
 
 
+def _emit_result(result: dict, *, output: str | None) -> int:
+    """Write one CLI result to disk or stdout and return success."""
+    if output:
+        write_json_file(output, result)
+        return 0
+    print(json.dumps(result, indent=2))
+    return 0
+
+
+def _load_token_argument(value: str) -> str:
+    """Load a token from a file path when present, otherwise treat it as inline."""
+    path = Path(value)
+    if path.exists():
+        return path.read_text(encoding="utf-8").strip()
+    return value
+
+
 def add_common_output_args(parser: argparse.ArgumentParser) -> None:
     """Add the shared optional output path argument used by write commands."""
     parser.add_argument("--output", help="Optional path to write the JSON or token result to")
@@ -71,11 +88,7 @@ def cmd_issue_vc(args: argparse.Namespace) -> int:
         if args.status_store:
             JsonFileStatusStore(args.status_store).project_acdc(acdc, args.issuer_did)
         result = {"token": token, "credential": vc, "kid": signer.kid, "publicKeyJwk": signer.public_jwk}
-        if args.output:
-            write_json_file(args.output, result)
-        else:
-            print(json.dumps(result, indent=2))
-        return 0
+        return _emit_result(result, output=args.output)
     finally:
         signer.close()
 
@@ -93,18 +106,14 @@ def cmd_issue_vp(args: argparse.Namespace) -> int:
             nonce=args.nonce,
         )
         result = {"token": token, "presentation": vp, "kid": signer.kid, "publicKeyJwk": signer.public_jwk}
-        if args.output:
-            write_json_file(args.output, result)
-        else:
-            print(json.dumps(result, indent=2))
-        return 0
+        return _emit_result(result, output=args.output)
     finally:
         signer.close()
 
 
 def cmd_verify_vc(args: argparse.Namespace) -> int:
     """Verify a VC-JWT from a file path or inline token value."""
-    token = Path(args.token).read_text(encoding="utf-8").strip() if Path(args.token).exists() else args.token
+    token = _load_token_argument(args.token)
     verifier = CrosswalkVerifier(resolver=DidWebsClient(args.resolver))
     result = verifier.verify_vc_jwt(token).to_dict()
     print(json.dumps(result, indent=2))
@@ -113,7 +122,7 @@ def cmd_verify_vc(args: argparse.Namespace) -> int:
 
 def cmd_verify_vp(args: argparse.Namespace) -> int:
     """Verify a VP-JWT from a file path or inline token value."""
-    token = Path(args.token).read_text(encoding="utf-8").strip() if Path(args.token).exists() else args.token
+    token = _load_token_argument(args.token)
     verifier = CrosswalkVerifier(resolver=DidWebsClient(args.resolver))
     result = verifier.verify_vp_jwt(token).to_dict()
     print(json.dumps(result, indent=2))
@@ -122,7 +131,7 @@ def cmd_verify_vp(args: argparse.Namespace) -> int:
 
 def cmd_verify_crosswalk(args: argparse.Namespace) -> int:
     """Verify a VC-JWT against its source ACDC document."""
-    token = Path(args.token).read_text(encoding="utf-8").strip() if Path(args.token).exists() else args.token
+    token = _load_token_argument(args.token)
     acdc = load_json_file(args.acdc)
     verifier = CrosswalkVerifier(resolver=DidWebsClient(args.resolver))
     result = verifier.verify_crosswalk_pair(acdc, token).to_dict()

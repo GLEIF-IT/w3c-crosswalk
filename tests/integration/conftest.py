@@ -154,6 +154,47 @@ def _wait_process_port(live_stack: dict, proc: subprocess.Popen[bytes], name: st
     wait_for_port(live_stack["host"], port, proc, name, log_path=log_path)
 
 
+def _didwebs_urls(live_stack: dict) -> dict[str, str]:
+    """Return the did:webs artifact and resolver URLs already assigned to the stack."""
+    return {
+        "artifact_url": live_stack["dws_artifact_url"],
+        "resolver_url": live_stack["dws_resolver_url"],
+    }
+
+
+def _open_process_log(live_stack: dict, filename: str):
+    """Open one process log file and register it for stack teardown."""
+    log_path = Path(live_stack["log_root"]) / filename
+    handle = log_path.open("wb")
+    live_stack["open_logs"].append(handle)
+    return log_path, handle
+
+
+def _spawn_process(
+    live_stack: dict,
+    *,
+    proc_name: str,
+    display_name: str,
+    argv: list[str],
+    cwd: Path,
+    env: dict[str, str],
+    log_path: Path,
+    log_handle,
+    port: int,
+) -> subprocess.Popen[bytes]:
+    """Launch one managed subprocess, register it, and wait for its port."""
+    proc = subprocess.Popen(
+        argv,
+        cwd=cwd,
+        env=env,
+        stdout=log_handle,
+        stderr=subprocess.STDOUT,
+    )
+    live_stack["runtime_procs"].append((proc_name, proc))
+    _wait_process_port(live_stack, proc, display_name, port, log_path)
+    return proc
+
+
 def _lazy_didwebs_launcher(live_stack: dict, *, name: str, alias: str, passcode: str) -> dict[str, str]:
     """Launch did:webs artifact and resolver services on first use.
 
@@ -162,102 +203,99 @@ def _lazy_didwebs_launcher(live_stack: dict, *, name: str, alias: str, passcode:
     not depend on did:webs until the final interoperability projection phase.
     """
     if live_stack.get("did_webs_running"):
-        return {
-            "artifact_url": live_stack["dws_artifact_url"],
-            "resolver_url": live_stack["dws_resolver_url"],
-        }
+        return _didwebs_urls(live_stack)
 
     script = _require_path(DWS_SERVICE_SCRIPT, "did-webs service wrapper")
     dws_bin = _require_path(DWS_BIN, "did-webs CLI")
     env = os.environ.copy()
     env["HOME"] = str(live_stack["home"])
+    cwd = W3C_CROSSWALK_ROOT
 
-    artifact_log_path = Path(live_stack["log_root"]) / "did-webs-artifact.log"
-    resolver_log_path = Path(live_stack["log_root"]) / "did-webs-resolver.log"
-    artifact_log = artifact_log_path.open("wb")
-    resolver_log = resolver_log_path.open("wb")
-    live_stack["open_logs"].extend([artifact_log, resolver_log])
+    artifact_log_path, artifact_log = _open_process_log(live_stack, "did-webs-artifact.log")
+    resolver_log_path, resolver_log = _open_process_log(live_stack, "did-webs-resolver.log")
 
-    artifact = _did_webs_static_process(live_stack, script, dws_bin, name, alias, passcode, W3C_CROSSWALK_ROOT, env, artifact_log)
-    live_stack["runtime_procs"].append(("did-webs-artifact", artifact))
-    _wait_process_port(live_stack, artifact, "did-webs-artifact", live_stack["topology"].dws_artifact_port, artifact_log_path)
+    artifact_argv = _did_webs_static_process(live_stack, script, dws_bin, name, alias, passcode)
+    _spawn_process(
+        live_stack,
+        proc_name="did-webs-artifact",
+        display_name="did-webs-artifact",
+        argv=artifact_argv,
+        cwd=cwd,
+        env=env,
+        log_path=artifact_log_path,
+        log_handle=artifact_log,
+        port=live_stack["topology"].dws_artifact_port,
+    )
 
-    resolver = _did_webs_resolver_process(live_stack, script, dws_bin, name, passcode, W3C_CROSSWALK_ROOT, env, artifact_log)
-    live_stack["runtime_procs"].append(("did-webs-resolver", resolver))
-    _wait_process_port(live_stack, resolver, "did-webs-resolver", live_stack["topology"].dws_resolver_port, resolver_log_path)
+    resolver_argv = _did_webs_resolver_process(live_stack, script, dws_bin, name, passcode)
+    _spawn_process(
+        live_stack,
+        proc_name="did-webs-resolver",
+        display_name="did-webs-resolver",
+        argv=resolver_argv,
+        cwd=cwd,
+        env=env,
+        log_path=resolver_log_path,
+        log_handle=resolver_log,
+        port=live_stack["topology"].dws_resolver_port,
+    )
+
     live_stack["did_webs_running"] = True
-    return {"artifact_url": live_stack["dws_artifact_url"], "resolver_url": live_stack["dws_resolver_url"]}
+    return _didwebs_urls(live_stack)
 
 
 def _did_webs_static_process(
-        live_stack, didwebs_runner_script, dws_bin_path, name, alias, passcode, cwd, env, stdout_log
+        live_stack, didwebs_runner_script, dws_bin_path, name, alias, passcode
 ):
-    """
-    Runs a did:webs static artifact server for did.json and keri.cesr by running the did_webs_resolver.py
-    helper script in "artifact" mode. Also sets the current working directory of the process, environment
-    for KERI Home override, and the standard out log.
-    """
-    return subprocess.Popen(
-        [
-            str(PYTHON_BIN),
-            "-u",
-            didwebs_runner_script,
-            "--mode",
-            "artifact",
-            "--dws-bin",
-            dws_bin_path,
-            "--name",
-            name,
-            "--alias",
-            alias,
-            "--passcode",
-            passcode,
-            "--http-port",
-            str(live_stack["topology"].dws_artifact_port),
-            "--did-path",
-            "dws",
-        ],
-        cwd=cwd,
-        env=env,
-        stdout=stdout_log,
-        stderr=subprocess.STDOUT,
-    )
+    """Return argv for the did:webs artifact helper process."""
+    return [
+        str(PYTHON_BIN),
+        "-u",
+        didwebs_runner_script,
+        "--mode",
+        "artifact",
+        "--dws-bin",
+        dws_bin_path,
+        "--name",
+        name,
+        "--alias",
+        alias,
+        "--passcode",
+        passcode,
+        "--http-port",
+        str(live_stack["topology"].dws_artifact_port),
+        "--did-path",
+        "dws",
+    ]
 
 
 def _did_webs_resolver_process(
-        live_stack, didwebs_runner_script, dws_bin_path, name, passcode, cwd, env, stdout_log
+        live_stack, didwebs_runner_script, dws_bin_path, name, passcode
 ):
-    """
-    Runs a did:webs resolver process with the did:webs helper script, overridden KERI home,
-    working directory, and standard out log.
-    """
-    return subprocess.Popen(
-        [
-            str(PYTHON_BIN),
-            "-u",
-            didwebs_runner_script,
-            "--mode",
-            "resolver",
-            "--dws-bin",
-            dws_bin_path,
-            "--name",
-            name,
-            "--passcode",
-            passcode,
-            "--http-port",
-            str(live_stack["topology"].dws_resolver_port),
-            "--did-path",
-            "dws",
-        ],
-        cwd=cwd,
-        env=env,
-        stdout=stdout_log,
-        stderr=subprocess.STDOUT,
-    )
+    """Return argv for the did:webs resolver helper process."""
+    return [
+        str(PYTHON_BIN),
+        "-u",
+        didwebs_runner_script,
+        "--mode",
+        "resolver",
+        "--dws-bin",
+        dws_bin_path,
+        "--name",
+        name,
+        "--passcode",
+        passcode,
+        "--http-port",
+        str(live_stack["topology"].dws_resolver_port),
+        "--did-path",
+        "dws",
+    ]
 
 @contextmanager
 def _launch_live_stack(live_stack: dict, *, shared_assets: dict[str, Path]):
-    """Launch the subprocess-managed services that make up the live stack including log files
+    """
+    Context manager for live, testrun specific processes and config bootstrapping.
+    Launch the subprocess-managed services that make up the live stack including log files
 
     Uses subprocess.Popen to run:
     - A witness process with three witnesses:
@@ -279,6 +317,7 @@ def _launch_live_stack(live_stack: dict, *, shared_assets: dict[str, Path]):
     """
     witness_python = _require_path(PYTHON_BIN, "crosswalk python")
     vlei_server_bin = _require_path(VLEI_SVR_BIN, "vLEI-server binary")
+    cwd = W3C_CROSSWALK_ROOT
 
     _set_vlei_dirs(live_stack, shared_assets=shared_assets)
     # Writes wan, wes, and wil configs to the local stack temp dir
@@ -293,42 +332,55 @@ def _launch_live_stack(live_stack: dict, *, shared_assets: dict[str, Path]):
 
     # Sets up processes and Python binaries to use
     procs: list[tuple[str, subprocess.Popen[bytes]]] = []
-    open_logs = []
+    open_logs: list = []
     live_stack["runtime_procs"] = procs
     live_stack["open_logs"] = open_logs
-    live_stack["dws_bin"] = _require_path(DWS_BIN, "did-webs CLI")
-    live_stack["crosswalk_python"] = witness_python  # Main python version to use
-    live_stack["witness_aids"] = WITNESS_AIDS  # wan, wil, wes
+    live_stack["witness_aids"] = WITNESS_AIDS
     live_stack["status_store"] = Path(live_stack["runtime_root"]) / "status-store.json"
-    live_stack["launch_did_webs"] = _lazy_didwebs_launcher  # lazy loaded did:webs subprocess
+    live_stack["launch_did_webs"] = _lazy_didwebs_launcher
     live_stack["did_webs_running"] = False
 
-    # Set up log file paths for later monitoring.
-    witness_log_path = Path(live_stack["log_root"]) / "witness.log"
-    vlei_log_path = Path(live_stack["log_root"]) / "vlei.log"
-    status_log_path = Path(live_stack["log_root"]) / "status.log"
+    witness_log_path, witness_log = _open_process_log(live_stack, "witness.log")
+    vlei_log_path, vlei_log = _open_process_log(live_stack, "vlei.log")
+    status_log_path, status_log = _open_process_log(live_stack, "status.log")
 
-    # Open log files
-    witness_log = witness_log_path.open("wb")
-    vlei_log = vlei_log_path.open("wb")
-    status_log = status_log_path.open("wb")
-    open_logs.extend([witness_log, vlei_log, status_log])
-
-    # runs three witnesses in one subprocess.
-    witness = _witness_process(live_stack, witness_python, W3C_CROSSWALK_ROOT, shared_env, witness_log)
+    witness_argv = _witness_process(live_stack, witness_python)
+    witness = subprocess.Popen(
+        witness_argv,
+        cwd=cwd,
+        env=shared_env,
+        stdout=witness_log,
+        stderr=subprocess.STDOUT,
+    )
     procs.append(("witness-demo", witness))
     for port in live_stack["witness_ports"]:
         _wait_process_port(live_stack, witness, "witness-demo", port, witness_log_path)
 
-    # runs a vLEI server
-    vlei = _vlei_process(live_stack, vlei_server_bin, W3C_CROSSWALK_ROOT, shared_env, vlei_log)
-    procs.append(("vlei-server", vlei))
-    _wait_process_port(live_stack, vlei, "vlei-server", live_stack["topology"].vlei_port, vlei_log_path)
+    vlei_argv = _vlei_process(live_stack, vlei_server_bin)
+    _spawn_process(
+        live_stack,
+        proc_name="vlei-server",
+        display_name="vlei-server",
+        argv=vlei_argv,
+        cwd=cwd,
+        env=shared_env,
+        log_path=vlei_log_path,
+        log_handle=vlei_log,
+        port=live_stack["topology"].vlei_port,
+    )
 
-    # Credential Status service for checking whether a W3C VC-JWT is revoked or not
-    status = _credential_status_process(live_stack, witness_python, W3C_CROSSWALK_ROOT, shared_env, status_log)
-    procs.append(("status-service", status))
-    _wait_process_port(live_stack, status, "status-service", live_stack["topology"].status_port, status_log_path)
+    status_argv = _credential_status_process(live_stack, witness_python)
+    _spawn_process(
+        live_stack,
+        proc_name="status-service",
+        display_name="status-service",
+        argv=status_argv,
+        cwd=cwd,
+        env=shared_env,
+        log_path=status_log_path,
+        log_handle=status_log,
+        port=live_stack["topology"].status_port,
+    )
     wait_for_json_health(f"{live_stack['status_base_url']}/health")
 
     try:
@@ -339,84 +391,55 @@ def _launch_live_stack(live_stack: dict, *, shared_assets: dict[str, Path]):
             handle.close()
 
 
-def _witness_process(live_stack, python_bin, cwd, env, log):
-    """
-    Runs a witness process with three witnesses configured from the local live stack using the cwd
-    as the working directory, passed in environment for the KERI HOME override, and the passed in
-    log file for logging.
-    """
-    return subprocess.Popen(
-        [
-            python_bin,
-            "-u",
-            _require_path(WITNESS_SERVER_SCRIPT, "witness service script"),
-            "--config-dir",
-            str(live_stack["config_root"]),
-            "--wan-port",
-            str(live_stack["witness_ports"][0]),
-            "--wil-port",
-            str(live_stack["witness_ports"][1]),
-            "--wes-port",
-            str(live_stack["witness_ports"][2]),
-        ],
-        cwd=cwd,
-        env=env,
-        stdout=log,
-        stderr=subprocess.STDOUT,
-    )
+def _witness_process(live_stack, python_bin):
+    """Return argv for the witness helper process."""
+    return [
+        python_bin,
+        "-u",
+        _require_path(WITNESS_SERVER_SCRIPT, "witness service script"),
+        "--config-dir",
+        str(live_stack["config_root"]),
+        "--wan-port",
+        str(live_stack["witness_ports"][0]),
+        "--wil-port",
+        str(live_stack["witness_ports"][1]),
+        "--wes-port",
+        str(live_stack["witness_ports"][2]),
+    ]
 
 
-def _vlei_process(live_stack, python_bin, cwd, env, log):
-    """
-    Runs a vLEI-server process configured from the local live stack using the cwd as the working
-    directory, passed in environment for the KERI HOME override, and the passed in log file for logging.
-    """
-    return subprocess.Popen(
-        [
-            python_bin,
-            "--schema-dir",
-            str(live_stack["schema_root"]),
-            "--cred-dir",
-            str(live_stack["cred_root"]),
-            "--oobi-dir",
-            str(live_stack["oobi_root"]),
-            "--http",
-            str(live_stack["topology"].vlei_port),
-        ],
-        cwd=cwd,
-        env=env,
-        stdout=log,
-        stderr=subprocess.STDOUT,
-    )
+def _vlei_process(live_stack, python_bin):
+    """Return argv for the vLEI helper process."""
+    return [
+        python_bin,
+        "--schema-dir",
+        str(live_stack["schema_root"]),
+        "--cred-dir",
+        str(live_stack["cred_root"]),
+        "--oobi-dir",
+        str(live_stack["oobi_root"]),
+        "--http",
+        str(live_stack["topology"].vlei_port),
+    ]
 
 
-def _credential_status_process(live_stack, python_bin, cwd, env, log):
-    """
-    Runs a simple POC credential status server process using the local w3c-crosswalk CLI configured
-    from the local live stack using the cwd as the working directory, passed in environment for the
-    KERI HOME override, and the passed in log file for logging.
-    """
-    return subprocess.Popen(
-        [
-            python_bin,
-            "-u",
-            "-m",
-            "w3c_crosswalk.cli",
-            "status-serve",
-            "--host",
-            live_stack["host"],
-            "--port",
-            str(live_stack["topology"].status_port),
-            "--status-store",
-            str(live_stack["status_store"]),
-            "--base-url",
-            live_stack["status_base_url"],
-        ],
-        cwd=cwd,
-        env=env,
-        stdout=log,
-        stderr=subprocess.STDOUT,
-    )
+def _credential_status_process(live_stack, python_bin):
+    """Return argv for the local credential status service."""
+    return [
+        python_bin,
+        "-u",
+        "-m",
+        "w3c_crosswalk.cli",
+        "status-serve",
+        "--host",
+        live_stack["host"],
+        "--port",
+        str(live_stack["topology"].status_port),
+        "--status-store",
+        str(live_stack["status_store"]),
+        "--base-url",
+        live_stack["status_base_url"],
+    ]
 
 
 def _port_conflict(err: BaseException) -> bool:
@@ -455,17 +478,19 @@ def _stack_fixture(tmp_path_factory: pytest.TempPathFactory, request: pytest.Fix
     worker_id = _current_worker_id()
     nodeid = request.node.nodeid if mode == "isolated" else None
 
-    vlei_temp = tmp_path_factory.getbasetemp()
+    shared_assets = _ensure_vlei_assets(tmp_path_factory.getbasetemp() / "shared-vlei-assets")
 
-    shared_assets = _ensure_vlei_assets(vlei_temp / "shared-vlei-assets")
-    last_err = None
-    for attempt in range(3):  # only retries on port error, up to three times
+    def launch_attempt(attempt: int):
         run_name = stack_runtime_name(mode=mode, worker_id=worker_id, nodeid=nodeid, attempt=attempt)
         runtime_root = tmp_path_factory.mktemp(run_name)
         topology = make_stack_topology(runtime_root, worker_id=worker_id, mode=mode)
         live_stack = topology.as_live_stack()
+        return _launch_live_stack(live_stack, shared_assets=shared_assets)
+
+    last_err = None
+    for attempt in range(3):  # only retries on port error, up to three times
         try:
-            with _launch_live_stack(live_stack, shared_assets=shared_assets) as launched:
+            with launch_attempt(attempt) as launched:
                 yield launched
                 return
         except (RuntimeError, TimeoutError) as err:

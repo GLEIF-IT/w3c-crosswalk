@@ -683,6 +683,10 @@ def init_and_incept_single_sig(
     """Initialize an actor and incept one single-sig identifier."""
     init_habery(live_stack, actor)
     alias = actor.alias if alias is None else alias
+
+    def observe() -> dict[str, str]:
+        return {"actor": actor.alias, "alias": alias}
+
     with patched_home(Path(live_stack["home"])):
         incept_doer = InceptDoer(
             name=actor.name,
@@ -699,7 +703,7 @@ def init_and_incept_single_sig(
             [incept_doer],
             timeout=120.0,
             tock=WORKFLOW_TOCK,
-            observe=lambda: {"actor": actor.alias, "alias": alias},
+            observe=observe,
             cleanup=_cleanup_incept_doers,
         )
     return aid(live_stack, Actor(name=actor.name, alias=alias, salt=actor.salt, passcode=actor.passcode))
@@ -750,6 +754,9 @@ def witness_oobi(live_stack: dict, actor: Actor) -> str:
 
 def resolve_oobi(live_stack: dict, recipient: Actor, *, alias: str, oobi: str) -> None:
     """Resolve one OOBI into a recipient actor's local KERI state."""
+    def observe() -> dict[str, str]:
+        return {"actor": recipient.alias, "oobi": oobi}
+
     with patched_home(Path(live_stack["home"])):
         resolve_doer = OobiDoer(name=recipient.name, oobi=oobi, oobiAlias=alias, force=False, bran=recipient.passcode, base="")
         run_doers_until(
@@ -757,13 +764,16 @@ def resolve_oobi(live_stack: dict, recipient: Actor, *, alias: str, oobi: str) -
             [resolve_doer],
             timeout=90.0,
             tock=WORKFLOW_TOCK,
-            observe=lambda: {"actor": recipient.alias, "oobi": oobi},
+            observe=observe,
             cleanup=_cleanup_oobi_doers,
         )
 
 
 def _query_keystate(live_stack: dict, actor: Actor, *, prefix: str) -> None:
     """Query witness-backed key state for one remote identifier."""
+    def observe() -> dict[str, str]:
+        return {"actor": actor.alias, "prefix": prefix}
+
     with patched_home(Path(live_stack["home"])):
         query_doer = QueryDoer(name=actor.name, alias=actor.alias, base="", bran=actor.passcode, pre=prefix, anchor=None)
         run_doers_until(
@@ -771,7 +781,7 @@ def _query_keystate(live_stack: dict, actor: Actor, *, prefix: str) -> None:
             [query_doer],
             timeout=30.0,
             tock=WORKFLOW_TOCK,
-            observe=lambda: {"actor": actor.alias, "prefix": prefix},
+            observe=observe,
             cleanup=_cleanup_query_doers,
         )
 
@@ -815,6 +825,11 @@ def create_delegated_qvi(
     if _maybe_hab(live_stack, proxy_actor) is None:
         raise RuntimeError(f"delegation proxy alias '{proxy_alias}' must exist before creating delegated qvi")
 
+    delegated_config = _delegated_icp_config(live_stack, delegator_prefix, witness_aid=witness_aid)
+
+    def observe() -> dict[str, str]:
+        return {"delegate": delegate.alias, "delegator": delegator.alias}
+
     with patched_home(Path(live_stack["home"])):
         delegated_incept_doer = InceptDoer(
             name=delegate.name,
@@ -824,7 +839,7 @@ def create_delegated_qvi(
             endpoint=False,
             proxy=proxy_alias,
             cnfg=None,
-            **_delegated_icp_config(live_stack, delegator_prefix, witness_aid=witness_aid),
+            **delegated_config,
         )
         confirm_doer = ConfirmDoer(
             name=delegator.name,
@@ -837,16 +852,20 @@ def create_delegated_qvi(
             codes=[],
             codeTime=None,
         )
+
+        def cleanup(_: list) -> None:
+            _cleanup_delegated_qvi_doers(
+                delegated_incept_doer=delegated_incept_doer,
+                confirm_doer=confirm_doer,
+            )
+
         run_doers_until(
             f"delegate {delegate.alias} from {delegator.alias}",
             [delegated_incept_doer, confirm_doer],
             timeout=180.0,
             tock=WORKFLOW_TOCK,
-            observe=lambda: {"delegate": delegate.alias, "delegator": delegator.alias},
-            cleanup=lambda doers: _cleanup_delegated_qvi_doers(
-                delegated_incept_doer=delegated_incept_doer,
-                confirm_doer=confirm_doer,
-            ),
+            observe=observe,
+            cleanup=cleanup,
         )
     _query_keystate(live_stack, delegate, prefix=delegator_prefix)
     return aid(live_stack, delegate)
@@ -855,11 +874,15 @@ def create_delegated_qvi(
 def resolve_pairwise_oobis(live_stack: dict, actors: list[Actor]) -> dict[str, str]:
     """Resolve each actor's witness OOBI into every other actor."""
     oobis = {actor.alias: witness_oobi(live_stack, actor) for actor in actors}
-    for recipient in actors:
+
+    def resolve_for_recipient(recipient: Actor) -> None:
         for source in actors:
             if source.alias == recipient.alias:
                 continue
             resolve_oobi(live_stack, recipient, alias=source.alias, oobi=oobis[source.alias])
+
+    for recipient in actors:
+        resolve_for_recipient(recipient)
     return oobis
 
 
@@ -870,6 +893,9 @@ def create_registry(live_stack: dict, actor: Actor, *, registry_name: str, usage
     the KERI/ACDC source-of-truth layer that later status and W3C projection
     logic derive from.
     """
+    def observe() -> dict[str, str]:
+        return {"actor": actor.alias, "registry": registry_name}
+
     with patched_home(Path(live_stack["home"])):
         registry_doer = ManagedRegistryInceptor(
             name=actor.name,
@@ -888,7 +914,7 @@ def create_registry(live_stack: dict, actor: Actor, *, registry_name: str, usage
             [registry_doer],
             timeout=180.0,
             tock=WORKFLOW_TOCK,
-            observe=lambda: {"actor": actor.alias, "registry": registry_name},
+            observe=observe,
             cleanup=_cleanup_registry_doers,
         )
 
@@ -943,6 +969,13 @@ def create_credential(
     - close LMDB resources,
     - then poll the actor store for the issued credential SAID.
     """
+    data = _load_json(data_path)
+    rules = _load_json(rules_path)
+    edges = _load_json(edges_path) if edges_path is not None else None
+
+    def observe() -> dict[str, str]:
+        return {"issuer": issuer.alias, "schema": schema}
+
     with patched_home(Path(live_stack["home"])):
         issue_doer = ManagedCredentialIssuer(
             name=issuer.name,
@@ -952,9 +985,9 @@ def create_credential(
             registryName=registry_name,
             schema=schema,
             recipient=recipient_prefix,
-            data=_load_json(data_path),
-            edges=_load_json(edges_path) if edges_path is not None else None,
-            rules=_load_json(rules_path),
+            data=data,
+            edges=edges,
+            rules=rules,
             credential=None,
             timestamp=helping.nowIso8601(),
             private=False,
@@ -966,7 +999,7 @@ def create_credential(
             [issue_doer],
             timeout=180.0,
             tock=WORKFLOW_TOCK,
-            observe=lambda: {"issuer": issuer.alias, "schema": schema},
+            observe=observe,
             cleanup=_cleanup_credential_issue_doers,
         )
     return wait_for_credential_said(live_stack, issuer, schema=schema, issued=True)
@@ -1045,19 +1078,26 @@ def sync_credential_mailbox_until_exchange(
             exc=exc,
             verifier=vry,
         )
+
+        def ready() -> bool:
+            return exchanging.cloneMessage(hby, said)[0] is not None
+
+        def observe() -> dict[str, str]:
+            return {
+                "actor": recipient.alias,
+                "exchange_said": said,
+                "credential_mail_seen": str(mbx.times.get("/credential")),
+                "notices": notifier.noter.notes.cntAll(),
+            }
+
         try:
             run_doers_until(
                 f"sync credential mailbox for {recipient.alias} exchange {said}",
                 [mbx],
                 timeout=timeout,
                 tock=WORKFLOW_TOCK,
-                ready=lambda: exchanging.cloneMessage(hby, said)[0] is not None,
-                observe=lambda: {
-                    "actor": recipient.alias,
-                    "exchange_said": said,
-                    "credential_mail_seen": str(mbx.times.get("/credential")),
-                    "notices": notifier.noter.notes.cntAll(),
-                },
+                ready=ready,
+                observe=observe,
             )
         finally:
             _cleanup_mailbox_sync_resources(notifier=notifier, rgy=rgy, hby=hby)
@@ -1071,6 +1111,9 @@ def grant_credential(live_stack: dict, issuer: Actor, *, recipient_prefix: str, 
     admit phase. The test intentionally does not use vague “latest grant”
     matching once multiple exchanges can exist.
     """
+    def observe() -> dict[str, str]:
+        return {"credential_said": credential_said, "recipient": recipient_prefix}
+
     with patched_home(Path(live_stack["home"])):
         grant_doer = ManagedGrantDoer(
             name=issuer.name,
@@ -1087,7 +1130,7 @@ def grant_credential(live_stack: dict, issuer: Actor, *, recipient_prefix: str, 
             [grant_doer],
             timeout=180.0,
             tock=WORKFLOW_TOCK,
-            observe=lambda: {"credential_said": credential_said, "recipient": recipient_prefix},
+            observe=observe,
             cleanup=_cleanup_grant_doers,
         )
     return poll_until(
@@ -1121,6 +1164,10 @@ def admit_grant(
     recipient store.
     """
     sync_credential_mailbox_until_exchange(live_stack, recipient, said=grant_said)
+
+    def observe() -> dict[str, str]:
+        return {"actor": recipient.alias, "grant_said": grant_said}
+
     with patched_home(Path(live_stack["home"])):
         admit_doer = ManagedAdmitDoer(
             name=recipient.name,
@@ -1136,7 +1183,7 @@ def admit_grant(
             [admit_doer],
             timeout=180.0,
             tock=WORKFLOW_TOCK,
-            observe=lambda: {"actor": recipient.alias, "grant_said": grant_said},
+            observe=observe,
             cleanup=_cleanup_admit_doers,
         )
     return wait_for_credential_said(live_stack, recipient, schema=expected_schema, issued=False)

@@ -39,7 +39,6 @@ from .helpers import patched_home, write_json
 
 
 ASSETS = Path(__file__).resolve().parent / "assets"
-QVI_RULES = Path("/Users/kbull/code/gleif-it/qvi-software/qvi-workflow/kli_only/acdc-info/rules/qvi-cred-rules.json")
 
 
 def _did_for(stack: dict, aid: str) -> str:
@@ -86,21 +85,13 @@ def _rules_path(stack: dict, filename: str) -> Path:
     return saidify_json(stack, Path(ASSETS) / filename)
 
 
-def test_single_sig_vrd_crosswalk_live(live_stack):
-    """Exercise the full single-sig GEDA -> QVI -> LE -> VRD crosswalk flow.
-
-    Phase model:
-      1. stand up the live stack and deterministic actor sandboxes
-      2. complete the KERI/ACDC issuance chain through grant/admit flow
-      3. validate source ACDC chain state directly from local stores
-      4. project the final VRD into W3C VC-JWT form
-      5. verify the W3C artifact through did:webs resolution and projected status
-    """
-    state = default_workflow_state()
-
+def _bootstrap_workflow_actors(live_stack: dict, state) -> None:
+    """Initialize actors, delegation plumbing, and pairwise witness OOBIs."""
     state.geda_prefix = init_and_incept_single_sig(live_stack, state.geda)
+
     init_habery(live_stack, state.qvi)
-    resolve_oobi(live_stack, state.qvi, alias=state.geda.alias, oobi=witness_oobi(live_stack, state.geda))
+    geda_oobi = witness_oobi(live_stack, state.geda)
+    resolve_oobi(live_stack, state.qvi, alias=state.geda.alias, oobi=geda_oobi)
     create_delegation_proxy(live_stack, state.qvi)
 
     # QVI stays delegated from GEDA even in the simplified single-sig flow.
@@ -109,29 +100,33 @@ def test_single_sig_vrd_crosswalk_live(live_stack):
 
     resolve_pairwise_oobis(live_stack, [state.geda, state.qvi, state.le])
 
+
+def _create_registries(live_stack: dict, state) -> None:
+    """Create one TEL registry per actor for the live credential chain."""
     create_registry(live_stack, state.geda, registry_name="geda-registry", usage="QVI Credential Registry for GEDA")
     create_registry(live_stack, state.qvi, registry_name="qvi-registry", usage="LE and VRD Credential Registry for QVI")
     create_registry(live_stack, state.le, registry_name="le-registry", usage="VRD Authorization Registry for LE")
 
-    print("Creating QVI credential")
-    qvi_cred_data = write_json(Path(live_stack["temp_root"]) / "qvi-data.json", {"LEI": "254900OPPU84GM83MG36"})
+
+def _issue_qvi_chain_credentials(live_stack: dict, state) -> None:
+    """Issue and admit the QVI and LE credentials that anchor the chain."""
+    qvi_rules = _rules_path(live_stack, "qvi-rules.json")
+    qvi_data = write_json(Path(live_stack["temp_root"]) / "qvi-data.json", {"LEI": "254900OPPU84GM83MG36"})
     state.qvi_credential_said = create_credential(
         live_stack,
         state.geda,
         registry_name="geda-registry",
         schema="EBfdlu8R27Fbx-ehrqwImnK-8Cm79sqbAQ4MmvEAYqao",
         recipient_prefix=state.qvi_prefix,
-        data_path=qvi_cred_data,
-        rules_path=QVI_RULES,
+        data_path=qvi_data,
+        rules_path=qvi_rules,
     )
-    print("Granting QVI credential")
     qvi_grant_said = grant_credential(
         live_stack,
         state.geda,
         recipient_prefix=state.qvi_prefix,
         credential_said=state.qvi_credential_said,
     )
-    print("Admitting QVI credential")
     assert (
         admit_grant(
             live_stack,
@@ -142,8 +137,7 @@ def test_single_sig_vrd_crosswalk_live(live_stack):
         == state.qvi_credential_said
     )
 
-    print("Creating LE credential")
-    le_cred_data = write_json(Path(live_stack["temp_root"]) / "le-data.json", {"LEI": "254900OPPU84GM83MG36"})
+    le_data = write_json(Path(live_stack["temp_root"]) / "le-data.json", {"LEI": "254900OPPU84GM83MG36"})
     le_edge = _edge_from_template(
         live_stack,
         "le-edge-template.json",
@@ -156,18 +150,16 @@ def test_single_sig_vrd_crosswalk_live(live_stack):
         registry_name="qvi-registry",
         schema="ENPXp1vQzRF6JwIuS-mp2U8Uf1MoADoP_GqQ62VsDZWY",
         recipient_prefix=state.le_prefix,
-        data_path=le_cred_data,
-        rules_path=QVI_RULES,
+        data_path=le_data,
+        rules_path=qvi_rules,
         edges_path=le_edge,
     )
-    print("Granting LE credential from QVI")
     le_grant_said = grant_credential(
         live_stack,
         state.qvi,
         recipient_prefix=state.le_prefix,
         credential_said=state.le_credential_said,
     )
-    print("Admitting LE credential as LE")
     assert (
         admit_grant(
             live_stack,
@@ -178,7 +170,9 @@ def test_single_sig_vrd_crosswalk_live(live_stack):
         == state.le_credential_said
     )
 
-    print("Creating VRD Auth credential")
+
+def _issue_vrd_credentials(live_stack: dict, state) -> str:
+    """Issue the VRD Auth and VRD credentials and return the QVI did:webs DID."""
     vrd_auth_data = _write_vrd_auth_data(live_stack, state)
     vrd_auth_rules = _rules_path(live_stack, "vrd-auth-rules.json")
     vrd_auth_edge = _edge_from_template(
@@ -197,14 +191,12 @@ def test_single_sig_vrd_crosswalk_live(live_stack):
         rules_path=vrd_auth_rules,
         edges_path=vrd_auth_edge,
     )
-    print("Granting VRD Auth credential from LE to QVI")
     vrd_auth_grant_said = grant_credential(
         live_stack,
         state.le,
         recipient_prefix=state.qvi_prefix,
         credential_said=state.vrd_auth_said,
     )
-    print("Admitting VRD Auth credential as QVI")
     assert (
         admit_grant(
             live_stack,
@@ -215,10 +207,12 @@ def test_single_sig_vrd_crosswalk_live(live_stack):
         == state.vrd_auth_said
     )
 
-    print("Creating VRD credential as QVI")
-    print("creating did:webs DID")
-    live_stack["launch_did_webs"](live_stack, name=state.qvi.name, alias=state.qvi.alias,
-                                  passcode=state.qvi.passcode)
+    live_stack["launch_did_webs"](
+        live_stack,
+        name=state.qvi.name,
+        alias=state.qvi.alias,
+        passcode=state.qvi.passcode,
+    )
     issuer_did = _did_for(live_stack, state.qvi_prefix)
 
     vrd_data = _write_vrd_data(live_stack, state, issuer_did)
@@ -239,14 +233,12 @@ def test_single_sig_vrd_crosswalk_live(live_stack):
         rules_path=vrd_rules,
         edges_path=vrd_edge,
     )
-    print("Granting VRD credential as QVI to LE")
     vrd_grant_said = grant_credential(
         live_stack,
         state.qvi,
         recipient_prefix=state.le_prefix,
         credential_said=state.vrd_said,
     )
-    print("Admitting VRD credential as LE")
     assert (
         admit_grant(
             live_stack,
@@ -256,8 +248,11 @@ def test_single_sig_vrd_crosswalk_live(live_stack):
         )
         == state.vrd_said
     )
+    return issuer_did
 
-    print("Validating Credential Chain")
+
+def _validate_and_project_status(live_stack: dict, state, issuer_did: str) -> dict:
+    """Validate the live ACDC chain and project VRD status for W3C consumers."""
     qvi_credential = clone_credential_sad(live_stack, state.qvi, said=state.qvi_credential_said)
     le_credential = clone_credential_sad(live_stack, state.le, said=state.le_credential_said)
     vrd_auth = clone_credential_sad(live_stack, state.qvi, said=state.vrd_auth_said)
@@ -272,10 +267,12 @@ def test_single_sig_vrd_crosswalk_live(live_stack):
         le_prefix=state.le_prefix,
     )
 
-
     JsonFileStatusStore(live_stack["status_store"]).project_acdc(vrd, issuer_did)
+    return vrd
 
-    print("issuing VC JWT")
+
+def _issue_and_verify_w3c_twin(live_stack: dict, state, *, issuer_did: str, vrd: dict) -> None:
+    """Issue the VC-JWT twin and verify both the VC and crosswalk pair."""
     with patched_home(Path(live_stack["home"])):
         signer = KeriHabSigner.open(name=state.qvi.name, base="", alias=state.qvi.alias, passcode=state.qvi.passcode)
         try:
@@ -283,10 +280,7 @@ def test_single_sig_vrd_crosswalk_live(live_stack):
         finally:
             signer.close()
 
-    print("Verifying VC JWT")
-    verifier = CrosswalkVerifier(
-        resolver=DidWebsClient(live_stack["dws_resolver_url"]),
-    )
+    verifier = CrosswalkVerifier(resolver=DidWebsClient(live_stack["dws_resolver_url"]))
     vc_result = verifier.verify_vc_jwt(token)
     pair_result = verifier.verify_crosswalk_pair(vrd, token)
 
@@ -296,3 +290,22 @@ def test_single_sig_vrd_crosswalk_live(live_stack):
     assert vc_result.checks["signatureValid"] is True
     assert vc_result.checks["statusActive"] is True
     assert pair_result.ok is True
+
+
+def test_single_sig_vrd_crosswalk_live(live_stack):
+    """Exercise the full single-sig GEDA -> QVI -> LE -> VRD crosswalk flow.
+
+    Phase model:
+      1. stand up the live stack and deterministic actor sandboxes
+      2. complete the KERI/ACDC issuance chain through grant/admit flow
+      3. validate source ACDC chain state directly from local stores
+      4. project the final VRD into W3C VC-JWT form
+      5. verify the W3C artifact through did:webs resolution and projected status
+    """
+    state = default_workflow_state()
+    _bootstrap_workflow_actors(live_stack, state)
+    _create_registries(live_stack, state)
+    _issue_qvi_chain_credentials(live_stack, state)
+    issuer_did = _issue_vrd_credentials(live_stack, state)
+    vrd = _validate_and_project_status(live_stack, state, issuer_did)
+    _issue_and_verify_w3c_twin(live_stack, state, issuer_did=issuer_did, vrd=vrd)

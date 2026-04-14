@@ -7,6 +7,8 @@ single-sig integration workflow.
 
 - `le-edge-template.json`: edge template for issuing the LE credential from the
   QVI credential.
+- `qvi-rules.json`: rules payload used for QVI and LE issuance in the live
+  chain.
 - `vrd-auth-edge-template.json`: edge template for issuing VRD Auth from the LE
   credential.
 - `vrd-edge-template.json`: edge template for issuing the VRD credential in the

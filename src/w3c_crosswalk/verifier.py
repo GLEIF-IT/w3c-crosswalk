@@ -52,6 +52,42 @@ class CrosswalkVerifier:
         self.resolver = resolver or DidWebsClient()
         self.status_resolver = status_resolver or HttpStatusResolver()
 
+    def _resolve_method(self, did: str, kid: str, errors: list[str]):
+        """Resolve one verification method and append resolution errors in place."""
+        try:
+            resolution = self.resolver.resolve(did)
+            return self.resolver.find_verification_method(resolution.did_document, kid)
+        except DidWebsResolutionError as exc:
+            errors.append(str(exc))
+            return None
+
+    def _verify_signature(self, *, token: str, method: dict[str, Any] | None, label: str, errors: list[str]) -> bool:
+        """Verify a JWT signature from a resolved method and append errors in place."""
+        if method is None:
+            return False
+
+        public_jwk = method.get("publicKeyJwk")
+        if not isinstance(public_jwk, dict):
+            errors.append(f"resolved verification method did not expose publicKeyJwk for {label}")
+            return False
+
+        signature_ok = verify_jwt_signature(token, public_jwk)
+        if not signature_ok:
+            errors.append(f"{label} signature verification failed")
+        return signature_ok
+
+    def _check_status(self, payload: dict[str, Any], errors: list[str]) -> bool:
+        """Check projected credential status for a VC payload."""
+        status_resource = payload.get("credentialStatus", {})
+        if not isinstance(status_resource, dict) or not status_resource.get("id"):
+            return True
+
+        status_doc = self.status_resolver.fetch(status_resource["id"])
+        status_ok = not bool(status_doc.get("revoked"))
+        if not status_ok:
+            errors.append(f"credential {status_doc.get('credentialSaid')} is revoked")
+        return status_ok
+
     def verify_vc_jwt(self, token: str) -> VerificationResult:
         """Verify a VC-JWT through did:webs resolution and status lookup."""
         decoded = decode_jwt(token)
@@ -68,31 +104,9 @@ class CrosswalkVerifier:
         if not issuer:
             errors.append("missing issuer")
 
-        method = None
-        if issuer:
-            try:
-                resolution = self.resolver.resolve(issuer)
-                method = self.resolver.find_verification_method(resolution.did_document, header.get("kid", ""))
-            except DidWebsResolutionError as exc:
-                errors.append(str(exc))
-
-        signature_ok = False
-        if method is not None:
-            public_jwk = method.get("publicKeyJwk")
-            if not isinstance(public_jwk, dict):
-                errors.append("resolved verification method did not expose publicKeyJwk")
-            else:
-                signature_ok = verify_jwt_signature(token, public_jwk)
-                if not signature_ok:
-                    errors.append("VC-JWT signature verification failed")
-
-        status_resource = payload.get("credentialStatus", {})
-        status_ok = True
-        if isinstance(status_resource, dict) and status_resource.get("id"):
-            status_doc = self.status_resolver.fetch(status_resource["id"])
-            status_ok = not bool(status_doc.get("revoked"))
-            if not status_ok:
-                errors.append(f"credential {status_doc.get('credentialSaid')} is revoked")
+        method = self._resolve_method(issuer, header.get("kid", ""), errors) if issuer else None
+        signature_ok = self._verify_signature(token=token, method=method, label="VC-JWT", errors=errors)
+        status_ok = self._check_status(payload, errors)
 
         return VerificationResult(
             ok=not errors,
@@ -120,21 +134,8 @@ class CrosswalkVerifier:
         if not holder:
             errors.append("missing holder")
 
-        method = None
-        if holder:
-            try:
-                resolution = self.resolver.resolve(holder)
-                method = self.resolver.find_verification_method(resolution.did_document, header.get("kid", ""))
-            except DidWebsResolutionError as exc:
-                errors.append(str(exc))
-
-        signature_ok = False
-        if method is not None:
-            public_jwk = method.get("publicKeyJwk")
-            if isinstance(public_jwk, dict):
-                signature_ok = verify_jwt_signature(token, public_jwk)
-                if not signature_ok:
-                    errors.append("VP-JWT signature verification failed")
+        method = self._resolve_method(holder, header.get("kid", ""), errors) if holder else None
+        signature_ok = self._verify_signature(token=token, method=method, label="VP-JWT", errors=errors)
 
         nested_results = []
         for vc_token in payload.get("verifiableCredential", []):

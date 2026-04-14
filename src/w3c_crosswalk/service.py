@@ -31,19 +31,28 @@ class StatusServiceHandler(BaseHTTPRequestHandler):
     store: JsonFileStatusStore
     base_url: str
 
+    def _status_record(self):
+        """Return the requested status record for a `/statuses/{said}` path."""
+        if not self.path.startswith("/statuses/"):
+            return None
+        credential_said = self.path.rsplit("/", 1)[-1]
+        return credential_said, self.store.get(credential_said)
+
     def do_GET(self) -> None:  # noqa: N802
         """Handle health and credential status lookups."""
         if self.path == "/health":
             self._send_json(HTTPStatus.OK, {"ok": True, "service": "status"})
             return
-        if self.path.startswith("/statuses/"):
-            credential_said = self.path.rsplit("/", 1)[-1]
-            record = self.store.get(credential_said)
+
+        status_record = self._status_record()
+        if status_record is not None:
+            credential_said, record = status_record
             if record is None:
                 self._send_json(HTTPStatus.NOT_FOUND, {"error": f"unknown credential SAID: {credential_said}"})
                 return
             self._send_json(HTTPStatus.OK, record.as_status_resource(self.base_url))
             return
+
         self._send_json(HTTPStatus.NOT_FOUND, {"error": "not found"})
 
     def do_POST(self) -> None:  # noqa: N802
@@ -74,6 +83,17 @@ class VerifierServiceHandler(BaseHTTPRequestHandler):
 
     verifier: CrosswalkVerifier
 
+    def _read_json_body(self) -> dict[str, Any]:
+        """Read and decode one request JSON body."""
+        content_length = int(self.headers.get("Content-Length", "0"))
+        return json.loads(self.rfile.read(content_length) or b"{}")
+
+    def _crosswalk_acdc(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Load the ACDC input for crosswalk verification from inline JSON or a file path."""
+        if "acdcPath" in body:
+            return load_json_file(Path(body["acdcPath"]))
+        return body["acdc"]
+
     def do_GET(self) -> None:  # noqa: N802
         """Handle service health checks."""
         if self.path == "/health":
@@ -83,8 +103,7 @@ class VerifierServiceHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         """Route verification requests to the appropriate verifier method."""
-        content_length = int(self.headers.get("Content-Length", "0"))
-        body = json.loads(self.rfile.read(content_length) or b"{}")
+        body = self._read_json_body()
         if self.path == "/verify/vc-jwt":
             self._send_json(HTTPStatus.OK, self.verifier.verify_vc_jwt(body["token"]).to_dict())
             return
@@ -92,10 +111,7 @@ class VerifierServiceHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.OK, self.verifier.verify_vp_jwt(body["token"]).to_dict())
             return
         if self.path == "/verify/crosswalk":
-            if "acdcPath" in body:
-                acdc = load_json_file(Path(body["acdcPath"]))
-            else:
-                acdc = body["acdc"]
+            acdc = self._crosswalk_acdc(body)
             self._send_json(HTTPStatus.OK, self.verifier.verify_crosswalk_pair(acdc, body["token"]).to_dict())
             return
         self._send_json(HTTPStatus.NOT_FOUND, {"error": "not found"})
