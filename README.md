@@ -38,31 +38,38 @@ This repo uses `uv` and expects a local `.venv`.
 Bootstrap the environment:
 
 ```bash
-UV_CACHE_DIR=$PWD/.uv-cache uv sync --group dev --group test
+UV_CACHE_DIR=$PWD/.uv-cache uv sync
 ```
 
-Install the local sibling Python repos this project depends on into the same
-environment as editable installs:
+The default `uv` groups include the live integration dependencies, so a normal
+sync installs:
+
+- `keri`
+- `did-webs-resolver`
+- `vlei`
+
+The live integration harness is intended to run entirely from this repo's
+`.venv`. It should not require sibling repository virtualenvs or runtime file
+lookups outside `w3c-crosswalk`.
+
+Dependency sources are pinned in `pyproject.toml` through `tool.uv.sources`,
+which keeps `uv sync` reproducible even when the latest PyPI releases lag the
+live integration work.
+
+### Optional Editable Overrides
+
+If you are intentionally developing one of the dependency repos locally, you can
+override the pinned source with an editable install in this environment. For
+example:
 
 ```bash
-uv pip install --python .venv/bin/python -e ../keripy
-uv pip install --python .venv/bin/python -e ../did-webs-resolver
+uv add --editable ../keripy
+uv add --editable ../did-webs-resolver
+uv add --editable ../vLEI
 ```
 
-The live integration harness also expects:
-
-- local `../vLEI` repo present
-- local `vLEI-server` binary available from that repo's environment
-- local `../did-webs-resolver` installed into this repo's `.venv`
-- local `../keripy` installed into this repo's `.venv`
-
-Important current reality:
-
-- the live crosswalk work depends on local `keripy` behavior beyond what is in
-  the published PyPI version stream
-- if you are intentionally using a local editable `keripy`, direct interpreter
-  invocations such as `./.venv/bin/python -m pytest ...` are the least
-  ambiguous path
+When using editable overrides, direct interpreter invocations such as
+`./.venv/bin/python -m pytest ...` remain the least ambiguous path.
 
 ## CLI
 
@@ -132,7 +139,7 @@ This is the current flagship integration test:
 ```bash
 PYTHONUNBUFFERED=1 \
 UV_CACHE_DIR=$PWD/.uv-cache \
-uv run pytest -s -vv \
+./.venv/bin/python -m pytest -s -vv \
   -o log_cli=true \
   --log-cli-level=INFO \
   tests/integration/test_single_sig_vrd_crosswalk.py

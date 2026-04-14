@@ -12,13 +12,13 @@ from hio.base import doing
 from keri import kering
 from keri.app import agenting, configing, connecting, forwarding, grouping, habbing, indirecting, notifying, oobiing, signing as appsigning
 from keri.app.cli.commands.delegate.confirm import ConfirmDoer
-from keri.app.cli.commands.ipex.admit import AdmitDoer
-from keri.app.cli.commands.ipex.grant import GrantDoer
+from keri.app.cli.commands.ipex.admit import AdmitDoer as KeriAdmitDoer
+from keri.app.cli.commands.ipex.grant import GrantDoer as KeriGrantDoer
 from keri.app.cli.commands.incept import InceptDoer
 from keri.app.cli.commands.oobi.resolve import OobiDoer
 from keri.app.cli.commands.query import LaunchDoer as QueryDoer
-from keri.app.cli.commands.vc.create import CredentialIssuer
-from keri.app.cli.commands.vc.registry.incept import RegistryInceptor
+from keri.app.cli.commands.vc.create import CredentialIssuer as KeriCredentialIssuer
+from keri.app.cli.commands.vc.registry.incept import RegistryInceptor as KeriRegistryInceptor
 from keri.app.cli.common import existing
 from keri import core
 from keri.core import coring, eventing, parsing, serdering, signing as coresigning
@@ -34,6 +34,191 @@ from .helpers import patched_home, poll_until, run_doers_until, write_json
 
 COMMON_CONFIG_FILE = "common-habery-config.json"
 WORKFLOW_TOCK = 0.03125
+
+
+class ManagedRegistryInceptor(KeriRegistryInceptor):
+    """Local wrapper that retains the notifier so tests can close it explicitly."""
+
+    def __init__(self, name, base, alias, bran, registryName, usage, **kwa):
+        self.name = name
+        self.alias = alias
+        self.registryName = registryName
+        self.usage = usage
+        self.hby = existing.setupHby(name=name, base=base, bran=bran)
+        self.rgy = credentialing.Regery(hby=self.hby, name=name, base=base)
+        self.hbyDoer = habbing.HaberyDoer(habery=self.hby)
+        counselor = grouping.Counselor(hby=self.hby)
+        self.postman = forwarding.Poster(hby=self.hby)
+        self.notifier = notifying.Notifier(self.hby)
+        mux = grouping.Multiplexor(self.hby, notifier=self.notifier)
+        exc = exchanging.Exchanger(hby=self.hby, handlers=[])
+        grouping.loadHandlers(exc, mux)
+        mbx = indirecting.MailboxDirector(hby=self.hby, topics=["/receipt", "/multisig", "/replay"], exc=exc)
+        self.registrar = credentialing.Registrar(hby=self.hby, rgy=self.rgy, counselor=counselor)
+        doers = [self.hbyDoer, counselor, self.registrar, self.postman, mbx]
+        self.toRemove = list(doers)
+        doers.extend([doing.doify(self.inceptDo, **kwa)])
+        doing.DoDoer.__init__(self, doers=doers)
+
+
+class ManagedCredentialIssuer(KeriCredentialIssuer):
+    """Local wrapper that retains the notifier so tests can close it explicitly."""
+
+    def __init__(
+        self,
+        name,
+        alias,
+        base,
+        bran,
+        registryName=None,
+        schema=None,
+        edges=None,
+        recipient=None,
+        data=None,
+        rules=None,
+        credential=None,
+        timestamp=None,
+        private: bool = False,
+        private_credential_nonce: str | None = None,
+        private_subject_nonce: str | None = None,
+    ):
+        self.name = name
+        self.registryName = registryName
+        self.timestamp = timestamp
+        self.hby = existing.setupHby(name=name, base=base, bran=bran)
+        self.hab = self.hby.habByName(alias)
+        if self.hab is None:
+            raise ValueError(f"invalid alias {alias}")
+
+        self.rgy = credentialing.Regery(hby=self.hby, name=name, base=base)
+        self.hbyDoer = habbing.HaberyDoer(habery=self.hby)
+        self.counselor = grouping.Counselor(hby=self.hby)
+        self.registrar = credentialing.Registrar(hby=self.hby, rgy=self.rgy, counselor=self.counselor)
+        self.org = connecting.Organizer(hby=self.hby)
+        self.postman = forwarding.Poster(hby=self.hby)
+        self.notifier = notifying.Notifier(self.hby)
+        mux = grouping.Multiplexor(self.hby, notifier=self.notifier)
+        exc = exchanging.Exchanger(hby=self.hby, handlers=[])
+        grouping.loadHandlers(exc, mux)
+
+        self.verifier = verifying.Verifier(hby=self.hby, reger=self.rgy.reger)
+        mbx = indirecting.MailboxDirector(
+            hby=self.hby,
+            topics=["/receipt", "/multisig", "/credential"],
+            verifier=self.verifier,
+            exc=exc,
+        )
+        self.credentialer = credentialing.Credentialer(
+            hby=self.hby,
+            rgy=self.rgy,
+            registrar=self.registrar,
+            verifier=self.verifier,
+        )
+
+        try:
+            if credential is None:
+                if recipient is None:
+                    recp = None
+                elif recipient in self.hby.kevers:
+                    recp = recipient
+                else:
+                    recp = self.org.find("alias", recipient)
+                    if len(recp) != 1:
+                        raise ValueError(f"invalid recipient {recipient}")
+                    recp = recp[0]["id"]
+
+                if self.timestamp is not None:
+                    data["dt"] = self.timestamp
+
+                self.creder = self.credentialer.create(
+                    regname=registryName,
+                    recp=recp,
+                    schema=schema,
+                    source=edges,
+                    rules=rules,
+                    data=data,
+                    private=private,
+                    private_credential_nonce=private_credential_nonce,
+                    private_subject_nonce=private_subject_nonce,
+                )
+            else:
+                self.creder = serdering.SerderACDC(sad=credential)
+                self.credentialer.validate(creder=self.creder)
+        except kering.ConfigurationError as err:
+            print(f"error issuing credential {err}")
+            return
+
+        doers = [self.hbyDoer, mbx, self.counselor, self.registrar, self.credentialer, self.postman]
+        self.toRemove = list(doers)
+        doers.extend([doing.doify(self.createDo)])
+        doing.DoDoer.__init__(self, doers=doers)
+
+
+class ManagedGrantDoer(KeriGrantDoer):
+    """Local wrapper that retains the notifier so tests can close it explicitly."""
+
+    def __init__(self, name, alias, base, bran, said, recp, message, timestamp):
+        self.said = said
+        self.recp = recp
+        self.message = message
+        self.timestamp = timestamp
+        self.hby = existing.setupHby(name=name, base=base, bran=bran)
+        self.hab = self.hby.habByName(alias)
+        self.rgy = credentialing.Regery(hby=self.hby, name=name, base=base)
+        self.org = connecting.Organizer(hby=self.hby)
+        self.notifier = notifying.Notifier(self.hby)
+        mux = grouping.Multiplexor(self.hby, notifier=self.notifier)
+
+        self.exc = exchanging.Exchanger(hby=self.hby, handlers=[])
+        grouping.loadHandlers(self.exc, mux)
+        protocoling.loadHandlers(self.hby, exc=self.exc, notifier=self.notifier)
+
+        mbx = indirecting.MailboxDirector(
+            hby=self.hby,
+            topics=["/receipt", "/multisig", "/replay", "/credential"],
+            exc=self.exc,
+        )
+
+        self.toRemove = [mbx]
+        doing.DoDoer.__init__(self, doers=self.toRemove + [doing.doify(self.grantDo)])
+
+
+class ManagedAdmitDoer(KeriAdmitDoer):
+    """Local wrapper that retains the notifier so tests can close it explicitly."""
+
+    def __init__(self, name, alias, base, bran, said, message, timestamp):
+        self.said = said
+        self.message = message
+        self.timestamp = timestamp
+        self.hby = existing.setupHby(name=name, base=base, bran=bran)
+        self.hab = self.hby.habByName(alias)
+        self.rgy = credentialing.Regery(hby=self.hby, name=name, base=base)
+        self.org = connecting.Organizer(hby=self.hby)
+        self.witq = agenting.WitnessInquisitor(hby=self.hby)
+
+        self.kvy = eventing.Kevery(db=self.hby.db)
+        self.tvy = teventing.Tevery(db=self.hby.db, reger=self.rgy.reger)
+        self.vry = verifying.Verifier(hby=self.hby, reger=self.rgy.reger)
+        self.psr = parsing.Parser(kvy=self.kvy, tvy=self.tvy, vry=self.vry)
+
+        self.notifier = notifying.Notifier(self.hby)
+        mux = grouping.Multiplexor(self.hby, notifier=self.notifier)
+
+        self.exc = exchanging.Exchanger(hby=self.hby, handlers=[])
+        grouping.loadHandlers(self.exc, mux)
+        protocoling.loadHandlers(self.hby, exc=self.exc, notifier=self.notifier)
+
+        mbx = indirecting.MailboxDirector(
+            hby=self.hby,
+            topics=["/receipt", "/multisig", "/replay", "/credential"],
+            exc=self.exc,
+            kvy=self.kvy,
+            tvy=self.tvy,
+            verifier=self.vry,
+        )
+
+        self.toRemove = [mbx, self.witq]
+        doing.DoDoer.__init__(self, doers=self.toRemove + [doing.doify(self.admitDo)])
 
 
 def _close_hby(hby) -> None:
@@ -66,6 +251,59 @@ def _cleanup_query_doers(doers: list) -> None:
     """Close resources owned by one or more `QueryDoer` instances."""
     for doer in doers:
         _close_hby(doer.hby)
+
+
+def _cleanup_confirm_doers(doers: list) -> None:
+    """Close resources owned by one or more `ConfirmDoer` instances."""
+    for doer in doers:
+        _close_notifier(getattr(doer, "notifier", None))
+        _close_hby(getattr(doer, "hby", None))
+
+
+def _cleanup_grant_doers(doers: list) -> None:
+    """Close resources owned by one or more `GrantDoer` instances."""
+    for doer in doers:
+        _close_notifier(getattr(doer, "notifier", None))
+        rgy = getattr(doer, "rgy", None)
+        if rgy is not None:
+            rgy.close()
+        _close_hby(getattr(doer, "hby", None))
+
+
+def _cleanup_admit_doers(doers: list) -> None:
+    """Close resources owned by one or more `AdmitDoer` instances."""
+    for doer in doers:
+        _close_notifier(getattr(doer, "notifier", None))
+        rgy = getattr(doer, "rgy", None)
+        if rgy is not None:
+            rgy.close()
+        _close_hby(getattr(doer, "hby", None))
+
+
+def _cleanup_registry_doers(doers: list) -> None:
+    """Close resources owned by one or more `RegistryInceptor` instances."""
+    for doer in doers:
+        _close_notifier(getattr(doer, "notifier", None))
+        rgy = getattr(doer, "rgy", None)
+        if rgy is not None:
+            rgy.close()
+        _close_hby(getattr(doer, "hby", None))
+
+
+def _cleanup_credential_issue_doers(doers: list) -> None:
+    """Close resources owned by one or more `CredentialIssuer` instances."""
+    for doer in doers:
+        _close_notifier(getattr(doer, "notifier", None))
+        rgy = getattr(doer, "rgy", None)
+        if rgy is not None:
+            rgy.close()
+        _close_hby(getattr(doer, "hby", None))
+
+
+def _cleanup_delegated_qvi_doers(*, delegated_incept_doer, confirm_doer) -> None:
+    """Close resources opened for delegated QVI inception and confirmation."""
+    _cleanup_incept_doers([delegated_incept_doer])
+    _cleanup_confirm_doers([confirm_doer])
 
 
 def _cleanup_mailbox_sync_resources(*, notifier, rgy, hby) -> None:
@@ -534,7 +772,10 @@ def create_delegated_qvi(
             timeout=180.0,
             tock=WORKFLOW_TOCK,
             observe=lambda: {"delegate": delegate.alias, "delegator": delegator.alias},
-            cleanup=lambda doers: _cleanup_incept_doers([delegated_incept_doer]),
+            cleanup=lambda doers: _cleanup_delegated_qvi_doers(
+                delegated_incept_doer=delegated_incept_doer,
+                confirm_doer=confirm_doer,
+            ),
         )
     _query_keystate(live_stack, delegate, prefix=delegator_prefix)
     return aid(live_stack, delegate)
@@ -554,7 +795,7 @@ def resolve_pairwise_oobis(live_stack: dict, actors: list[Actor]) -> dict[str, s
 def create_registry(live_stack: dict, actor: Actor, *, registry_name: str, usage: str) -> None:
     """Create a credential registry owned by one actor."""
     with patched_home(Path(live_stack["home"])):
-        registry_doer = RegistryInceptor(
+        registry_doer = ManagedRegistryInceptor(
             name=actor.name,
             base="",
             alias=actor.alias,
@@ -572,6 +813,7 @@ def create_registry(live_stack: dict, actor: Actor, *, registry_name: str, usage
             timeout=180.0,
             tock=WORKFLOW_TOCK,
             observe=lambda: {"actor": actor.alias, "registry": registry_name},
+            cleanup=_cleanup_registry_doers,
         )
 
 
@@ -618,7 +860,7 @@ def create_credential(
 ) -> str:
     """Issue one credential and return its resulting SAID."""
     with patched_home(Path(live_stack["home"])):
-        issue_doer = CredentialIssuer(
+        issue_doer = ManagedCredentialIssuer(
             name=issuer.name,
             alias=issuer.alias,
             base="",
@@ -641,6 +883,7 @@ def create_credential(
             timeout=180.0,
             tock=WORKFLOW_TOCK,
             observe=lambda: {"issuer": issuer.alias, "schema": schema},
+            cleanup=_cleanup_credential_issue_doers,
         )
     return wait_for_credential_said(live_stack, issuer, schema=schema, issued=True)
 
@@ -737,7 +980,7 @@ def sync_credential_mailbox_until_exchange(
 def grant_credential(live_stack: dict, issuer: Actor, *, recipient_prefix: str, credential_said: str) -> str:
     """Send an IPEX grant for a credential and return the issuer-side exchange SAID."""
     with patched_home(Path(live_stack["home"])):
-        grant_doer = GrantDoer(
+        grant_doer = ManagedGrantDoer(
             name=issuer.name,
             alias=issuer.alias,
             base="",
@@ -753,6 +996,7 @@ def grant_credential(live_stack: dict, issuer: Actor, *, recipient_prefix: str, 
             timeout=180.0,
             tock=WORKFLOW_TOCK,
             observe=lambda: {"credential_said": credential_said, "recipient": recipient_prefix},
+            cleanup=_cleanup_grant_doers,
         )
     return poll_until(
         lambda: _grant_exchange_said(
@@ -782,7 +1026,7 @@ def admit_grant(
     """
     sync_credential_mailbox_until_exchange(live_stack, recipient, said=grant_said)
     with patched_home(Path(live_stack["home"])):
-        admit_doer = AdmitDoer(
+        admit_doer = ManagedAdmitDoer(
             name=recipient.name,
             alias=recipient.alias,
             base="",
@@ -797,6 +1041,7 @@ def admit_grant(
             timeout=180.0,
             tock=WORKFLOW_TOCK,
             observe=lambda: {"actor": recipient.alias, "grant_said": grant_said},
+            cleanup=_cleanup_admit_doers,
         )
     return wait_for_credential_said(live_stack, recipient, schema=expected_schema, issued=False)
 
