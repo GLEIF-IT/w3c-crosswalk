@@ -1,4 +1,14 @@
-"""Runtime-generated topology for live W3C crosswalk integration tests."""
+"""Allocate the runtime paths and URLs that define one live integration stack.
+
+The topology object is the boundary between pytest temp-path mechanics and the
+rest of the integration harness.
+
+It owns:
+- path creation,
+- ephemeral port reservation, and
+- derived helper URLs
+so later code can reason about one stack instance without repeating path or URL math.
+"""
 
 from __future__ import annotations
 
@@ -35,6 +45,10 @@ class IntegrationStackTopology:
 
     The topology owns all runtime paths and ephemeral ports used by the local
     services so tests can run in parallel without hard-coded port collisions.
+
+    Read this object as the static portion of the ``live_stack`` contract.
+    Dynamic subprocess handles and helper-service state are attached later
+    by ``conftest.py``.
     """
 
     stack_id: str
@@ -54,22 +68,35 @@ class IntegrationStackTopology:
 
     @property
     def vlei_schema_url(self) -> str:
-        """Return the base URL of the local vLEI helper server."""
+        """Return the base URL of the local vLEI helper server.
+
+        This URL is used to derive schema OOBIs consumed by KERIpy habery
+        bootstrap, not as a source of truth for issued credentials.
+        """
         return f"http://{self.host}:{self.vlei_port}"
 
     @property
     def dws_artifact_url(self) -> str:
-        """Return the base URL of the local did:webs artifact server."""
+        """Return the base URL of the local did:webs artifact server.
+
+        The artifact server hosts ``did.json`` and related DID material. It is
+        distinct from the resolver endpoint used by the verifier.
+        """
         return f"http://{self.host}:{self.dws_artifact_port}"
 
     @property
     def dws_resolver_url(self) -> str:
-        """Return the base URL of the local did:webs resolver endpoint."""
+        """Return the base URL of the local did:webs resolver endpoint.
+
+        The verifier uses this endpoint so key-state resolution goes through the
+        resolver seam instead of trusting embedded keys or direct ``did.json``
+        fetches.
+        """
         return f"http://{self.host}:{self.dws_resolver_port}/1.0/identifiers"
 
     @property
     def status_base_url(self) -> str:
-        """Return the base URL of the local status service."""
+        """Return the base URL of the local status projection service."""
         return f"http://{self.host}:{self.status_port}"
 
     @property
@@ -82,7 +109,11 @@ class IntegrationStackTopology:
 
     @property
     def schema_oobis(self) -> dict[str, str]:
-        """Return schema OOBIs served by the local vLEI helper server."""
+        """Return schema OOBIs served by the local vLEI helper server.
+
+        These URLs are written into the common habery config so later actor
+        initialization resolves schemas against the live helper service.
+        """
         return {alias: f"{self.vlei_schema_url}/oobi/{said}" for alias, said in SCHEMA_OOBI_SAIDS.items()}
 
     def did_webs_did(self, aid: str, *, did_path: str = "dws") -> str:
@@ -90,7 +121,12 @@ class IntegrationStackTopology:
         return f"did:webs:{self.host}%3A{self.dws_artifact_port}:{did_path}:{aid}"
 
     def as_live_stack(self) -> dict:
-        """Project the topology into the mutable `live_stack` fixture contract."""
+        """Project the topology into the mutable ``live_stack`` fixture contract.
+
+        Only topology-derived state is emitted here. Launch-time service
+        handles, binaries, logs, and lazily attached helpers are added later by
+        the stack launcher.
+        """
         return {
             "topology": self,
             "stack_id": self.stack_id,

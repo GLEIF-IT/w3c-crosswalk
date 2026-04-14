@@ -30,7 +30,12 @@ class DidResolution:
 
 
 class DidWebsClient:
-    """Resolve did:webs DIDs and locate verification methods within them."""
+    """Resolve did:webs DIDs and locate verification methods within them.
+
+    This client is the narrow trust boundary for W3C verification. Verifiers in
+    this repo are expected to resolve key state through this seam instead of
+    trusting embedded keys or direct ``did.json`` fetches.
+    """
 
     def __init__(
         self,

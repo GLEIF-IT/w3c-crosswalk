@@ -1,4 +1,9 @@
-"""Shared helpers for live crosswalk integration workflows."""
+"""Shared polling, lifecycle, and HOME-sandbox helpers for live integration.
+
+These helpers exist to make integration failures diagnosable. Most of them are
+small, but they define the timeout/error-reporting contract used across the
+fixture and the in-process KERI workflow layer.
+"""
 
 from __future__ import annotations
 
@@ -37,7 +42,12 @@ def poll_until(
     describe: str,
     retry_exceptions: tuple[type[BaseException], ...] = (),
 ):
-    """Poll a fetch function until a readiness predicate succeeds or times out."""
+    """Poll a fetch function until a readiness predicate succeeds or times out.
+
+    The helper preserves both the last fetched value and the last retryable
+    error so timeout messages explain whether the system was merely incomplete
+    or repeatedly failing while being polled.
+    """
     deadline = time.monotonic() + timeout
     last_value = None
     last_error = None
@@ -91,7 +101,12 @@ def wait_for_port(
     log_path: Path,
     timeout: float = 45.0,
 ) -> None:
-    """Wait until a subprocess has bound a TCP port or fail with log context."""
+    """Wait until a subprocess has bound a TCP port or fail with log context.
+
+    Startup failures in the live stack are often easiest to understand from the
+    helper-service log tail, so this helper upgrades an ordinary port timeout
+    into a log-backed startup diagnostic.
+    """
     def _fetch() -> bool:
         if proc.poll() is not None:
             raise RuntimeError(f"{name} exited early with code {proc.returncode}:\n{read_log_tail(log_path)}")
@@ -128,6 +143,10 @@ def run_doers_until(
     The helper owns the doer lifecycle for integration tests: it enters the
     doers, advances the doist, captures optional observer state for diagnostics,
     and always attempts resource cleanup at the end.
+
+    This is the core harness seam that lets the integration layer treat KERIpy
+    ``Doer`` and ``DoDoer`` objects as deterministic workflow steps instead of
+    shelling out to ``kli`` and scraping stdout.
     """
     doist = doing.Doist(limit=timeout, tock=tock, real=True)
     deeds = doist.enter(doers=doers)
@@ -155,41 +174,6 @@ def run_doers_until(
         doist.exit(deeds=deeds)
         if cleanup is not None:
             cleanup(doers)
-
-
-def run_checked(
-    argv: Iterable[str],
-    *,
-    env: dict[str, str],
-    cwd: str | Path,
-    timeout: float = 90.0,
-    input_text: str | None = None,
-) -> subprocess.CompletedProcess[str]:
-    """Run a subprocess command and raise a rich error on non-zero exit.
-
-    This helper remains available for non-KERI subprocess utilities even though
-    the workflow itself should prefer in-process KERIpy doers.
-    """
-    proc = subprocess.run(
-        list(argv),
-        cwd=str(cwd),
-        env=env,
-        input=input_text,
-        text=True,
-        capture_output=True,
-        timeout=timeout,
-        check=False,
-    )
-    if proc.returncode != 0:
-        raise RuntimeError(
-            "command failed:\n"
-            f"argv={list(argv)!r}\n"
-            f"cwd={cwd}\n"
-            f"returncode={proc.returncode}\n"
-            f"stdout=\n{proc.stdout}\n"
-            f"stderr=\n{proc.stderr}"
-        )
-    return proc
 
 
 def write_json(path: Path, body: dict) -> Path:

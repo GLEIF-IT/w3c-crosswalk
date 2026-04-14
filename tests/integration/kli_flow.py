@@ -1,4 +1,19 @@
-"""In-process KERIpy workflow helpers for crosswalk integration tests."""
+"""Run the credential workflow in-process using KERIpy doers and stores.
+
+This module is the live test's KERI orchestration layer. It translates the
+human phase model of the end to end test into deterministic KERIpy operations:
+- initialize actors,
+- resolve OOBIs,
+- create registries,
+- issue credentials,
+- exchange grants,
+- admit credentials, and finally
+- inspect stored state.
+
+The important rule is that this module treats KERIpy as the protocol engine.
+The local helpers coordinate Doer logic and close resources deterministically;
+they should not drift into reimplementing protocol behavior.
+"""
 
 from __future__ import annotations
 
@@ -37,7 +52,19 @@ WORKFLOW_TOCK = 0.03125
 
 
 class ManagedRegistryInceptor(KeriRegistryInceptor):
-    """Local wrapper that retains the notifier so tests can close it explicitly."""
+    """Expose hidden notifier ownership for deterministic LMDB cleanup.
+
+    Upstream ``RegistryInceptor`` opens a notifier-backed note store but does
+    not retain enough owned handles for the integration harness to close that
+    LMDB environment deterministically under strict LMDB behavior.
+
+    This wrapper is intentionally narrow integration debt. It exists only to
+    make upstream-owned resources visible to cleanup code.
+
+    This Doer can be removed and replaced once the upstream RegistryInceptor is
+    changed to have Notifier be a self.notifier attribute and cleans it up, including
+    its inner Noter LMDB, when closing the RegistryInterceptor.
+    """
 
     def __init__(self, name, base, alias, bran, registryName, usage, **kwa):
         self.name = name
@@ -62,7 +89,17 @@ class ManagedRegistryInceptor(KeriRegistryInceptor):
 
 
 class ManagedCredentialIssuer(KeriCredentialIssuer):
-    """Local wrapper that retains the notifier so tests can close it explicitly."""
+    """Expose hidden notifier ownership for deterministic LMDB cleanup.
+
+    The live test reopens the same actor stores across issue/grant/admit
+    phases. Under strict LMDB behavior that means the harness must explicitly
+    close every hidden ``Notifier`` and ``Regery`` opened by a doer before the
+    next phase starts.
+
+    This Doer can be removed and replaced once the upstream CredentialIssuer is
+    changed to have Notifier be a self.notifier attribute and cleans it up, including
+    its inner Noter LMDB, when closing the CredentialIssuer.
+    """
 
     def __init__(
         self,
@@ -155,7 +192,13 @@ class ManagedCredentialIssuer(KeriCredentialIssuer):
 
 
 class ManagedGrantDoer(KeriGrantDoer):
-    """Local wrapper that retains the notifier so tests can close it explicitly."""
+    """
+    Expose grant-doer notifier ownership for deterministic cleanup.
+
+    This Doer can be removed and replaced once the upstream GrantDoer is
+    changed to have Notifier be a self.notifier attribute and cleans it up, including
+    its inner Noter LMDB, when closing the GrantDoer.
+    """
 
     def __init__(self, name, alias, base, bran, said, recp, message, timestamp):
         self.said = said
@@ -184,7 +227,13 @@ class ManagedGrantDoer(KeriGrantDoer):
 
 
 class ManagedAdmitDoer(KeriAdmitDoer):
-    """Local wrapper that retains the notifier so tests can close it explicitly."""
+    """
+    Expose admit-doer notifier ownership for deterministic cleanup.
+
+    This Doer can be removed and replaced once the upstream AdmitDoer is
+    changed to have Notifier be a self.notifier attribute and cleans it up, including
+    its inner Noter LMDB, when closing the AdmitDoer.
+    """
 
     def __init__(self, name, alias, base, bran, said, message, timestamp):
         self.said = said
@@ -301,7 +350,7 @@ def _cleanup_credential_issue_doers(doers: list) -> None:
 
 
 def _cleanup_delegated_qvi_doers(*, delegated_incept_doer, confirm_doer) -> None:
-    """Close resources opened for delegated QVI inception and confirmation."""
+    """Close the two-doer delegated inception unit as one owned workflow step."""
     _cleanup_incept_doers([delegated_incept_doer])
     _cleanup_confirm_doers([confirm_doer])
 
@@ -738,6 +787,10 @@ def create_delegated_qvi(
 
     The delegate keystore/habery and delegation proxy should already exist
     before this helper runs.
+
+    In KERI terms this helper coordinates a delegated inception followed by the
+    delegator-side confirmation/anchoring step, then queries key state so later
+    workflow phases observe the committed delegated identifier.
     """
     init_habery(live_stack, delegate)
     proxy_actor = Actor(name=delegate.name, alias=proxy_alias, salt=delegate.salt, passcode=delegate.passcode)
@@ -793,7 +846,12 @@ def resolve_pairwise_oobis(live_stack: dict, actors: list[Actor]) -> dict[str, s
 
 
 def create_registry(live_stack: dict, actor: Actor, *, registry_name: str, usage: str) -> None:
-    """Create a credential registry owned by one actor."""
+    """Create one TEL-backed credential registry for an actor.
+
+    This is registry state creation, not a W3C concern. The registry is part of
+    the KERI/ACDC source-of-truth layer that later status and W3C projection
+    logic derive from.
+    """
     with patched_home(Path(live_stack["home"])):
         registry_doer = ManagedRegistryInceptor(
             name=actor.name,
@@ -858,7 +916,15 @@ def create_credential(
     rules_path: Path,
     edges_path: Path | None = None,
 ) -> str:
-    """Issue one credential and return its resulting SAID."""
+    """Issue one credential through KERIpy and return the resulting SAID.
+
+    The helper owns only orchestration:
+    - open the actor HOME sandbox,
+    - construct the issuing doer,
+    - run it to completion,
+    - close LMDB resources,
+    - then poll the actor store for the issued credential SAID.
+    """
     with patched_home(Path(live_stack["home"])):
         issue_doer = ManagedCredentialIssuer(
             name=issuer.name,
@@ -940,10 +1006,13 @@ def sync_credential_mailbox_until_exchange(
 ) -> str:
     """Poll the recipient mailbox until one exact credential exchange is stored.
 
-    `AdmitDoer` expects the referenced grant exn to already exist in the
+    ``AdmitDoer`` expects the referenced grant exn to already exist in the
     recipient's local exchange store. This helper performs the explicit mailbox
     receive/sync phase before admission so the test does not race the incoming
-    `/credential` delivery path.
+    ``/credential`` delivery path.
+
+    Read this as an exchange-delivery synchronization barrier between the grant
+    phase and the admit phase.
     """
     with patched_home(Path(live_stack["home"])):
         hby = existing.setupHby(name=recipient.name, base="", bran=recipient.passcode)
@@ -978,7 +1047,12 @@ def sync_credential_mailbox_until_exchange(
 
 
 def grant_credential(live_stack: dict, issuer: Actor, *, recipient_prefix: str, credential_said: str) -> str:
-    """Send an IPEX grant for a credential and return the issuer-side exchange SAID."""
+    """Send an IPEX grant and return the issuer-side grant exchange SAID.
+
+    The returned grant exchange SAID is the durable handoff token for the subsequent
+    admit phase. The test intentionally does not use vague “latest grant”
+    matching once multiple exchanges can exist.
+    """
     with patched_home(Path(live_stack["home"])):
         grant_doer = ManagedGrantDoer(
             name=issuer.name,
@@ -1023,6 +1097,10 @@ def admit_grant(
 
     The caller must pass the exact GRANT exchange SAID returned by the grant
     workflow. This helper does not accept credential-based fallback lookup.
+
+    In phase terms this is:
+    mailbox sync -> admit doer -> saved subject credential visible in the
+    recipient store.
     """
     sync_credential_mailbox_until_exchange(live_stack, recipient, said=grant_said)
     with patched_home(Path(live_stack["home"])):

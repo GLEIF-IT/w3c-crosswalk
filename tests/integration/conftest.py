@@ -1,4 +1,15 @@
-"""Live-stack fixtures for the W3C crosswalk integration layer."""
+"""Launch and manage the subprocess side of the live integration stack.
+
+This module owns the network-facing portion of the end to end integration test:
+- runtime directory setup (test run root and KERI home override),
+- shared staged assets (vLEI schemas, VRD schemas, witness config),
+- long-lived helper subprocesses (witness, vLEI-server, did:webs resolver),
+- and the mutable ``live_stack`` contract that later workflow helpers consume.
+
+KERI workflow steps do not run here. They run in-process through
+``kli_flow.py`` after this fixture has established a HOME sandbox, witness
+reachability, schema/helper services, and the local W3C status endpoint.
+"""
 
 from __future__ import annotations
 
@@ -10,8 +21,16 @@ import subprocess
 
 import pytest
 
+from .helpers import read_log_tail, terminate_process, wait_for_json_health, wait_for_port
+from .constants import WITNESS_AIDS
+from .topology import make_stack_topology, stack_runtime_name
+
+# Directory Setup
+# should resolve to w3c-crosswalk/
 W3C_CROSSWALK_ROOT = Path(__file__).resolve().parents[2]
+# should resolve to w3c-crosswalk/tests/integration
 INTEGRATION_ROOT = Path(__file__).resolve().parent
+# should resolve to w3c-crosswalk/tests/integration/_assets
 ASSET_ROOT = INTEGRATION_ROOT / "_assets"
 WITNESS_CONFIG_ROOT = ASSET_ROOT / "keri" / "cf" / "main"
 VLEI_ASSET_ROOT = ASSET_ROOT / "vlei"
@@ -19,14 +38,12 @@ VLEI_SCHEMA_ROOT = VLEI_ASSET_ROOT / "schema" / "acdc"
 VLEI_CRED_ROOT = VLEI_ASSET_ROOT / "samples" / "acdc"
 VLEI_OOBI_ROOT = VLEI_ASSET_ROOT / "samples" / "oobis"
 
-from .helpers import read_log_tail, terminate_process, wait_for_json_health, wait_for_port
-from .constants import WITNESS_AIDS
-from .topology import make_stack_topology, stack_runtime_name
-
+# Local venv Python and binary setup
 PYTHON_BIN = W3C_CROSSWALK_ROOT / ".venv" / "bin" / "python"
 VLEI_SVR_BIN = W3C_CROSSWALK_ROOT / ".venv" / "bin" / "vLEI-server"
 DWS_BIN = W3C_CROSSWALK_ROOT / ".venv" / "bin" / "dws"
 
+# Witness and other service config and script names
 WITNESS_CONFIG_NAMES = ("wan", "wil", "wes")
 SERVICE_SCRIPTS_ROOT = INTEGRATION_ROOT / "_services"
 WITNESS_SERVER_SCRIPT = SERVICE_SCRIPTS_ROOT / "witness_server.py"
@@ -63,6 +80,10 @@ def _write_habery_config(config_root: Path, live_stack: dict) -> None:
     - witness OOBI URLs
     - ACDC Schema URLs
     read in from the live config.
+
+    This is the config seam that lets later KERIpy habery initialization pull
+    witness and ACDC schema material from the run-specific, local live stack
+    instead of from the user's machine-global environment.
     """
     target_dir = config_root / "keri" / "cf"
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -83,15 +104,21 @@ def _ensure_link(target: Path, source: Path) -> None:
     target.symlink_to(source)
 
 
-def _ensure_shared_vlei_assets(shared_root: Path) -> dict[str, Path]:
+def _ensure_vlei_assets(shared_root: Path) -> dict[str, Path]:
     """
-    Stage reusable live-stack assets once and return their shared paths.
+    Stage reusable live-stack assets (schemas, well knowns, .cesr streams) once
+    and return their shared paths.
 
     Credentials and OOBIs are served directly from vendored asset directories.
     Schemas are staged in one shared directory as symlinks so the live stack
     does not recopy them for every test runtime.
+
+    ``shared_root`` lives under ``tmp_path_factory.getbasetemp()`` and is
+    shared across one pytest session or xdist worker. This is intentionally
+    different from the per-stack ``runtime_root`` created with ``mktemp(...)``
+    inside ``_stack_fixture(...)``.
     """
-    schema_root = shared_root / "schema"
+    schema_root = shared_root / "schema"  # place to host ACDC schema files
     schema_root.mkdir(parents=True, exist_ok=True)
 
     for schema_path in VLEI_SCHEMA_ROOT.iterdir():
@@ -106,7 +133,11 @@ def _ensure_shared_vlei_assets(shared_root: Path) -> dict[str, Path]:
 
 
 def _set_vlei_dirs(live_stack: dict, *, shared_assets: dict[str, Path]) -> None:
-    """Attach the shared vLEI asset roots to the live-stack contract."""
+    """Attach staged helper-asset roots to the live-stack contract.
+
+    These directories are consumed only by the helper services. They are not
+    the KERI source of truth for issued credentials or registry state.
+    """
     live_stack["schema_root"] = shared_assets["schema_root"]
     live_stack["cred_root"] = shared_assets["cred_root"]
     live_stack["oobi_root"] = shared_assets["oobi_root"]
@@ -126,7 +157,9 @@ def _wait_process_port(live_stack: dict, proc: subprocess.Popen[bytes], name: st
 def _lazy_didwebs_launcher(live_stack: dict, *, name: str, alias: str, passcode: str) -> dict[str, str]:
     """Launch did:webs artifact and resolver services on first use.
 
-    The service pair is started lazily because only the W3C issuance and verification phase needs it.
+    The service pair is started lazily because only the W3C issuance and
+    verification phase needs it. The KERI issuance workflow deliberately does
+    not depend on did:webs until the final interoperability projection phase.
     """
     if live_stack.get("did_webs_running"):
         return {
@@ -235,8 +268,14 @@ def _launch_live_stack(live_stack: dict, *, shared_assets: dict[str, Path]):
     - Credential Status service backed by a simple JSON document credential status registry DB.
     - did:webs service (lazily executed)
 
-    The fixture contract uses subprocesses only for long-lived network-facing services.
-    All KERI workflow steps run separately in-process through the workflow helpers.
+    The fixture contract uses subprocesses only for long-lived network-facing
+    services. All KERI workflow steps run separately in-process through the
+    workflow helpers.
+
+    ``live_stack["status_store"]`` is created here as the per-stack backing
+    path for the local status projection service. The file is not generic temp
+    scratch space. It is the W3C-facing status projection store used by the
+    verifier path later in the test.
     """
     witness_python = _require_path(PYTHON_BIN, "crosswalk python")
     vlei_server_bin = _require_path(VLEI_SVR_BIN, "vLEI-server binary")
@@ -400,12 +439,17 @@ def _stack_fixture(tmp_path_factory: pytest.TempPathFactory, request: pytest.Fix
     """
     Create and yield a live stack, retrying a few times on port conflicts.
 
-    Uses the TempPathFactory to set up the following directory and symlink structure:
-    - vLEI server home: vlei_temp / shared-vlei-assets
+    Uses the TempPathFactory to set up the following directory and symlink
+    structure:
+    - shared helper assets: basetemp / shared-vlei-assets
     - runtime root:
       - config
       - logs
       - tmp
+
+    ``getbasetemp()`` yields a worker/session-scoped shared staging area for
+    reusable helper assets. ``mktemp(...)`` yields the isolated runtime root
+    whose path becomes the stack HOME sandbox.
     """
     # attrs used for custom $HOME keystore dir, replacing KERI home of `$HOME/.keri` or /usr/local/var/keri
     worker_id = _current_worker_id()
@@ -413,7 +457,7 @@ def _stack_fixture(tmp_path_factory: pytest.TempPathFactory, request: pytest.Fix
 
     vlei_temp = tmp_path_factory.getbasetemp()
 
-    shared_assets = _ensure_shared_vlei_assets(vlei_temp / "shared-vlei-assets")
+    shared_assets = _ensure_vlei_assets(vlei_temp / "shared-vlei-assets")
     last_err = None
     for attempt in range(3):  # only retries on port error, up to three times
         run_name = stack_runtime_name(mode=mode, worker_id=worker_id, nodeid=nodeid, attempt=attempt)

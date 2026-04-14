@@ -3,6 +3,10 @@
 This module owns the W3C-side verification rules for the repository. It
 resolves did:webs key material, verifies JWT signatures, checks projected
 status, and compares derived W3C credentials against their source ACDC.
+
+The key boundary is this: the verifier validates the projected W3C representation,
+but its correctness still depends on the KERI-side source credential and status
+projection seams.
 """
 
 from __future__ import annotations
@@ -34,7 +38,14 @@ class VerificationResult:
 
 
 class CrosswalkVerifier:
-    """Verify W3C artifacts and their consistency with source ACDCs."""
+    """Verify W3C artifacts and their consistency with source ACDCs.
+
+    Verification proceeds in layers:
+    - resolve key state,
+    - verify signature,
+    - dereference projected status, and only then
+    - compare the W3C payload against source ACDC content.
+    """
 
     def __init__(self, resolver: DidWebsClient | None = None, status_resolver: HttpStatusResolver | None = None):
         """Create a verifier with overridable DID and status resolvers."""

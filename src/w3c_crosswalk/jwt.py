@@ -3,6 +3,9 @@
 This module keeps the JOSE mechanics intentionally small and explicit so the
 repository can bind W3C JWT artifacts to live KERI Ed25519 signing keys
 without pulling in a heavier JWT abstraction.
+
+This module is the cryptographic binding seam between the
+projected W3C payload and a live KERI habitat signer.
 """
 
 from __future__ import annotations
@@ -71,7 +74,12 @@ class DecodedJwt:
 
 
 class KeriHabSigner:
-    """Adapter for a live KERI habitat signer."""
+    """Adapter for a live KERI habitat signer.
+
+    This object is intentionally small: it exposes the minimum JWT-signing
+    interface while preserving the ability to close the owned habery when the
+    signer opened it.
+    """
 
     def __init__(self, hab: Any, hby: habbing.Habery | None = None):
         """Wrap a habitat and optional habery owner for later cleanup."""

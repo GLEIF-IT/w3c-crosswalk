@@ -14,6 +14,7 @@ from w3c_crosswalk.jwt import KeriHabSigner, issue_vc_jwt
 from w3c_crosswalk.status import JsonFileStatusStore
 from w3c_crosswalk.verifier import CrosswalkVerifier
 from w3c_crosswalk.didwebs import DidWebsClient
+from .conftest import INTEGRATION_ROOT, W3C_CROSSWALK_ROOT
 
 from .kli_flow import (
     Actor,
@@ -86,8 +87,19 @@ def _rules_path(stack: dict, filename: str) -> Path:
 
 
 def test_single_sig_vrd_crosswalk_live(live_stack):
-    """Exercise the full single-sig GEDA -> QVI -> LE -> VRD crosswalk flow."""
+    """Exercise the full single-sig GEDA -> QVI -> LE -> VRD crosswalk flow.
+
+    Phase model:
+
+    1. stand up the live stack and deterministic actor sandboxes
+    2. complete the KERI/ACDC issuance chain through grant/admit flow
+    3. validate source ACDC chain state directly from local stores
+    4. project the final VRD into W3C VC-JWT form
+    5. verify the W3C artifact through did:webs resolution and projected status
+    """
     state = default_workflow_state()
+    print(f"{INTEGRATION_ROOT}")
+    print(f"{W3C_CROSSWALK_ROOT}")
 
     state.geda_prefix = init_and_incept_single_sig(live_stack, state.geda)
     init_habery(live_stack, state.qvi)

@@ -3,6 +3,10 @@
 The CLI is intentionally thin: it loads files and keystores, delegates to the
 package's runtime modules, and prints JSON so the commands remain easy to
 compose in scripts and integration tests.
+
+Treat this module as an adapter surface, not as the primary architecture.
+The semantic core lives in ``profile.py``, ``jwt.py``, ``didwebs.py``,
+``status.py``, ``service.py``, and ``verifier.py``.
 """
 
 from __future__ import annotations
@@ -27,7 +31,11 @@ def add_common_output_args(parser: argparse.ArgumentParser) -> None:
 
 
 def add_live_signer_args(parser: argparse.ArgumentParser) -> None:
-    """Add the arguments required to open a live KERI habitat signer."""
+    """Add the arguments required to open a live KERI habitat signer.
+
+    These arguments intentionally mirror KERIpy keystore concepts rather than
+    hiding them behind crosswalk-specific abstractions.
+    """
     parser.add_argument("--name", required=True, help="KLI/KERIpy keystore name")
     parser.add_argument("--base", default="", help="KLI/KERIpy keystore base path")
     parser.add_argument("--alias", required=True, help="Habitat alias inside the keystore")
@@ -51,7 +59,11 @@ def load_passcode(args: argparse.Namespace) -> str | None:
 
 
 def cmd_issue_vc(args: argparse.Namespace) -> int:
-    """Issue a VC-JWT from an input ACDC and optionally project status state."""
+    """Issue a VC-JWT from an input ACDC and optionally project status state.
+
+    The CLI path composes three runtime seams: ACDC-to-W3C projection, live
+    habitat signing, and optional status projection.
+    """
     acdc = load_json_file(args.acdc)
     signer = KeriHabSigner.open(name=args.name, base=args.base, alias=args.alias, passcode=load_passcode(args))
     try:

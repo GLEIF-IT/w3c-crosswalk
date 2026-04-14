@@ -20,16 +20,20 @@ crosswalk profile, not yet a full ecosystem-grade verifier.
 
 ## What Is Here
 
-- [`src/w3c_crosswalk`](/Users/kbull/code/keri/kentbull/w3c-crosswalk/src/w3c_crosswalk): current Python implementation
-- [`tests`](/Users/kbull/code/keri/kentbull/w3c-crosswalk/tests): contract tests plus the live-stack integration test
-- [`fixtures`](/Users/kbull/code/keri/kentbull/w3c-crosswalk/fixtures): stable contract fixtures
-- [`docs/crosswalk-profile.md`](/Users/kbull/code/keri/kentbull/w3c-crosswalk/docs/crosswalk-profile.md): current profile note
-- [`docs/w3c-vc-libs-options.md`](/Users/kbull/code/keri/kentbull/w3c-crosswalk/docs/w3c-vc-libs-options.md): external verifier library options
-- [`plans`](/Users/kbull/code/keri/kentbull/w3c-crosswalk/plans): execution and architecture plans
+- [`src/w3c_crosswalk`](src/w3c_crosswalk): current Python implementation
+- [`tests`](tests): contract tests plus the live-stack integration test
+- [`fixtures`](fixtures): stable contract fixtures
+- [`docs/crosswalk-profile.md`](docs/crosswalk-profile.md): current profile note
+- [`docs/w3c-vc-libs-options.md`](docs/w3c-vc-libs-options.md): external verifier library options
+- [`plans`](plans): execution and architecture plans
 
 The `packages/`, `apps/`, and `scripts/demo/` directories are still repo-shape
 placeholders for the longer-term monorepo layout. The active implementation is
 in `src/` and `tests/`.
+
+Read
+[`docs/integration-maintainer-guide.md`](docs/integration-maintainer-guide.md)
+for the live stack, workflow, and projection mental model.
 
 ## Local Setup
 
@@ -114,7 +118,7 @@ Important distinction:
 - an IPEX grant path also requires KEL material, TEL material, any chained
   source credentials, and the `/ipex/grant` exchange message
 
-See [`fixtures/README.md`](/Users/kbull/code/keri/kentbull/w3c-crosswalk/fixtures/README.md) for the fixture contract.
+See [`fixtures/README.md`](fixtures/README.md) for the fixture contract.
 
 ## Testing
 

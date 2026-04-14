@@ -19,7 +19,7 @@ ecosystem choice.
 
 ## Current `w3c-crosswalk` verifier legitimacy
 
-Our verifier in [`src/w3c_crosswalk/verifier.py`](/Users/kbull/code/keri/kentbull/w3c-crosswalk/src/w3c_crosswalk/verifier.py)
+Our verifier in [`src/w3c_crosswalk/verifier.py`](src/w3c_crosswalk/verifier.py)
 is legitimate as a project verifier because it:
 
 - resolves issuer DID state through `did:webs`

@@ -3,6 +3,9 @@
 These handlers intentionally keep protocol logic thin. They decode requests,
 delegate to the status store or verifier, and return JSON responses suitable
 for the local demo stack and integration tests.
+
+They should be read as transport adapters, not as the place where status or
+verification semantics are defined.
 """
 
 from __future__ import annotations
@@ -19,7 +22,11 @@ from .verifier import CrosswalkVerifier
 
 
 class StatusServiceHandler(BaseHTTPRequestHandler):
-    """Serve health and credential status resources from a JSON status store."""
+    """Serve health and credential status resources from a JSON status store.
+
+    The handler publishes projected status state for W3C consumers. It does not
+    derive status truth independently of the backing store.
+    """
 
     store: JsonFileStatusStore
     base_url: str

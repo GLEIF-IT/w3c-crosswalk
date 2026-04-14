@@ -3,6 +3,10 @@
 This module is the semantic core of the repository. It defines how live ACDC
 credentials are transposed into W3C VC-shaped documents while preserving
 source lineage, credential-chain semantics, and revocation/status references.
+
+Read this module as the W3C mapping policy layer.
+It does not fetch key state, read LMDB directly, or sign tokens.
+It only defines what the projected W3C document means.
 """
 
 from __future__ import annotations
@@ -85,7 +89,11 @@ def build_crosswalk_metadata(acdc: dict[str, Any]) -> dict[str, Any]:
 
 
 def build_status_reference(acdc: dict[str, Any], status_base_url: str) -> dict[str, str]:
-    """Build the dereferenceable W3C credential status reference."""
+    """Build the dereferenceable W3C credential status reference.
+
+    The returned object is a projection hook into the local status-service seam,
+    not an authoritative status engine of its own.
+    """
     base_url = status_base_url.rstrip("/")
     return {
         "id": f"{base_url}/statuses/{acdc.get('d', '')}",

@@ -3,6 +3,9 @@
 This module provides the local status-store abstraction used by the CLI,
 service layer, and verifier. It is intentionally small so that later status
 implementations can replace storage or transport without changing callers.
+
+The important maintainer mental model is that status here is a projection seam.
+The authoritative state still comes from KERI registry/TEL state.
 """
 
 from __future__ import annotations
@@ -68,7 +71,12 @@ class StatusResolver(Protocol):
 
 
 class JsonFileStatusStore:
-    """Persist projected credential status records in a local JSON file."""
+    """Persist projected credential status records in a local JSON file.
+
+    This store is deliberately simple because it serves local integration and
+    proof-of-concept status publication. It is not the intended long-term
+    production architecture.
+    """
 
     def __init__(self, path: str | Path):
         """Initialize the store and create an empty file on first use."""
