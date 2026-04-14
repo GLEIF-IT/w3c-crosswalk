@@ -1,0 +1,196 @@
+{
+  "$id": "EFiYsVADHXcn1BZirDRH301Rm12301povihg5UMIYkfc",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Verifiable Reference Data (VRD) Authorization Credential",
+  "description": "A VRD Authorization Credential issued by a Legal Entity to a QVI for the authorization of VRD credentials",
+  "type": "object",
+  "credentialType": "VRDAuthorizationCredential",
+  "version": "1.0.0",
+  "properties": {
+    "v": {
+      "description": "Version",
+      "type": "string"
+    },
+    "d": {
+      "description": "Credential SAID",
+      "type": "string"
+    },
+    "i": {
+      "description": "LE Issuer AID",
+      "type": "string"
+    },
+    "ri": {
+      "description": "Credential status registry",
+      "type": "string"
+    },
+    "s": {
+      "description": "Schema SAID",
+      "type": "string"
+    },
+    "a": {
+      "oneOf": [
+        {
+          "description": "Attributes block SAID",
+          "type": "string"
+        },
+        {
+          "$id": "EAFCPtqS_ulIJ_9FL_R1kzj22j0lTUJEQniBWlX9l9-J",
+          "description": "Attributes block",
+          "type": "object",
+          "properties": {
+            "d": {
+              "description": "Attributes block SAID",
+              "type": "string"
+            },
+            "i": {
+              "description": "QVI Issuee AID",
+              "type": "string"
+            },
+            "dt": {
+              "description": "Issuance date time",
+              "type": "string",
+              "format": "date-time"
+            },
+            "AID": {
+              "description": "AID of the Legal Entity of the VRD credential",
+              "type": "string"
+            },
+            "DID": {
+              "description": "DID of the Legal Entity",
+              "type": "string"
+            },
+            "HeadquartersAddress": {
+              "description": "Headquarters Address of the Legal Entity",
+              "type": "string"
+            },
+            "LegalName": {
+              "description": "Legal Name of the Legal Entity",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "i",
+            "dt",
+            "AID",
+            "DID",
+            "HeadquartersAddress",
+            "LegalName"
+          ]
+        }
+      ]
+    },
+    "e": {
+      "oneOf": [
+        {
+          "description": "Edges block SAID",
+          "type": "string"
+        },
+        {
+          "$id": "ECadfxrrTHs5-clF7_KYdF00qvgpYNH-B3vR7FkOg9ay",
+          "description": "Edges block",
+          "type": "object",
+          "properties": {
+            "d": {
+              "description": "Edges block SAID",
+              "type": "string"
+            },
+            "le": {
+              "description": "Chain to legal entity  credential",
+              "type": "object",
+              "properties": {
+                "n": {
+                  "description": "QVI Issuer credential SAID",
+                  "type": "string"
+                },
+                "s": {
+                  "description": "SAID of required schema of the credential pointed to by this node",
+                  "type": "string",
+                  "const": "ENPXp1vQzRF6JwIuS-mp2U8Uf1MoADoP_GqQ62VsDZWY"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "n",
+                "s"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "d",
+            "le"
+          ]
+        }
+      ]
+    },
+    "r": {
+      "oneOf": [
+        {
+          "description": "Rules block SAID",
+          "type": "string"
+        },
+        {
+          "$id": "EOJGdeB8bSOrLjE2SDpKpbY8Cn-kdGD1uS46FR5Jasp7",
+          "description": "Rules block",
+          "type": "object",
+          "properties": {
+            "d": {
+              "description": "Rules block SAID",
+              "type": "string"
+            },
+            "usageDisclaimer": {
+              "description": "Usage Disclaimer",
+              "type": "object",
+              "properties": {
+                "l": {
+                  "description": "Associated legal language",
+                  "type": "string",
+                  "const": ""
+                }
+              }
+            },
+            "issuanceDisclaimer": {
+              "description": "Issuance Disclaimer",
+              "type": "object",
+              "properties": {
+                "l": {
+                  "description": "Associated legal language",
+                  "type": "string",
+                  "const": ""
+                }
+              }
+            },
+            "privacyDisclaimer": {
+              "description": "Privacy Disclaimer",
+              "type": "object",
+              "properties": {
+                "l": {
+                  "description": "Associated legal language",
+                  "type": "string",
+                  "const": ""
+                }
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "d",
+            "usageDisclaimer",
+            "issuanceDisclaimer",
+            "privacyDisclaimer"
+          ]
+        }
+      ]
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "i",
+    "ri",
+    "s",
+    "d",
+    "e",
+    "r"
+  ]
+}

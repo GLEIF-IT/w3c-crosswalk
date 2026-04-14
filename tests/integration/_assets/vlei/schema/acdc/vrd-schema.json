@@ -1,0 +1,202 @@
+{
+  "$id": "EAyv2DLocYxJlPrWAfYBuHWDpjCStdQBzNLg0-3qQ-KP",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Verifiable Reference Data (VRD) Credential",
+  "description": "A VRD Credential issued by a Qualified vLEI Issuer to a LE",
+  "type": "object",
+  "credentialType": "VRDCredential",
+  "version": "1.0.0",
+  "properties": {
+    "v": {
+      "description": "Version",
+      "type": "string"
+    },
+    "d": {
+      "description": "Credential SAID",
+      "type": "string"
+    },
+    "i": {
+      "description": "QVI Issuer AID",
+      "type": "string"
+    },
+    "ri": {
+      "description": "Credential status registry",
+      "type": "string"
+    },
+    "s": {
+      "description": "Schema SAID",
+      "type": "string"
+    },
+    "a": {
+      "oneOf": [
+        {
+          "description": "Attributes block SAID",
+          "type": "string"
+        },
+        {
+          "$id": "EIsncCzvBiY5g-JDJn2PreFbr1gANEepRTgK0U6BPhFE",
+          "description": "Attributes block",
+          "type": "object",
+          "properties": {
+            "d": {
+              "description": "Attributes block SAID",
+              "type": "string"
+            },
+            "i": {
+              "description": "QVI Issuee AID",
+              "type": "string"
+            },
+            "dt": {
+              "description": "Issuance date time",
+              "type": "string",
+              "format": "date-time"
+            },
+            "AID": {
+              "description": "AID of the intended recipient of the VRD credential",
+              "type": "string"
+            },
+            "DID": {
+              "description": "DID of the intended recipient of the VCDM VRD credential",
+              "type": "string"
+            },
+            "HeadquartersAddress": {
+              "description": "Headquarters Address of the Legal Entity",
+              "type": "string"
+            },
+            "LegalName": {
+              "description": "LegalName of the Legal Entity",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "i",
+            "dt",
+            "AID",
+            "DID",
+            "HeadquartersAddress",
+            "LegalName"
+          ]
+        }
+      ]
+    },
+    "e": {
+      "oneOf": [
+        {
+          "description": "Edges block SAID",
+          "type": "string"
+        },
+        {
+          "$id": "EAtMAKVYGMKYbziGkL117tB9sL3yhbGwsKQJHet-jICc",
+          "description": "Edges block",
+          "type": "object",
+          "properties": {
+            "d": {
+              "description": "Edges block SAID",
+              "type": "string"
+            },
+            "le": {
+              "description": "Chain to Legal Entity vLEI credential",
+              "type": "object",
+              "properties": {
+                "n": {
+                  "description": "QVI Issuer credential SAID",
+                  "type": "string"
+                },
+                "s": {
+                  "description": "SAID of required schema of the credential pointed to by this node",
+                  "type": "string",
+                  "const": "ENPXp1vQzRF6JwIuS-mp2U8Uf1MoADoP_GqQ62VsDZWY"
+                },
+                "o": {
+                  "description": "Edge operator for the Legal Entity chain",
+                  "type": "string",
+                  "const": "NI2I"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "n",
+                "s",
+                "o"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "d",
+            "le"
+          ]
+        }
+      ]
+    },
+    "r": {
+      "oneOf": [
+        {
+          "description": "Rules block SAID",
+          "type": "string"
+        },
+        {
+          "$id": "EOJGdeB8bSOrLjE2SDpKpbY8Cn-kdGD1uS46FR5Jasp7",
+          "description": "Rules block",
+          "type": "object",
+          "properties": {
+            "d": {
+              "description": "Rules block SAID",
+              "type": "string"
+            },
+            "usageDisclaimer": {
+              "description": "Usage Disclaimer",
+              "type": "object",
+              "properties": {
+                "l": {
+                  "description": "Associated legal language",
+                  "type": "string",
+                  "const": ""
+                }
+              }
+            },
+            "issuanceDisclaimer": {
+              "description": "Issuance Disclaimer",
+              "type": "object",
+              "properties": {
+                "l": {
+                  "description": "Associated legal language",
+                  "type": "string",
+                  "const": ""
+                }
+              }
+            },
+            "privacyDisclaimer": {
+              "description": "Privacy Disclaimer",
+              "type": "object",
+              "properties": {
+                "l": {
+                  "description": "Associated legal language",
+                  "type": "string",
+                  "const": ""
+                }
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "d",
+            "usageDisclaimer",
+            "issuanceDisclaimer",
+            "privacyDisclaimer"
+          ]
+        }
+      ]
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "i",
+    "ri",
+    "s",
+    "d",
+    "e",
+    "r"
+  ]
+}
