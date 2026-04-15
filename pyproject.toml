@@ -1,7 +1,7 @@
 [project]
-name = "w3c-crosswalk"
+name = "vc-isomer"
 version = "0.1.0"
-description = "W3C crosswalk services and tooling for vLEI VRD credentials"
+description = "W3C isomer services and tooling for vLEI VRD credentials"
 readme = "README.md"
 requires-python = ">=3.12.6,<3.14"
 license = { text = "Apache-2.0" }
@@ -29,7 +29,7 @@ live = [
 ]
 
 [project.scripts]
-crosswalk = "w3c_crosswalk.cli:main"
+isomer = "vc_isomer.cli:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -44,7 +44,7 @@ keri = { git = "https://github.com/WebOfTrust/keripy.git", rev = "cbbf700fa80915
 vlei = { git = "https://github.com/WebOfTrust/vLEI.git", rev = "f514b9431c5f965b5f7f64a8693e19df2f181564" }
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/w3c_crosswalk"]
+packages = ["src/vc_isomer"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

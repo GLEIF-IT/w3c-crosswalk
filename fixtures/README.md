@@ -1,6 +1,6 @@
 # Fixture Contract
 
-This directory holds language-neutral fixture data for the crosswalk profile and
+This directory holds language-neutral fixture data for the isomer profile and
 verifier contract tests.
 
 ## Purpose
@@ -16,7 +16,7 @@ verifier contract tests.
 
 ## Maintenance Rules
 
-- Keep these fixtures stable unless the crosswalk profile itself changes.
+- Keep these fixtures stable unless the isomer profile itself changes.
 - Treat them as contract inputs shared across Python now and `keri-ts` later.
 - Prefer adding a new fixture over mutating an existing one when testing a new
   scenario or regression.

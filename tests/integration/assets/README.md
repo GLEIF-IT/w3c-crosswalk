@@ -24,7 +24,7 @@ single-sig integration workflow.
 - Rules files are copied or SAIDified at runtime but are otherwise treated as
   source-controlled issuance inputs.
 - Keep these assets aligned with the corresponding helpers in
-  `tests/integration/test_single_sig_vrd_crosswalk.py` and
+  `tests/integration/test_single_sig_vrd_isomer.py` and
   `tests/integration/kli_flow.py`.
 - If schema or edge semantics change, update these assets together with the
   live test so the workflow remains internally coherent.

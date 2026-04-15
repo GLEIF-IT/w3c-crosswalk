@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from w3c_crosswalk.longrunning import OperationMonitor
+from vc_isomer.longrunning import OperationMonitor
 
 
 def test_operation_monitor_tracks_pending_completed_failed_and_deleted(tmp_path):

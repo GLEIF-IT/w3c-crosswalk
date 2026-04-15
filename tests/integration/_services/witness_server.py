@@ -1,4 +1,4 @@
-"""Launch the crosswalk integration witness-demo topology."""
+"""Launch the isomer integration witness-demo topology."""
 
 from __future__ import annotations
 

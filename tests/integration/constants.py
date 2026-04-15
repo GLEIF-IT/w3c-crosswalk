@@ -1,4 +1,4 @@
-"""Stable constants for the live crosswalk integration harness."""
+"""Stable constants for the live isomer integration harness."""
 
 # Canonical schema SAIDs exercised by the single-sig live workflow.
 QVI_SCHEMA_SAID = "EBfdlu8R27Fbx-ehrqwImnK-8Cm79sqbAQ4MmvEAYqao"

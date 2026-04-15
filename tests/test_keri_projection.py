@@ -9,9 +9,9 @@ from typing import Any
 from mockito import mock, unstub, when
 import pytest
 
-from w3c_crosswalk.common import load_json_file
-from w3c_crosswalk.keri_projection import ACDCProjector, ProjectorError
-from w3c_crosswalk.services import issue_vc_artifact
+from vc_isomer.common import load_json_file
+from vc_isomer.keri_projection import ACDCProjector, ProjectorError
+from vc_isomer.services import issue_vc_artifact
 
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"

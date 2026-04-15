@@ -198,7 +198,7 @@ def make_stack_topology(
 
 def stack_runtime_name(*, mode: str, worker_id: str, nodeid: str | None = None, attempt: int = 0) -> str:
     """Build a stable pytest temp-directory name for one stack instance."""
-    parts = ["crosswalk-live-stack", mode, _slug(worker_id)]
+    parts = ["isomer-live-stack", mode, _slug(worker_id)]
     if nodeid is not None:
         parts.append(_slug(nodeid))
     if attempt:

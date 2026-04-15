@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from w3c_crosswalk.isomer_runtime import (
+from vc_isomer.isomer_runtime import (
     IsomerRuntimeDoer,
     IsomerRuntimeError,
     IsomerSignerRuntimeDoer,
@@ -59,8 +59,8 @@ def test_open_isomer_runtime_builds_projector_and_signer(monkeypatch):
     """Opening a runtime wires the non-owning projector and signer."""
     hby = FakeHabery()
 
-    monkeypatch.setattr("w3c_crosswalk.isomer_runtime.existing.setupHby", lambda **_: hby)
-    monkeypatch.setattr("w3c_crosswalk.isomer_runtime.credentialing.Regery", FakeRegery)
+    monkeypatch.setattr("vc_isomer.isomer_runtime.existing.setupHby", lambda **_: hby)
+    monkeypatch.setattr("vc_isomer.isomer_runtime.credentialing.Regery", FakeRegery)
 
     runtime = open_isomer_runtime(name="qvi", base="", alias="qvi", passcode="0123456789abcdefghijk")
     try:
@@ -77,7 +77,7 @@ def test_open_isomer_runtime_closes_habery_when_alias_missing(monkeypatch):
     """A failed alias lookup closes the opened Habery before raising."""
     hby = FakeHabery()
 
-    monkeypatch.setattr("w3c_crosswalk.isomer_runtime.existing.setupHby", lambda **_: hby)
+    monkeypatch.setattr("vc_isomer.isomer_runtime.existing.setupHby", lambda **_: hby)
 
     with pytest.raises(IsomerRuntimeError, match="unable to locate habitat alias"):
         open_isomer_runtime(name="qvi", base="", alias="missing", passcode="0123456789abcdefghijk")
@@ -89,8 +89,8 @@ def test_open_isomer_signer_runtime_builds_signer_without_regery(monkeypatch):
     hby = FakeHabery()
     opened_regery = []
 
-    monkeypatch.setattr("w3c_crosswalk.isomer_runtime.existing.setupHby", lambda **_: hby)
-    monkeypatch.setattr("w3c_crosswalk.isomer_runtime.credentialing.Regery", lambda **_: opened_regery.append(True))
+    monkeypatch.setattr("vc_isomer.isomer_runtime.existing.setupHby", lambda **_: hby)
+    monkeypatch.setattr("vc_isomer.isomer_runtime.credentialing.Regery", lambda **_: opened_regery.append(True))
 
     runtime = open_isomer_signer_runtime(name="qvi", base="", alias="qvi", passcode="0123456789abcdefghijk")
     try:
@@ -111,8 +111,8 @@ def test_isomer_runtime_close_closes_regery_before_habery(monkeypatch):
         def __init__(self, **kwargs):
             super().__init__(events=events, **kwargs)
 
-    monkeypatch.setattr("w3c_crosswalk.isomer_runtime.existing.setupHby", lambda **_: hby)
-    monkeypatch.setattr("w3c_crosswalk.isomer_runtime.credentialing.Regery", OrderedRegery)
+    monkeypatch.setattr("vc_isomer.isomer_runtime.existing.setupHby", lambda **_: hby)
+    monkeypatch.setattr("vc_isomer.isomer_runtime.credentialing.Regery", OrderedRegery)
 
     runtime = open_isomer_runtime(name="qvi", base="", alias="qvi", passcode="0123456789abcdefghijk")
     runtime.close()
@@ -134,7 +134,7 @@ def test_isomer_signer_runtime_doer_closes_runtime_after_failure(monkeypatch):
         def recur(self, tyme):
             raise RuntimeError("boom")
 
-    monkeypatch.setattr("w3c_crosswalk.isomer_runtime.open_isomer_signer_runtime", lambda **_: FakeRuntime())
+    monkeypatch.setattr("vc_isomer.isomer_runtime.open_isomer_signer_runtime", lambda **_: FakeRuntime())
     doer = FailingDoer(name="qvi", base="", alias="qvi", passcode="0123456789abcdefghijk")
     dog = doer(tymth=lambda: 0.0)
     next(dog)
@@ -160,7 +160,7 @@ def test_isomer_runtime_doer_closes_runtime_after_failure(monkeypatch):
         def recur(self, tyme):
             raise RuntimeError("boom")
 
-    monkeypatch.setattr("w3c_crosswalk.isomer_runtime.open_isomer_runtime", lambda **_: FakeRuntime())
+    monkeypatch.setattr("vc_isomer.isomer_runtime.open_isomer_runtime", lambda **_: FakeRuntime())
     doer = FailingDoer(name="qvi", base="", alias="qvi", passcode="0123456789abcdefghijk")
     dog = doer(tymth=lambda: 0.0)
     next(dog)

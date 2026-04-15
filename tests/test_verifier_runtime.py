@@ -7,13 +7,13 @@ import socket
 from urllib.parse import unquote
 
 import falcon
-from w3c_crosswalk.common import canonicalize_did_url, canonicalize_did_webs, load_json_file
-from w3c_crosswalk.jwt import issue_vc_jwt
-from w3c_crosswalk.profile import transpose_acdc_to_w3c_vc
-from w3c_crosswalk.service import VerifierServerConfig, setup_verifier_doers
-from w3c_crosswalk.runtime_http import setup_server_doers
-from w3c_crosswalk.signing import HabSigner
-from w3c_crosswalk.verifier_client import verify_vc_doer
+from vc_isomer.common import canonicalize_did_url, canonicalize_did_webs, load_json_file
+from vc_isomer.jwt import issue_vc_jwt
+from vc_isomer.profile import transpose_acdc_to_w3c_vc
+from vc_isomer.service import VerifierServerConfig, setup_verifier_doers
+from vc_isomer.runtime_http import setup_server_doers
+from vc_isomer.signing import HabSigner
+from vc_isomer.verifier_client import verify_vc_doer
 
 from keri_test_support import open_test_hab
 from tests.integration.helpers import run_doers_until

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from w3c_crosswalk.common import canonicalize_did_url, canonicalize_did_webs, load_json_file
-from w3c_crosswalk.jwt import decode_jwt, encode_jwt, issue_vc_jwt, verify_jwt_signature
-from w3c_crosswalk.profile import transpose_acdc_to_w3c_vc
-from w3c_crosswalk.signing import HabSigner
+from vc_isomer.common import canonicalize_did_url, canonicalize_did_webs, load_json_file
+from vc_isomer.jwt import decode_jwt, encode_jwt, issue_vc_jwt, verify_jwt_signature
+from vc_isomer.profile import transpose_acdc_to_w3c_vc
+from vc_isomer.signing import HabSigner
 
 from keri_test_support import open_test_hab
 

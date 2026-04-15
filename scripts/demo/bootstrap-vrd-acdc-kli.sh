@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Bootstrap the KERI/ACDC side of the crosswalk demo using KERIpy KLI commands.
+# Bootstrap the KERI/ACDC side of the isomer demo using KERIpy KLI commands.
 #
-# This script intentionally stops at the crosswalk boundary:
+# This script intentionally stops at the isomer boundary:
 # - GEDA, delegated QVI, and LE identifiers exist.
 # - GEDA/QVI/LE registries exist.
 # - QVI, LE, VRD Auth, and VRD credentials have been issued, granted, mailbox
 #   synced, and admitted.
-# - The final VRD ACDC is exported as JSON for `crosswalk vc issue`.
+# - The final VRD ACDC is exported as JSON for `isomer vc issue`.
 #
 # By default this uses KERIpy's normal KLI home resolution. On macOS that means
 # ~/.keri; on Linux that means /usr/local/var/keri. Set KERI_HOME only when you
@@ -45,18 +45,18 @@ START_VLEI_SERVER="${START_VLEI_SERVER:-0}"
 STOP_BOOTSTRAP_SERVICES="${STOP_BOOTSTRAP_SERVICES:-1}"
 VLEI_SERVER_BIN="${VLEI_SERVER_BIN:-$ROOT/.venv/bin/vLEI-server}"
 
-GEDA_NAME="${GEDA_NAME:-crosswalk-geda}"
+GEDA_NAME="${GEDA_NAME:-isomer-geda}"
 GEDA_ALIAS="${GEDA_ALIAS:-geda}"
 GEDA_SALT="${GEDA_SALT:-0AA2-S2YS4KqvlSzO7faIEpH}"
 GEDA_PASSCODE="${GEDA_PASSCODE:-18b2c88fd050851c45c67}"
 
-QVI_NAME="${QVI_NAME:-crosswalk-qvi}"
+QVI_NAME="${QVI_NAME:-isomer-qvi}"
 QVI_ALIAS="${QVI_ALIAS:-qvi}"
 QVI_PROXY_ALIAS="${QVI_PROXY_ALIAS:-proxy}"
 QVI_SALT="${QVI_SALT:-0ACgCmChLaw_qsLycbqBoxDK}"
 QVI_PASSCODE="${QVI_PASSCODE:-e6b3402845de8185abe94}"
 
-LE_NAME="${LE_NAME:-crosswalk-legal-entity}"
+LE_NAME="${LE_NAME:-isomer-legal-entity}"
 LE_ALIAS="${LE_ALIAS:-legal-entity}"
 LE_SALT="${LE_SALT:-0AB90ainJghoJa8BzFmGiEWa}"
 LE_PASSCODE="${LE_PASSCODE:-tcc6Yj4JM8MfTDs1IiidP}"

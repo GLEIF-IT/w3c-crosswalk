@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from urllib.parse import quote, unquote
 
-from w3c_crosswalk.common import canonicalize_did_url, canonicalize_did_webs
-from w3c_crosswalk.didwebs import resolution_url
+from vc_isomer.common import canonicalize_did_url, canonicalize_did_webs
+from vc_isomer.didwebs import resolution_url
 
 
 def test_canonicalize_did_webs_encodes_raw_port_separator():

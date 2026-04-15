@@ -1,4 +1,4 @@
-"""Launch the crosswalk integration vLEI helper server."""
+"""Launch the isomer integration vLEI helper server."""
 
 from __future__ import annotations
 

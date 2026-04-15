@@ -1,6 +1,6 @@
 # CLI End-to-End Walkthrough
 
-This guide gives a CLI-only walkthrough of the crosswalk-specific
+This guide gives a CLI-only walkthrough of the isomer-specific
 interoperability flow:
 
 - project local TEL-backed credential status
@@ -18,7 +18,7 @@ the complete KERI issuance chain:
 - registry inception
 - issue -> grant -> mailbox sync -> admit
 
-This CLI guide starts at the crosswalk boundary: you already have a source ACDC
+This CLI guide starts at the isomer boundary: you already have a source ACDC
 and a live KERI habitat signer that matches a resolvable `did:webs` DID.
 
 For the live stack and maintainer mental model behind this flow, see
@@ -28,13 +28,13 @@ For the live stack and maintainer mental model behind this flow, see
 
 The CLI is intentionally thin. It is not trying to be a generic KERI wallet, a
 full vLEI issuance orchestrator, or an operation-inspection console. Think of it
-as a crosswalk boundary tool:
+as an isomer boundary tool:
 
-1. `crosswalk status project` reads the accepted source ACDC and TEL state from
+1. `isomer status project` reads the accepted source ACDC and TEL state from
    local KERIpy state, then writes the W3C-facing status projection.
-2. `crosswalk vc issue` reads that same accepted source credential by SAID and
+2. `isomer vc issue` reads that same accepted source credential by SAID and
    signs a VC-JWT twin with a live KERI habitat signer.
-3. `crosswalk vc verify`, `crosswalk vp verify`, and `crosswalk vc verify-pair` submit verification work to the verifier
+3. `isomer vc verify`, `isomer vp verify`, and `isomer vc verify-pair` submit verification work to the verifier
    service, waits for completion, and returns pass/fail.
 4. Revocation starts with `kli vc revoke`. W3C revocation is only a projection
    after local KERI TEL state says the source credential is revoked.
@@ -130,7 +130,7 @@ That exports the signer, issuer DID, registry, and source credential values cons
 the commands below:
 
 - `SOURCE_ACDC`: the generated VRD ACDC JSON
-- `VRD_SAID`: the generated VRD ACDC SAID used by crosswalk commands
+- `VRD_SAID`: the generated VRD ACDC SAID used by isomer commands
 - `SIGNER_NAME`, `SIGNER_ALIAS`, `SIGNER_PASSCODE`: the live QVI signer
 - `QVI_REGISTRY`: the QVI registry name used when revoking the VRD ACDC
 - `ISSUER_DID`: the QVI `did:webs` DID to use as the W3C issuer
@@ -182,7 +182,7 @@ Use your real values. `ISSUER_DID` must resolve to the same Ed25519 key that the
 opened habitat signer uses, and `VRD_SAID` must already exist in the opened
 KERIpy credential/TEL state.
 
-## 2. Start The Local Crosswalk Services
+## 2. Start The Local Isomer Services
 
 
 ### Credential Status Service
@@ -192,13 +192,13 @@ Source the same env vars from the "Set Environment Variables section" first.
 Start the status service in one terminal:
 
 ```bash
-crosswalk status serve \
+isomer status serve \
   --host 127.0.0.1 \
   --port "$STATUS_PORT" \
   --store "$STATUS_STORE" \
   --base-url "$STATUS_BASE"
 # Alternative syntax:
-#   ./.venv/bin/python -m w3c_crosswalk.cli status serve ...
+#   ./.venv/bin/python -m vc_isomer.cli status serve ...
 ```
 
 ### W3C Verifier Service
@@ -208,13 +208,13 @@ Source the same env vars from the "Set Environment Variables section" first.
 Start the verifier service in a second terminal:
 
 ```bash
-crosswalk verifier serve \
+isomer verifier serve \
   --host 127.0.0.1 \
   --port "$VERIFIER_PORT" \
   --resolver "$RESOLVER_BASE" \
   --operation-root "$OP_ROOT"
 # Alternative syntax:
-#   ./.venv/bin/python -m w3c_crosswalk.cli verifier serve ...
+#   ./.venv/bin/python -m vc_isomer.cli verifier serve ...
 ```
 
 ### Health checks
@@ -246,7 +246,7 @@ Project the accepted VRD TEL state into the local status store:
 
 ```bash
 SIGNER_PASS="$SIGNER_PASSCODE" \
-crosswalk status project \
+isomer status project \
   --said "$VRD_SAID" \
   --issuer-did "$ISSUER_DID" \
   --store "$STATUS_STORE" \
@@ -256,7 +256,7 @@ crosswalk status project \
   --passcode-env SIGNER_PASS \
   --output "$OUT_DIR/status.json"
 # Alternative syntax:
-#   ./.venv/bin/python -m w3c_crosswalk.cli status project ...
+#   ./.venv/bin/python -m vc_isomer.cli status project ...
 ```
 
 Inspect the projected status resource:
@@ -277,7 +277,7 @@ signer:
 
 ```bash
 SIGNER_PASS="$SIGNER_PASSCODE" \
-crosswalk vc issue \
+isomer vc issue \
   --said "$VRD_SAID" \
   --issuer-did "$ISSUER_DID" \
   --status-base-url "$STATUS_BASE" \
@@ -287,7 +287,7 @@ crosswalk vc issue \
   --passcode-env SIGNER_PASS \
   --output "$OUT_DIR/vc.json"
 # Alternative syntax:
-#   ./.venv/bin/python -m w3c_crosswalk.cli vc issue ...
+#   ./.venv/bin/python -m vc_isomer.cli vc issue ...
 ```
 
 The command writes both the full JSON artifact and a sibling raw VC-JWT token
@@ -302,27 +302,27 @@ The real point of this step is:
 
 - the VC-JWT is signed by your live habitat signer
 - `credentialStatus.id` points at your local status service
-- the payload still carries crosswalk provenance back to the source ACDC
+- the payload still carries isomer provenance back to the source ACDC
 
 ## 5. Run Verifier Checks
 
 Submit and wait for plain VC verification:
 
 ```bash
-crosswalk vc verify \
+isomer vc verify \
   --token "$OUT_DIR/vc.token" \
   --server "$VERIFIER_BASE" \
   --timeout 45 \
   --poll 0.25
 # Alternative syntax:
-#   ./.venv/bin/python -m w3c_crosswalk.cli vc verify ...
+#   ./.venv/bin/python -m vc_isomer.cli vc verify ...
 ```
 
-Submit and wait for crosswalk pair verification:
+Submit and wait for isomer pair verification:
 
 ```bash
 SIGNER_PASS="$SIGNER_PASSCODE" \
-crosswalk vc verify-pair \
+isomer vc verify-pair \
   --said "$VRD_SAID" \
   --token "$OUT_DIR/vc.token" \
   --server "$VERIFIER_BASE" \
@@ -332,7 +332,7 @@ crosswalk vc verify-pair \
   --timeout 45 \
   --poll 0.25
 # Alternative syntax:
-#   ./.venv/bin/python -m w3c_crosswalk.cli vc verify-pair ...
+#   ./.venv/bin/python -m vc_isomer.cli vc verify-pair ...
 ```
 
 These commands do not run verification inline inside the CLI process. They submit
@@ -350,7 +350,7 @@ issuer=did:webs:...
 or:
 
 ```text
-verified crosswalk pair:
+verified isomer pair:
 type=VRDCredential
 source=E...
 vc=urn:said:E...
@@ -367,7 +367,7 @@ The verifier checks are:
 - issuer DID resolution through the configured `did:webs` resolver
 - JWT signature verification against the resolved verification method
 - projected credential-status lookup
-- crosswalk equivalence between the VC-JWT and source ACDC cloned from local
+- isomer equivalence between the VC-JWT and source ACDC cloned from local
   KERIpy state for `vc verify-pair`
 
 ## 6. Revoke The Source ACDC And Reproject Status
@@ -387,7 +387,7 @@ Then project the accepted TEL state again:
 
 ```bash
 SIGNER_PASS="$SIGNER_PASSCODE" \
-crosswalk status project \
+isomer status project \
   --said "$VRD_SAID" \
   --issuer-did "$ISSUER_DID" \
   --store "$STATUS_STORE" \
@@ -397,7 +397,7 @@ crosswalk status project \
   --passcode-env SIGNER_PASS \
   --output "$OUT_DIR/revoked-status.json"
 # Alternative syntax:
-#   ./.venv/bin/python -m w3c_crosswalk.cli status project ...
+#   ./.venv/bin/python -m vc_isomer.cli status project ...
 ```
 
 Inspect the projected status resource:
@@ -432,13 +432,13 @@ point at the same file you just updated.
 Now re-run VC verification:
 
 ```bash
-crosswalk vc verify \
+isomer vc verify \
   --token "$OUT_DIR/vc.token" \
   --server "$VERIFIER_BASE" \
   --timeout 45 \
   --poll 0.25
 # Alternative syntax:
-#   ./.venv/bin/python -m w3c_crosswalk.cli vc verify ...
+#   ./.venv/bin/python -m vc_isomer.cli vc verify ...
 ```
 
 The expected outcome is:
@@ -462,7 +462,7 @@ If you also want to issue and verify a VP-JWT:
 
 ```bash
 SIGNER_PASS="$SIGNER_PASSCODE" \
-crosswalk vp issue \
+isomer vp issue \
   --vc-token "$OUT_DIR/vc.token" \
   --holder-did "$ISSUER_DID" \
   --name "$SIGNER_NAME" \
@@ -470,7 +470,7 @@ crosswalk vp issue \
   --passcode-env SIGNER_PASS \
   --output "$OUT_DIR/vp.json"
 # Alternative syntax:
-#   ./.venv/bin/python -m w3c_crosswalk.cli vp issue ...
+#   ./.venv/bin/python -m vc_isomer.cli vp issue ...
 ```
 
 Extract the VP token:
@@ -488,13 +488,13 @@ PY
 Verify it:
 
 ```bash
-crosswalk vp verify \
+isomer vp verify \
   --token "$OUT_DIR/vp.token" \
   --server "$VERIFIER_BASE" \
   --timeout 45 \
   --poll 0.25
 # Alternative syntax:
-#   ./.venv/bin/python -m w3c_crosswalk.cli vp verify ...
+#   ./.venv/bin/python -m vc_isomer.cli vp verify ...
 ```
 
 Successful VP verification prints:
@@ -507,7 +507,7 @@ embeddedCredentials=1
 
 ## What This Walkthrough Proves
 
-- the nested `crosswalk` CLI is wired correctly
+- the nested `isomer` CLI is wired correctly
 - the local status service hosts W3C-facing status resources
 - VC issuance uses a live KERI habitat signer
 - verify commands expose a simple pass/fail interface
@@ -529,5 +529,5 @@ UV_CACHE_DIR=$PWD/.uv-cache \
 ./.venv/bin/python -m pytest -s -vv \
   -o log_cli=true \
   --log-cli-level=INFO \
-  tests/integration/test_single_sig_vrd_crosswalk.py
+  tests/integration/test_single_sig_vrd_isomer.py
 ```

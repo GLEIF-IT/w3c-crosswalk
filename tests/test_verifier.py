@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from w3c_crosswalk.common import canonicalize_did_url, canonicalize_did_webs, load_json_file
-from w3c_crosswalk.didwebs import DidWebsClient
-from w3c_crosswalk.jwt import issue_vc_jwt, issue_vp_jwt
-from w3c_crosswalk.profile import transpose_acdc_to_w3c_vc
-from w3c_crosswalk.signing import HabSigner
-from w3c_crosswalk.verifier import VerificationEngine
+from vc_isomer.common import canonicalize_did_url, canonicalize_did_webs, load_json_file
+from vc_isomer.didwebs import DidWebsClient
+from vc_isomer.jwt import issue_vc_jwt, issue_vp_jwt
+from vc_isomer.profile import transpose_acdc_to_w3c_vc
+from vc_isomer.signing import HabSigner
+from vc_isomer.verifier import VerificationEngine
 
 from keri_test_support import open_test_hab
 
@@ -72,7 +72,7 @@ def test_engine_accepts_active_status_when_signature_inputs_are_present():
         assert result.checks["signatureValid"] is True
 
 
-def test_engine_rejects_revoked_status_and_crosswalk_pair_mismatch():
+def test_engine_rejects_revoked_status_and_isomer_pair_mismatch():
     """Reject revoked credentials and mismatched ACDC/W3C projections."""
     acdc = load_json_file(FIXTURES / "vrd-auth-acdc.json")
     engine = VerificationEngine()
@@ -106,7 +106,7 @@ def test_engine_rejects_revoked_status_and_crosswalk_pair_mismatch():
 
         tampered = load_json_file(FIXTURES / "vrd-auth-acdc.json")
         tampered["a"]["LegalName"] = "Wrong Name"
-        pair_result = engine.evaluate_crosswalk_pair(tampered, result)
+        pair_result = engine.evaluate_isomer_pair(tampered, result)
 
         assert result.ok is False
         assert any("revoked" in error for error in result.errors)

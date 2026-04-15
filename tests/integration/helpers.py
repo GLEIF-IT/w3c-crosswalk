@@ -20,8 +20,8 @@ from urllib.request import urlopen
 
 from hio.base import doing
 
-POLL_INTERVAL = float(os.getenv("W3C_CROSSWALK_INTEGRATION_POLL_INTERVAL", "0.25"))
-PORT_POLL_INTERVAL = float(os.getenv("W3C_CROSSWALK_INTEGRATION_PORT_POLL_INTERVAL", "0.1"))
+POLL_INTERVAL = float(os.getenv("W3C_ISOMER_INTEGRATION_POLL_INTERVAL", "0.25"))
+PORT_POLL_INTERVAL = float(os.getenv("W3C_ISOMER_INTEGRATION_PORT_POLL_INTERVAL", "0.1"))
 
 
 def _format_poll_value(value) -> str:

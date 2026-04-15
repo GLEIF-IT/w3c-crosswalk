@@ -8,14 +8,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from w3c_crosswalk.common import load_json_file
-from w3c_crosswalk.profile import transpose_acdc_to_w3c_vc
+from vc_isomer.common import load_json_file
+from vc_isomer.profile import transpose_acdc_to_w3c_vc
 
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 
 
-def test_transpose_vrd_credential_has_crosswalk_metadata():
+def test_transpose_vrd_credential_has_isomer_metadata():
     """Ensure VRD projection preserves source lineage and status linkage."""
     acdc = load_json_file(FIXTURES / "vrd-acdc.json")
     vc = transpose_acdc_to_w3c_vc(
@@ -25,7 +25,7 @@ def test_transpose_vrd_credential_has_crosswalk_metadata():
         status_base_url="http://127.0.0.1:8787",
     )
     assert "VRDCredential" in vc["type"]
-    assert vc["crosswalk"]["sourceCredentialSaid"] == acdc["d"]
+    assert vc["isomer"]["sourceCredentialSaid"] == acdc["d"]
     assert vc["credentialStatus"]["id"].endswith(acdc["d"])
 
 

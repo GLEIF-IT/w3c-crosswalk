@@ -6,7 +6,7 @@ from pathlib import Path
 
 from keri.core import coring, counting, serdering
 
-from w3c_crosswalk.common import load_json_file
+from vc_isomer.common import load_json_file
 
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"

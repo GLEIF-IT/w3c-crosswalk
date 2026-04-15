@@ -5,7 +5,7 @@ from __future__ import annotations
 import socket
 
 import falcon
-from w3c_crosswalk.runtime_http import Clienter, JsonRequestDoer, setup_server_doers
+from vc_isomer.runtime_http import Clienter, JsonRequestDoer, setup_server_doers
 
 from tests.integration.helpers import run_doers_until
 

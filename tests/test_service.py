@@ -7,11 +7,11 @@ from pathlib import Path
 
 from falcon import testing
 
-from w3c_crosswalk.common import load_json_file
-from w3c_crosswalk.longrunning import OperationMonitor
-from w3c_crosswalk.service import create_status_app, create_verifier_app
-from w3c_crosswalk.services import VerifierOperationService
-from w3c_crosswalk.status import JsonFileStatusStore
+from vc_isomer.common import load_json_file
+from vc_isomer.longrunning import OperationMonitor
+from vc_isomer.service import create_status_app, create_verifier_app
+from vc_isomer.services import VerifierOperationService
+from vc_isomer.status import JsonFileStatusStore
 
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"

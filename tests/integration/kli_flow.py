@@ -42,7 +42,7 @@ from keri.peer import exchanging
 from keri.vc import protocoling
 from keri.vdr import credentialing, eventing as teventing, verifying
 
-from w3c_crosswalk.constants import LE_SCHEMA, QVI_SCHEMA, VRD_AUTH_SCHEMA, VRD_SCHEMA
+from vc_isomer.constants import LE_SCHEMA, QVI_SCHEMA, VRD_AUTH_SCHEMA, VRD_SCHEMA
 
 from .helpers import patched_home, poll_until, run_doers_until, write_json
 

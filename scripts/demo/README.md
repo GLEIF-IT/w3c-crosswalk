@@ -1,7 +1,7 @@
 # Demo Scripts
 
 `bootstrap-vrd-acdc-kli.sh` prepares the KERI/ACDC source side for the
-crosswalk CLI walkthrough using KERIpy `kli` commands. By default it uses the
+isomer CLI walkthrough using KERIpy `kli` commands. By default it uses the
 same KERI home as normal KLI usage. It does not redirect KERI state into `.tmp`
 unless you explicitly set `KERI_HOME`.
 

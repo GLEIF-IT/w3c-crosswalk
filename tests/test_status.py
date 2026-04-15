@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from w3c_crosswalk.common import load_json_file
-from w3c_crosswalk.status import JsonFileStatusStore
+from vc_isomer.common import load_json_file
+from vc_isomer.status import JsonFileStatusStore
 
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"

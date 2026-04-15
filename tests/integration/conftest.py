@@ -37,11 +37,11 @@ from .constants import WITNESS_AIDS
 from .topology import make_stack_topology, stack_runtime_name
 
 # Directory Setup
-# should resolve to w3c-crosswalk/
-W3C_CROSSWALK_ROOT = Path(__file__).resolve().parents[2]
-# should resolve to w3c-crosswalk/tests/integration
+# should resolve to isomer/
+W3C_ISOMER_ROOT = Path(__file__).resolve().parents[2]
+# should resolve to isomer/tests/integration
 INTEGRATION_ROOT = Path(__file__).resolve().parent
-# should resolve to w3c-crosswalk/tests/integration/_assets
+# should resolve to isomer/tests/integration/_assets
 ASSET_ROOT = INTEGRATION_ROOT / "_assets"
 WITNESS_CONFIG_ROOT = ASSET_ROOT / "keri" / "cf" / "main"
 VLEI_ASSET_ROOT = ASSET_ROOT / "vlei"
@@ -50,8 +50,8 @@ VLEI_CRED_ROOT = VLEI_ASSET_ROOT / "samples" / "acdc"
 VLEI_OOBI_ROOT = VLEI_ASSET_ROOT / "samples" / "oobis"
 
 # Local venv Python and binary setup
-PYTHON_BIN = W3C_CROSSWALK_ROOT / ".venv" / "bin" / "python"
-VLEI_SVR_BIN = W3C_CROSSWALK_ROOT / ".venv" / "bin" / "vLEI-server"
+PYTHON_BIN = W3C_ISOMER_ROOT / ".venv" / "bin" / "python"
+VLEI_SVR_BIN = W3C_ISOMER_ROOT / ".venv" / "bin" / "vLEI-server"
 
 # Witness and other service config and script names
 WITNESS_CONFIG_NAMES = ("wan", "wil", "wes")
@@ -318,9 +318,9 @@ def _launch_live_stack(live_stack: dict, *, shared_assets: dict[str, Path]):
     scratch space. It is the W3C-facing status projection store used by the
     verifier path later in the test.
     """
-    witness_python = _require_path(PYTHON_BIN, "crosswalk python")
+    witness_python = _require_path(PYTHON_BIN, "isomer python")
     vlei_server_bin = _require_path(VLEI_SVR_BIN, "vLEI-server binary")
-    cwd = W3C_CROSSWALK_ROOT
+    cwd = W3C_ISOMER_ROOT
 
     _set_vlei_dirs(live_stack, shared_assets=shared_assets)
     # Writes wan, wes, and wil configs to the local stack temp dir
@@ -451,7 +451,7 @@ def _credential_status_process(live_stack, python_bin):
         python_bin,
         "-u",
         "-m",
-        "w3c_crosswalk.cli",
+        "vc_isomer.cli",
         "status",
         "serve",
         "--host",
@@ -471,7 +471,7 @@ def _verifier_process(live_stack, python_bin):
         python_bin,
         "-u",
         "-m",
-        "w3c_crosswalk.cli",
+        "vc_isomer.cli",
         "verifier",
         "serve",
         "--host",
