@@ -116,6 +116,31 @@ For an end-to-end CLI walkthrough, including status projection, VC issuance,
 and verifier checks, see
 [`docs/cli-e2e-walkthrough.md`](docs/cli-e2e-walkthrough.md).
 
+## Publishing
+
+Publishing uses `uv build` and `uv publish` through the repo `Makefile`.
+
+Run the full pre-publish gate:
+
+```bash
+make prepublish
+```
+
+Publish to TestPyPI first:
+
+```bash
+TEST_PYPI_TOKEN=... make publish-test
+```
+
+Publish to PyPI:
+
+```bash
+PYPI_TOKEN=... make publish
+```
+
+The publish targets refuse to upload from a dirty worktree unless
+`ALLOW_DIRTY=1` is set.
+
 ## Fixtures
 
 The fixture directory currently contains:
