@@ -8,9 +8,8 @@ from pathlib import Path
 from hio.base import doing
 
 from w3c_crosswalk.cli.common import add_common_output_args, add_live_signer_args, emit_json, load_passcode
-from w3c_crosswalk.common import load_json_file
+from w3c_crosswalk.keri_projection import ACDCProjector
 from w3c_crosswalk.services import issue_vc_artifact
-from w3c_crosswalk.signing import KeriHabSigner
 from w3c_crosswalk.status import JsonFileStatusStore
 
 
@@ -27,8 +26,7 @@ class IssueVcDoer(doing.Doer):
         super().__init__(**kwa)
 
     def recur(self, tyme):
-        acdc = load_json_file(self.args.acdc)
-        signer = KeriHabSigner.open(
+        projector = ACDCProjector.open(
             name=self.args.name,
             base=self.args.base,
             alias=self.args.alias,
@@ -37,10 +35,10 @@ class IssueVcDoer(doing.Doer):
         try:
             store = JsonFileStatusStore(self.args.store) if self.args.store else None
             result = issue_vc_artifact(
-                acdc=acdc,
+                projector=projector,
+                said=self.args.said,
                 issuer_did=self.args.issuer_did,
                 status_base_url=self.args.status_base_url,
-                signer=signer,
                 status_store=store,
             )
             emit_json(result.to_dict(), output=self.args.output)
@@ -52,7 +50,7 @@ class IssueVcDoer(doing.Doer):
                 print(f"vc: {json_path}")
                 print(f"jwt: {token_path}")
         finally:
-            signer.close()
+            projector.close()
         return True
 
 
@@ -63,8 +61,8 @@ def handle(args: argparse.Namespace):
 
 def add_vc_command(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register `crosswalk issue vc`."""
-    issue_vc = subparsers.add_parser("vc", help="Issue a VC-JWT from an ACDC fixture")
-    issue_vc.add_argument("--acdc", required=True)
+    issue_vc = subparsers.add_parser("vc", help="Issue a VC-JWT from accepted local KERI credential state")
+    issue_vc.add_argument("--said", required=True, help="Source ACDC credential SAID to project")
     issue_vc.add_argument("--issuer-did", required=True)
     issue_vc.add_argument("--status-base-url", required=True)
     issue_vc.add_argument("--store")

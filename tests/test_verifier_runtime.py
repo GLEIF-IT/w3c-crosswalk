@@ -7,11 +7,12 @@ import socket
 from urllib.parse import unquote
 
 import falcon
-from w3c_crosswalk.common import load_json_file
+from w3c_crosswalk.common import canonicalize_did_url, canonicalize_did_webs, load_json_file
 from w3c_crosswalk.jwt import issue_vc_jwt
+from w3c_crosswalk.profile import transpose_acdc_to_w3c_vc
 from w3c_crosswalk.service import VerifierServerConfig, setup_verifier_doers
 from w3c_crosswalk.runtime_http import setup_server_doers
-from w3c_crosswalk.signing import KeriHabSigner
+from w3c_crosswalk.signing import HabSigner
 from w3c_crosswalk.verifier_client import verify_vc_doer
 
 from keri_test_support import open_test_hab
@@ -19,6 +20,19 @@ from tests.integration.helpers import run_doers_until
 
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
+
+
+def _issue_projected_fixture(acdc: dict, *, issuer_did: str, status_base_url: str, signer: HabSigner):
+    """Project a fixture ACDC explicitly, then sign the resulting VC."""
+    canonical_issuer = canonicalize_did_webs(issuer_did)
+    verification_method = canonicalize_did_url(f"{canonical_issuer}#{signer.kid}")
+    vc = transpose_acdc_to_w3c_vc(
+        acdc,
+        issuer_did=canonical_issuer,
+        verification_method=verification_method,
+        status_base_url=status_base_url,
+    )
+    return issue_vc_jwt(vc, signer=signer, verification_method=verification_method)
 
 
 def _free_port() -> int:
@@ -82,7 +96,7 @@ def test_verifier_runtime_completes_vc_operation_via_hio_doers(tmp_path):
     acdc = load_json_file(FIXTURES / "vrd-acdc.json")
 
     with open_test_hab("runtime-issuer-hab", b"1122334455667788") as (_hby, hab):
-        signer = KeriHabSigner(hab)
+        signer = HabSigner(hab)
         issuer_did = "did:webs:example.com:dws:ELEGALAID000000000000000000000000000000000000000001"
         resolver_port = _free_port()
         status_port = _free_port()
@@ -98,7 +112,7 @@ def test_verifier_runtime_completes_vc_operation_via_hio_doers(tmp_path):
             }],
         }
         status_base_url = f"http://127.0.0.1:{status_port}"
-        token, _vc = issue_vc_jwt(acdc, issuer_did=issuer_did, status_base_url=status_base_url, signer=signer)
+        token, _vc = _issue_projected_fixture(acdc, issuer_did=issuer_did, status_base_url=status_base_url, signer=signer)
 
         resolver_app = falcon.App()
         resolver_app.add_route("/1.0/identifiers/{did}", ResolverResource({issuer_did: did_document}))
@@ -107,9 +121,9 @@ def test_verifier_runtime_completes_vc_operation_via_hio_doers(tmp_path):
         statuses = {
             acdc["d"]: {
                 "id": f"{status_base_url}/status/{acdc['d']}",
-                "credentialSaid": acdc["d"],
+                "credSaid": acdc["d"],
                 "revoked": False,
-                "status": "active",
+                "status": "iss",
             }
         }
         status_app = falcon.App()
@@ -196,13 +210,13 @@ def test_verifier_runtime_surfaces_resolver_failure_details(tmp_path):
     acdc = load_json_file(FIXTURES / "vrd-acdc.json")
 
     with open_test_hab("runtime-resolver-failure", b"1122334455667788") as (_hby, hab):
-        signer = KeriHabSigner(hab)
+        signer = HabSigner(hab)
         issuer_did = "did:webs:example.com:dws:ELEGALAID000000000000000000000000000000000000000001"
         resolver_port = _free_port()
         status_port = _free_port()
         verifier_port = _free_port()
 
-        token, _vc = issue_vc_jwt(
+        token, _vc = _issue_projected_fixture(
             acdc,
             issuer_did=issuer_did,
             status_base_url=f"http://127.0.0.1:{status_port}",
@@ -214,7 +228,7 @@ def test_verifier_runtime_surfaces_resolver_failure_details(tmp_path):
         _resolver_server, resolver_doers = setup_server_doers(host="127.0.0.1", port=resolver_port, app=resolver_app)
 
         status_app = falcon.App()
-        status_app.add_route("/status/{credential_said}", StatusResource({acdc["d"]: {"revoked": False, "status": "active"}}))
+        status_app.add_route("/status/{credential_said}", StatusResource({acdc["d"]: {"revoked": False, "status": "iss"}}))
         _status_server, status_doers = setup_server_doers(host="127.0.0.1", port=status_port, app=status_app)
 
         _verifier_server, verifier_doers = setup_verifier_doers(
@@ -251,7 +265,7 @@ def test_verifier_runtime_surfaces_status_failure_details(tmp_path):
     acdc = load_json_file(FIXTURES / "vrd-acdc.json")
 
     with open_test_hab("runtime-status-failure", b"1122334455667788") as (_hby, hab):
-        signer = KeriHabSigner(hab)
+        signer = HabSigner(hab)
         issuer_did = "did:webs:example.com:dws:ELEGALAID000000000000000000000000000000000000000001"
         resolver_port = _free_port()
         status_port = _free_port()
@@ -266,7 +280,7 @@ def test_verifier_runtime_surfaces_status_failure_details(tmp_path):
                 "publicKeyJwk": signer.public_jwk,
             }],
         }
-        token, _vc = issue_vc_jwt(
+        token, _vc = _issue_projected_fixture(
             acdc,
             issuer_did=issuer_did,
             status_base_url=f"http://127.0.0.1:{status_port}",

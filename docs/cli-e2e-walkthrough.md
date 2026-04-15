@@ -3,8 +3,8 @@
 This guide gives a CLI-only walkthrough of the crosswalk-specific
 interoperability flow:
 
-- project local credential status
-- issue a W3C VC-JWT twin from a source ACDC
+- project local TEL-backed credential status
+- issue a W3C VC-JWT twin from accepted local KERI credential state
 - verify the VC-JWT and ACDC/VC pair through the verifier service
 - observe success and revocation failure through exit codes and short errors
 
@@ -30,13 +30,14 @@ The CLI is intentionally thin. It is not trying to be a generic KERI wallet, a
 full vLEI issuance orchestrator, or an operation-inspection console. Think of it
 as a crosswalk boundary tool:
 
-1. `crosswalk status project` creates the W3C-facing status record for a source
-   ACDC.
-2. `crosswalk issue vc` signs a VC-JWT twin with a live KERI habitat signer.
+1. `crosswalk status project` reads the accepted source ACDC and TEL state from
+   local KERIpy state, then writes the W3C-facing status projection.
+2. `crosswalk issue vc` reads that same accepted source credential by SAID and
+   signs a VC-JWT twin with a live KERI habitat signer.
 3. `crosswalk verify vc|vp|pair` submits verification work to the verifier
    service, waits for completion, and returns pass/fail.
-4. `crosswalk status revoke` mutates the projected status record so the same
-   verifier path can observe revocation.
+4. Revocation starts with `kli vc revoke`. W3C revocation is only a projection
+   after local KERI TEL state says the source credential is revoked.
 
 Verifier operations still exist inside the service because verification may need
 network I/O, DID resolution, and status dereferencing. They are an internal
@@ -59,7 +60,7 @@ UV_CACHE_DIR=$PWD/.uv-cache uv sync
 
 - a live KERI habitat signer you can open from the CLI
 - a `did:webs` DID for that signer that resolves through a running resolver
-- a source ACDC JSON credential
+- a source ACDC credential SAID accepted in local KERIpy state
 
 For the normal local walkthrough, generate those prerequisites with the KLI
 bootstrap script in this repo before starting the CLI workflow below.
@@ -98,7 +99,7 @@ bootstrap script drives the KERI side with KERIpy `kli` commands:
 - LE inception
 - GEDA, QVI, and LE registry inception
 - QVI, LE, VRD Auth, and VRD issue -> grant -> mailbox sync -> admit
-- export of the final VRD ACDC JSON for `crosswalk issue vc`
+- export of the final VRD ACDC JSON for inspection and debugging
 
 The script assumes a compatible witness stack and a vLEI schema helper are
 already running. For this repo, the easiest path is to run it from the repo root
@@ -125,11 +126,13 @@ Then source the generated environment before starting the CLI workflow:
 source .tmp/kli-vrd-acdc/out/env.sh
 ```
 
-That exports the signer, issuer DID, and source credential values consumed by
+That exports the signer, issuer DID, registry, and source credential values consumed by
 the commands below:
 
 - `SOURCE_ACDC`: the generated VRD ACDC JSON
+- `VRD_SAID`: the generated VRD ACDC SAID used by crosswalk commands
 - `SIGNER_NAME`, `SIGNER_ALIAS`, `SIGNER_PASSCODE`: the live QVI signer
+- `QVI_REGISTRY`: the QVI registry name used when revoking the VRD ACDC
 - `ISSUER_DID`: the QVI `did:webs` DID to use as the W3C issuer
 - `DWS_ARTIFACT_DIR`: static did:webs files generated from the QVI KERI state
 
@@ -163,7 +166,7 @@ mkdir -p "$OUT_DIR"
 ```
 
 If you did not run the bootstrap script, set these for your live signer and
-source ACDC manually:
+source credential manually:
 
 ```bash
 export SIGNER_NAME="qvi"
@@ -171,10 +174,13 @@ export SIGNER_ALIAS="qvi"
 export SIGNER_PASSCODE='your-22-char-bran-here'
 export ISSUER_DID='did:webs:127.0.0.1%3A7677:dws:YOUR_AID_HERE'
 export SOURCE_ACDC="$ROOT/fixtures/vrd-acdc.json"
+export VRD_SAID='your-source-acdc-said-here'
+export QVI_REGISTRY='qvi-registry'
 ```
 
 Use your real values. `ISSUER_DID` must resolve to the same Ed25519 key that the
-opened habitat signer uses.
+opened habitat signer uses, and `VRD_SAID` must already exist in the opened
+KERIpy credential/TEL state.
 
 ## 2. Start The Local Crosswalk Services
 
@@ -227,7 +233,7 @@ There is also a `serve verifier-worker` command for split deployments, but the
 single-process `serve verifier` shape is the right default for this PoC and for
 this walkthrough.
 
-## 3. Project Status From The Source ACDC
+## 3. Project Status From TEL State
 
 Make sure to source the appropriate generated environment context with:
 
@@ -236,14 +242,18 @@ source .tmp/kli-vrd-acdc/out/env.sh
 ```
 
 
-Project the fixture VRD into the local status store:
+Project the accepted VRD TEL state into the local status store:
 
 ```bash
+SIGNER_PASS="$SIGNER_PASSCODE" \
 crosswalk status project \
-  --acdc "$SOURCE_ACDC" \
+  --said "$VRD_SAID" \
   --issuer-did "$ISSUER_DID" \
   --store "$STATUS_STORE" \
   --base-url "$STATUS_BASE" \
+  --name "$SIGNER_NAME" \
+  --alias "$SIGNER_ALIAS" \
+  --passcode-env SIGNER_PASS \
   --output "$OUT_DIR/status.json"
 # Alternative syntax:
 #   ./.venv/bin/python -m w3c_crosswalk.cli status project ...
@@ -255,19 +265,20 @@ Inspect the projected status resource:
 cat "$OUT_DIR/status.json"
 ```
 
-Mental model: this is a W3C-facing projection of credential status, not the
-authoritative KERI registry itself. The verifier later follows the
-`credentialStatus.id` URL in the VC-JWT and expects this local status service to
-answer.
+Mental model: the KERI TEL is authoritative. This command only publishes a
+W3C-facing projection of whatever local KERIpy has already accepted. The verifier
+later follows the `credentialStatus.id` URL in the VC-JWT and expects this local
+status service to answer.
 
 ## 4. Issue The VC-JWT Twin
 
-Issue a W3C VC-JWT from the source ACDC using your live habitat signer:
+Issue a W3C VC-JWT from the accepted source credential using your live habitat
+signer:
 
 ```bash
 SIGNER_PASS="$SIGNER_PASSCODE" \
 crosswalk issue vc \
-  --acdc "$SOURCE_ACDC" \
+  --said "$VRD_SAID" \
   --issuer-did "$ISSUER_DID" \
   --status-base-url "$STATUS_BASE" \
   --store "$STATUS_STORE" \
@@ -310,10 +321,14 @@ crosswalk verify vc \
 Submit and wait for crosswalk pair verification:
 
 ```bash
+SIGNER_PASS="$SIGNER_PASSCODE" \
 crosswalk verify pair \
-  --acdc "$SOURCE_ACDC" \
+  --said "$VRD_SAID" \
   --token "$OUT_DIR/vc.token" \
   --server "$VERIFIER_BASE" \
+  --name "$SIGNER_NAME" \
+  --alias "$SIGNER_ALIAS" \
+  --passcode-env SIGNER_PASS \
   --timeout 45 \
   --poll 0.25
 # Alternative syntax:
@@ -352,45 +367,40 @@ The verifier checks are:
 - issuer DID resolution through the configured `did:webs` resolver
 - JWT signature verification against the resolved verification method
 - projected credential-status lookup
-- crosswalk equivalence between the VC-JWT and source ACDC for `verify pair`
+- crosswalk equivalence between the VC-JWT and source ACDC cloned from local
+  KERIpy state for `verify pair`
 
-## 6. Revoke Status And Watch Verification Fail
+## 6. Revoke The Source ACDC And Reproject Status
 
-TODO: Update this section based on TEL projection.
-
-This revoke flow mutates the local projected status store created earlier. It
-does not revoke the source KERI registry credential; it lets you test that the
-W3C verifier actually follows `credentialStatus.id` and refuses an inactive
-projection.
-
-Store the source credential SAID from the generated ACDC:
+Revoke the source ACDC in its issuer TEL with KERIpy first:
 
 ```bash
-export SOURCE_SAID="$(python - <<'PY'
-import json
-import os
-from pathlib import Path
-acdc = json.loads(Path(os.environ["SOURCE_ACDC"]).read_text())
-print(acdc["d"])
-PY
-)"
-echo "$SOURCE_SAID"
+kli vc revoke \
+  --name "$SIGNER_NAME" \
+  --alias "$SIGNER_ALIAS" \
+  --passcode "$SIGNER_PASSCODE" \
+  --registry-name "$QVI_REGISTRY" \
+  --said "$VRD_SAID"
 ```
 
-Use that SAID in the revoke command:
+Then project the accepted TEL state again:
 
 ```bash
-crosswalk status revoke \
-  --credential-said "$SOURCE_SAID" \
+SIGNER_PASS="$SIGNER_PASSCODE" \
+crosswalk status project \
+  --said "$VRD_SAID" \
+  --issuer-did "$ISSUER_DID" \
   --store "$STATUS_STORE" \
   --base-url "$STATUS_BASE" \
-  --reason 'manual CLI walkthrough' \
+  --name "$SIGNER_NAME" \
+  --alias "$SIGNER_ALIAS" \
+  --passcode-env SIGNER_PASS \
   --output "$OUT_DIR/revoked-status.json"
 # Alternative syntax:
-#   ./.venv/bin/python -m w3c_crosswalk.cli status revoke ...
+#   ./.venv/bin/python -m w3c_crosswalk.cli status project ...
 ```
 
-The command writes the revoked status resource. Inspect it:
+Inspect the projected status resource:
 
 ```bash
 cat "$OUT_DIR/revoked-status.json"
@@ -400,9 +410,11 @@ You should see:
 
 ```json
 {
+  "status": "rev",
+  "statusSaid": "E...",
+  "statusSequence": 1,
   "revoked": true,
-  "status": "revoked",
-  "reason": "manual CLI walkthrough"
+  "credSaid": "E..."
 }
 ```
 
@@ -410,7 +422,7 @@ With the status service still running, dereference the same status URL that the
 verifier will use:
 
 ```bash
-curl -fsS "${STATUS_BASE}/status/${SOURCE_SAID}"
+curl -fsS "${STATUS_BASE}/status/${VRD_SAID}"
 ```
 
 That response should also show `revoked: true`. If it does not, stop here: the
@@ -433,26 +445,16 @@ The expected outcome is:
 
 - the verifier command exits non-zero
 - the command prints a short verifier error to `stderr`, such as
-  `verification failed: credential ${SOURCE_SAID} is revoked`
+  `verification failed: credential ${VRD_SAID} is revoked`
 - the status-related verifier check fails because the credential is inactive or
   revoked
 
 That failure is healthy. It proves the verifier is consulting the projected
 status service rather than blindly trusting the JWT signature.
 
-If you want to repeat the happy-path verification afterward, re-run the status
-projection step to write an active record again:
-
-```bash
-crosswalk status project \
-  --acdc "$SOURCE_ACDC" \
-  --issuer-did "$ISSUER_DID" \
-  --store "$STATUS_STORE" \
-  --base-url "$STATUS_BASE" \
-  --output "$OUT_DIR/status.json"
-# Alternative syntax:
-#   ./.venv/bin/python -m w3c_crosswalk.cli status project ...
-```
+If you want to repeat the happy-path verification afterward, issue a fresh source
+credential or rerun the bootstrap. Reprojecting cannot make a revoked TEL active
+again, and that is the point: W3C status is downstream of KERI TEL state.
 
 ## 7. Optional VP Walkthrough
 

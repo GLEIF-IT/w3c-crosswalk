@@ -26,8 +26,11 @@ from .verifier import PreparedVcToken, PreparedVpToken, VerificationEngine, Veri
 class VerificationRuntimeError(RuntimeError):
     """Terminal operation error raised while executing one verifier job."""
 
+    # HTTP-style error code written to the failed operation resource.
     code: int
+    # Human-readable terminal failure message returned by __str__.
     message: str
+    # Optional domain details such as token parse errors, DID URL, HTTP status, or verifier errors.
     details: dict[str, Any] | None = None
 
     def __str__(self) -> str:

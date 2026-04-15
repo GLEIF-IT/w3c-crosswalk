@@ -9,7 +9,7 @@ from hio.base import doing
 
 from w3c_crosswalk.cli.common import add_common_output_args, add_live_signer_args, emit_json, load_passcode
 from w3c_crosswalk.services import issue_vp_artifact
-from w3c_crosswalk.signing import KeriHabSigner
+from w3c_crosswalk.signing import HabSigner
 
 
 class IssueVpDoer(doing.Doer):
@@ -21,7 +21,7 @@ class IssueVpDoer(doing.Doer):
 
     def recur(self, tyme):
         vc_tokens = [Path(path).read_text(encoding="utf-8").strip() for path in self.args.vc_token]
-        signer = KeriHabSigner.open(
+        signer = HabSigner.open(
             name=self.args.name,
             base=self.args.base,
             alias=self.args.alias,

@@ -24,7 +24,7 @@ from .constants import (
 )
 from .longrunning import OperationCollectionResource, OperationMonitor, OperationResource
 from .runtime_http import setup_server_doers
-from .services import VerifierOperationService, revoke_status
+from .services import VerifierOperationService
 from .status import JsonFileStatusStore
 from .verifier_runtime import VerificationManagerDoer
 
@@ -33,10 +33,15 @@ from .verifier_runtime import VerificationManagerDoer
 class StatusServerConfig:
     """Runtime inputs for the local status projection service."""
 
+    # Interface address for the HIO/Falcon status HTTP server.
     host: str
+    # TCP port for the local status service.
     port: int
+    # JSON file path backing projected credential status records.
     store_path: str
+    # Public base URL used when rendering status resource ids.
     base_url: str
+    # Cooperative HIO scheduler cadence for status server doers.
     tock: float = 0.03125
 
 
@@ -44,11 +49,17 @@ class StatusServerConfig:
 class VerifierServerConfig:
     """Runtime inputs for the long-running verifier service."""
 
+    # Interface address for the HIO/Falcon verifier HTTP server.
     host: str
+    # TCP port for verifier submission and operation polling APIs.
     port: int
+    # Base URL of the did:webs resolver route, ending at /1.0/identifiers.
     resolver_url: str
+    # Filesystem root for the LMDB-backed operation store.
     operation_store_root: str
+    # LMDB environment name for verifier operation records.
     operation_store_name: str = "verifier"
+    # Cooperative HIO scheduler cadence for verifier API and worker doers.
     tock: float = 0.03125
 
 
@@ -78,27 +89,6 @@ class CredentialStatusResource:
             resp.media = {"ok": False, "error": f"unknown credential SAID: {credential_said}"}
             return
         resp.media = record.as_status_resource(self.base_url)
-
-
-class CredentialStatusRevokeResource:
-    """Mutate one projected credential status record into a revoked state."""
-
-    def __init__(self, *, store: JsonFileStatusStore, base_url: str):
-        self.store = store
-        self.base_url = base_url
-
-    def on_post(self, _req: falcon.Request, resp: falcon.Response, credential_said: str) -> None:
-        """Revoke one credential status resource."""
-        try:
-            resp.media = revoke_status(
-                store=self.store,
-                credential_said=credential_said,
-                base_url=self.base_url,
-                reason="revoked via status service",
-            )
-        except KeyError as exc:
-            resp.status = falcon.HTTP_404
-            resp.media = {"ok": False, "error": str(exc)}
 
 
 class VerificationSubmissionResource:
@@ -131,10 +121,6 @@ def create_status_app(*, store: JsonFileStatusStore, base_url: str) -> falcon.Ap
     app = falcon.App()
     app.add_route(HEALTH_ROUTE, HealthResource("status"))
     app.add_route(f"{STATUS_ROUTE_PREFIX}/{{credential_said}}", CredentialStatusResource(store=store, base_url=base_url))
-    app.add_route(
-        f"{STATUS_ROUTE_PREFIX}/{{credential_said}}/revoke",
-        CredentialStatusRevokeResource(store=store, base_url=base_url),
-    )
     return app
 
 

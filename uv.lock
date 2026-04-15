@@ -394,6 +394,15 @@ wheels = [
 ]
 
 [[package]]
+name = "mockito"
+version = "1.5.5"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/24/71/12c56464071524a7941744e8b8fb02c6614500d27475c2d643d2e780a4b0/mockito-1.5.5.tar.gz", hash = "sha256:49826e3901dc826d0204e93b16dce1c61dde9d3a94eadc9c209ab0e130283393", size = 60707, upload-time = "2025-11-17T11:28:41.21Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ff/f0/fc3475ef7732d080c6a555e4ce12e606c699e82e220eb4bcafb9e801fc07/mockito-1.5.5-py3-none-any.whl", hash = "sha256:422a6ce2666e3c32d756547b98ee67e83a339f457e132476689643015845fc36", size = 30456, upload-time = "2025-11-17T11:28:40.371Z" },
+]
+
+[[package]]
 name = "msgpack"
 version = "1.1.2"
 source = { registry = "https://pypi.org/simple" }
@@ -748,6 +757,7 @@ live = [
     { name = "vlei" },
 ]
 test = [
+    { name = "mockito" },
     { name = "pytest" },
 ]
 
@@ -764,7 +774,10 @@ live = [
     { name = "did-webs-resolver", git = "https://github.com/GLEIF-IT/did-webs-resolver.git?rev=be1679f5629ca4a145db456cc79219d837ae3d2c" },
     { name = "vlei", git = "https://github.com/WebOfTrust/vLEI.git?rev=f514b9431c5f965b5f7f64a8693e19df2f181564" },
 ]
-test = [{ name = "pytest", specifier = ">=8.4,<9" }]
+test = [
+    { name = "mockito", specifier = ">=1.5,<2" },
+    { name = "pytest", specifier = ">=8.4,<9" },
+]
 
 [[package]]
 name = "wcwidth"

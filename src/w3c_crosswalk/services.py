@@ -9,8 +9,10 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any
 
+from .common import canonicalize_did_url, canonicalize_did_webs
 from .constants import VERIFY_PAIR_OPERATION, VERIFY_VC_OPERATION, VERIFY_VP_OPERATION
 from .jwt import issue_vc_jwt, issue_vp_jwt
+from .keri_projection import ACDCProjector, ProjectorError
 from .longrunning import BaseOperation, OperationMonitor
 from .signing import SignerLike
 from .status import JsonFileStatusStore
@@ -20,10 +22,15 @@ from .status import JsonFileStatusStore
 class IssueArtifact:
     """Normalized issuance result returned by service-layer issue flows."""
 
+    # True when artifact construction and signing completed.
     ok: bool
+    # JWT artifact family, currently vc+jwt or vp+jwt.
     kind: str
+    # Compact signed JWT string written to .token files and submitted to verifier APIs.
     token: str
+    # Projected W3C VC/VP JSON payload before compact JWT encoding.
     document: dict[str, Any]
+    # Public signing metadata exposed for debugging/manual verification.
     signer: dict[str, Any]
 
     def to_dict(self) -> dict[str, Any]:
@@ -75,18 +82,36 @@ class VerifierOperationService:
             raise ValueError(f"verification request requires `{field}`")
         return value
 
+
 def issue_vc_artifact(
     *,
-    acdc: dict[str, Any],
+    projector: ACDCProjector,
+    said: str,
     issuer_did: str,
     status_base_url: str,
-    signer: SignerLike,
     status_store: JsonFileStatusStore | None = None,
 ) -> IssueArtifact:
-    """Issue a VC-JWT and optionally project initial status state."""
-    token, document = issue_vc_jwt(acdc, issuer_did=issuer_did, status_base_url=status_base_url, signer=signer)
+    """Issue a VC-JWT from accepted local KERI credential/TEL state."""
+    projection = projector.project_credential(said)
+    if projection.state.revoked:
+        raise ProjectorError(f"credential {said} is revoked in accepted TEL state")
+
+    signer = projector.signer()
+    canonical_issuer = canonicalize_did_webs(issuer_did)
+    verification_method = canonicalize_did_url(f"{canonical_issuer}#{signer.kid}")
+    document = projector.project_vc(
+        said=said,
+        issuer_did=canonical_issuer,
+        verification_method=verification_method,
+        status_base_url=status_base_url,
+    )
+    token, document = issue_vc_jwt(
+        document,
+        signer=signer,
+        verification_method=verification_method,
+    )
     if status_store is not None:
-        status_store.project_acdc(acdc, issuer_did)
+        status_store.project_credential(projection.acdc, issuer_did, projection.state)
     return IssueArtifact(
         ok=True,
         kind="vc+jwt",
@@ -118,20 +143,11 @@ def issue_vp_artifact(
 def project_status(
     *,
     store: JsonFileStatusStore,
-    acdc: dict[str, Any],
+    projector: ACDCProjector,
+    said: str,
     issuer_did: str,
     base_url: str,
 ) -> dict[str, Any]:
-    """Project one source ACDC credential into the local status store."""
-    return store.project_acdc(acdc, issuer_did).as_status_resource(base_url)
-
-
-def revoke_status(
-    *,
-    store: JsonFileStatusStore,
-    credential_said: str,
-    base_url: str,
-    reason: str,
-) -> dict[str, Any]:
-    """Mark one projected credential as revoked."""
-    return store.set_revoked(credential_said, True, reason=reason).as_status_resource(base_url)
+    """Project one accepted local credential TEL state into the local status store."""
+    projection = projector.project_credential(said)
+    return store.project_credential(projection.acdc, issuer_did, projection.state).as_status_resource(base_url)

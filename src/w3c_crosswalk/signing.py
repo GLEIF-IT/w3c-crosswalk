@@ -30,7 +30,7 @@ class SignerLike(Protocol):
         ...
 
 
-class KeriHabSigner:
+class HabSigner:
     """Adapter for a live KERI habitat signing key.
 
     The object intentionally stays narrow: it exposes the minimum surface the
@@ -44,7 +44,7 @@ class KeriHabSigner:
         self._hby = hby
 
     @classmethod
-    def open(cls, *, name: str, base: str, alias: str, passcode: str | None) -> "KeriHabSigner":
+    def open(cls, *, name: str, base: str, alias: str, passcode: str | None) -> "HabSigner":
         """Open a live habitat signer from a KERIpy keystore."""
         hby = habbing.Habery(name=name, base=base, bran=passcode)
         hab = hby.habByName(alias)

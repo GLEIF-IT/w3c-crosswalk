@@ -25,10 +25,15 @@ from keri.app import httping
 class JsonResponse:
     """Structured result returned by one outbound JSON HTTP request."""
 
+    # HTTP status code returned by the peer.
     status: int
+    # HTTP reason phrase when HIO exposes one.
     reason: str | None
+    # Response headers normalized into a plain dictionary.
     headers: dict[str, Any]
+    # Parsed JSON body when parsing succeeds; otherwise None.
     data: Any
+    # Raw response body bytes retained for diagnostics and non-JSON failure handling.
     body: bytes
 
 
@@ -36,9 +41,13 @@ class JsonResponse:
 class JsonRequestError(RuntimeError):
     """Terminal failure while executing one outbound JSON request."""
 
+    # Human-readable error message returned by __str__.
     message: str
+    # Full URL originally requested by the outbound HIO client.
     url: str
+    # HTTP method used for the failed request.
     method: str
+    # Path/query actually sent to HIO after URL normalization.
     effective_path: str | None = None
 
     def __str__(self) -> str:

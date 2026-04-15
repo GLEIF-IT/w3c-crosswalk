@@ -597,6 +597,9 @@ export ISSUER_DID="$QVI_DID"
 export SOURCE_ACDC="$OUT_DIR/vrd-acdc.json"
 export VRD_AUTH_ACDC="$OUT_DIR/vrd-auth-acdc.json"
 export DWS_ARTIFACT_DIR="$DWS_ARTIFACT_DIR"
+export GEDA_REGISTRY="$GEDA_REGISTRY"
+export QVI_REGISTRY="$QVI_REGISTRY"
+export LE_REGISTRY="$LE_REGISTRY"
 export VRD_SAID="$VRD_SAID"
 export VRD_AUTH_SAID="$VRD_AUTH_SAID"
 export QVI_AID="$QVI_AID"
@@ -614,6 +617,9 @@ cat > "$OUT_DIR/summary.json" <<EOF
   "qviAid": "$QVI_AID",
   "leAid": "$LE_AID",
   "issuerDid": "$QVI_DID",
+  "gedaRegistry": "$GEDA_REGISTRY",
+  "qviRegistry": "$QVI_REGISTRY",
+  "leRegistry": "$LE_REGISTRY",
   "qviCredentialSaid": "$QVI_CREDENTIAL_SAID",
   "qviAdmittedSaid": "$QVI_ADMITTED_SAID",
   "leCredentialSaid": "$LE_CREDENTIAL_SAID",
@@ -630,4 +636,4 @@ EOF
 
 say "bootstrap complete"
 cat "$OUT_DIR/summary.json"
-printf '\nNext:\n  source "%s"\n  use "$SOURCE_ACDC" and "$ISSUER_DID" in docs/cli-e2e-walkthrough.md\n' "$OUT_DIR/env.sh"
+printf '\nNext:\n  source "%s"\n  use "$VRD_SAID" and "$ISSUER_DID" in docs/cli-e2e-walkthrough.md\n' "$OUT_DIR/env.sh"

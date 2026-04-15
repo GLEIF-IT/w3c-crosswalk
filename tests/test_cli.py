@@ -2,16 +2,33 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import json
-from pathlib import Path
-from types import SimpleNamespace
+from typing import Any
 
+import pytest
 from hio.base import doing
 
 from w3c_crosswalk.cli import main
+from w3c_crosswalk.cli.main import build_parser
 
 
-FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
+@dataclass
+class FakeIssueArtifact:
+    """Data fake for the issue service artifact returned to CLI code."""
+
+    token: str
+    document: dict[str, Any]
+
+    def to_dict(self):
+        return self.document
+
+
+@dataclass
+class FakeCredentialProjection:
+    """Data fake for projected source credential state used by verify pair."""
+
+    acdc: dict[str, Any]
 
 
 class _CompletedVerifyDoer(doing.Doer):
@@ -28,59 +45,82 @@ class _CompletedVerifyDoer(doing.Doer):
         return True
 
 
-def test_cli_status_project_uses_nested_command_tree(tmp_path, capsys):
+def test_cli_status_project_uses_nested_command_tree(monkeypatch, tmp_path, capsys):
     """Project status through `crosswalk status project` and emit the new route shape."""
-    fixture = FIXTURES / "vrd-acdc.json"
     store = tmp_path / "status-store.json"
 
+    class FakeProjector:
+        def close(self):
+            pass
+
+    def fake_project_status(**kwargs):
+        assert isinstance(kwargs["projector"], FakeProjector)
+        assert kwargs["said"] == "Ecredential"
+        assert kwargs["store"].path == store
+        return {"id": "http://status.example/status/Ecredential", "revoked": False}
+
+    monkeypatch.setattr("w3c_crosswalk.cli.status.project.ACDCProjector.open", lambda **_: FakeProjector())
+    monkeypatch.setattr("w3c_crosswalk.cli.status.project.project_status", fake_project_status)
     exit_code = main(
         [
             "status",
             "project",
-            "--acdc",
-            str(fixture),
+            "--said",
+            "Ecredential",
             "--issuer-did",
             "did:webs:example.com:dws:ELEGALAID000000000000000000000000000000000000000001",
             "--store",
             str(store),
             "--base-url",
             "http://status.example",
+            "--name",
+            "qvi",
+            "--alias",
+            "qvi",
+            "--passcode",
+            "0123456789abcdefghijk",
         ]
     )
 
     captured = json.loads(capsys.readouterr().out)
     assert exit_code == 0
-    assert captured["id"].startswith("http://status.example/status/")
+    assert captured["id"] == "http://status.example/status/Ecredential"
+
+
+def test_cli_status_revoke_command_is_removed():
+    """Manual W3C status mutation is not a supported CLI command."""
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["status", "revoke"])
 
 
 def test_cli_issue_vc_can_write_raw_token_file(monkeypatch, tmp_path, capsys):
     """Allow `issue vc` to emit both the JSON artifact and raw token file."""
-    fixture = tmp_path / "source-acdc.json"
     output = tmp_path / "vc.json"
     token_output = tmp_path / "vc.token"
-    fixture.write_text(json.dumps({"d": "Efake"}), encoding="utf-8")
 
-    class FakeSigner:
-        kid = "fake#key"
-        public_jwk = {"kty": "OKP"}
-
+    class FakeProjector:
         def close(self):
             pass
 
-    fake_artifact = SimpleNamespace(
+    fake_artifact = FakeIssueArtifact(
         token="header.payload.signature",
-        to_dict=lambda: {"ok": True, "kind": "vc+jwt", "token": "header.payload.signature"},
+        document={"ok": True, "kind": "vc+jwt", "token": "header.payload.signature"},
     )
 
-    monkeypatch.setattr("w3c_crosswalk.cli.issue.vc.KeriHabSigner.open", lambda **_: FakeSigner())
-    monkeypatch.setattr("w3c_crosswalk.cli.issue.vc.issue_vc_artifact", lambda **_: fake_artifact)
+    def fake_issue_vc_artifact(**kwargs):
+        assert isinstance(kwargs["projector"], FakeProjector)
+        assert kwargs["said"] == "Ecredential"
+        return fake_artifact
+
+    monkeypatch.setattr("w3c_crosswalk.cli.issue.vc.ACDCProjector.open", lambda **_: FakeProjector())
+    monkeypatch.setattr("w3c_crosswalk.cli.issue.vc.issue_vc_artifact", fake_issue_vc_artifact)
 
     exit_code = main(
         [
             "issue",
             "vc",
-            "--acdc",
-            str(fixture),
+            "--said",
+            "Ecredential",
             "--issuer-did",
             "did:webs:example.com:dws:Efake",
             "--status-base-url",
@@ -175,10 +215,16 @@ def test_cli_verify_vp_reports_success_summary(monkeypatch, capsys):
     )
 
 
-def test_cli_verify_pair_reports_success_summary(monkeypatch, tmp_path, capsys):
+def test_cli_verify_pair_reports_success_summary(monkeypatch, capsys):
     """Print credential type and source/VC identifiers after successful pair verification."""
-    acdc = tmp_path / "acdc.json"
-    acdc.write_text(json.dumps({"d": "Ecredential"}), encoding="utf-8")
+    class FakeProjector:
+        def project_credential(self, said):
+            assert said == "Ecredential"
+            return FakeCredentialProjection(acdc={"d": "Ecredential"})
+
+        def close(self):
+            pass
+
     fake_doer = _CompletedVerifyDoer(
         operation={
             "done": True,
@@ -192,18 +238,30 @@ def test_cli_verify_pair_reports_success_summary(monkeypatch, tmp_path, capsys):
             },
         }
     )
-    monkeypatch.setattr("w3c_crosswalk.cli.verify.pair.verify_pair_doer", lambda **_: fake_doer)
+
+    def fake_verify_pair_doer(**kwargs):
+        assert kwargs["acdc"] == {"d": "Ecredential"}
+        return fake_doer
+
+    monkeypatch.setattr("w3c_crosswalk.cli.verify.pair.ACDCProjector.open", lambda **_: FakeProjector())
+    monkeypatch.setattr("w3c_crosswalk.cli.verify.pair.verify_pair_doer", fake_verify_pair_doer)
 
     exit_code = main(
         [
             "verify",
             "pair",
-            "--acdc",
-            str(acdc),
+            "--said",
+            "Ecredential",
             "--token",
             "inline-token",
             "--server",
             "http://verifier.example",
+            "--name",
+            "qvi",
+            "--alias",
+            "qvi",
+            "--passcode",
+            "0123456789abcdefghijk",
         ]
     )
 

@@ -2,10 +2,10 @@
 
 from .profile import transpose_acdc_to_w3c_vc
 from .jwt import issue_vc_jwt, issue_vp_jwt
-from .signing import KeriHabSigner
+from .signing import HabSigner
 
 __all__ = [
-    "KeriHabSigner",
+    "HabSigner",
     "issue_vc_jwt",
     "issue_vp_jwt",
     "transpose_acdc_to_w3c_vc",

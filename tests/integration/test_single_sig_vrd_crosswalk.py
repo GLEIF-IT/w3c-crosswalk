@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 
 from w3c_crosswalk.jwt import issue_vc_jwt
-from w3c_crosswalk.signing import KeriHabSigner
+from w3c_crosswalk.keri_projection import ACDCProjector
 from w3c_crosswalk.status import JsonFileStatusStore
 from w3c_crosswalk.verifier_client import verify_pair_doer, verify_vc_doer
 from .conftest import INTEGRATION_ROOT, W3C_CROSSWALK_ROOT
@@ -268,7 +268,19 @@ def _validate_and_project_status(live_stack: dict, state, issuer_did: str) -> di
         le_prefix=state.le_prefix,
     )
 
-    JsonFileStatusStore(live_stack["status_store"]).project_acdc(vrd, issuer_did)
+    with patched_home(Path(live_stack["home"])):
+        projector = ACDCProjector.open(
+            name=state.qvi.name,
+            base="",
+            alias=state.qvi.alias,
+            passcode=state.qvi.passcode,
+        )
+        try:
+            projection = projector.project_credential(state.vrd_said)
+        finally:
+            projector.close()
+
+    JsonFileStatusStore(live_stack["status_store"]).project_credential(projection.acdc, issuer_did, projection.state)
     return vrd
 
 
@@ -289,11 +301,19 @@ def _issue_and_verify_w3c_twin(live_stack: dict, state, *, issuer_did: str, vrd:
         return rendered
 
     with patched_home(Path(live_stack["home"])):
-        signer = KeriHabSigner.open(name=state.qvi.name, base="", alias=state.qvi.alias, passcode=state.qvi.passcode)
+        projector = ACDCProjector.open(name=state.qvi.name, base="", alias=state.qvi.alias, passcode=state.qvi.passcode)
         try:
-            token, vc = issue_vc_jwt(vrd, issuer_did=issuer_did, status_base_url=live_stack["status_base_url"], signer=signer)
+            signer = projector.signer()
+            verification_method = f"{issuer_did}#{signer.kid}"
+            vc = projector.project_vc(
+                said=state.vrd_said,
+                issuer_did=issuer_did,
+                verification_method=verification_method,
+                status_base_url=live_stack["status_base_url"],
+            )
+            token, vc = issue_vc_jwt(vc, signer=signer, verification_method=verification_method)
         finally:
-            signer.close()
+            projector.close()
 
     vc_doer = verify_vc_doer(
         base_url=live_stack["verifier_base_url"],

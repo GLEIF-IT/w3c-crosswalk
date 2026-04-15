@@ -27,6 +27,7 @@ from .runtime_http import Clienter
 class VerifierApiError(RuntimeError):
     """Raised when the verifier API returns an unexpected response."""
 
+    # Client-facing message surfaced through CLI/test doer .error handling.
     message: str
 
     def __str__(self) -> str:
@@ -382,4 +383,3 @@ def verify_pair_doer(
         clienter=clienter,
         tock=tock,
     )
-

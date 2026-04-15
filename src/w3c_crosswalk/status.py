@@ -24,56 +24,75 @@ from .runtime_http import JsonResponse
 
 @dataclass
 class CredentialStatusRecord:
-    """Persisted status projection for one source credential."""
+    """Persisted W3C status projection of accepted KERI TEL state."""
 
-    credential_said: str
-    source_registry: str
-    source_schema_said: str
-    source_issuer_aid: str
+    # ACDC credential SAID, copied from the source credential's "d" field.
+    cred_said: str
+    # Source credential registry identifier, copied from ACDC "ri".
+    registry: str
+    # Source credential schema SAID, copied from ACDC "s".
+    schema_said: str
+    # Source credential issuer AID, copied from ACDC "i".
+    issuer_aid: str
+    # Canonical W3C issuer DID used when projecting/signing the VC twin.
     issuer_did: str
+    # Convenience boolean derived from TEL ilk rev/brv; iss/bis project as not revoked.
     revoked: bool
+    # Raw TEL ilk from Tever.vcState(...).et: iss, bis, rev, or brv; not "active"/"revoked".
+    status: str
+    # Latest TEL event SAID/digest from Tever.vcState(...).d.
+    source_status_said: str
+    # KEL sequence number from Tever.vcState(...).a["s"]; this is not the TEL sequence state.s.
+    source_status_sequence: int
+    # TEL event timestamp from Tever.vcState(...).dt.
+    status_date: str
+    # Local projection write time; this is not a KERI/TEL event timestamp.
     updated_at: str
-    reason: str | None = None
 
     @classmethod
-    def from_acdc(cls, acdc: dict[str, Any], issuer_did: str) -> "CredentialStatusRecord":
-        """Create an active status record from an issued ACDC credential."""
+    def from_tel_state(cls, acdc: dict[str, Any], *, issuer_did: str, state: Any) -> "CredentialStatusRecord":
+        """Create a status record from accepted TEL state for the source credential."""
+        if state.ilk not in {"iss", "bis", "rev", "brv"}:
+            raise ValueError(f"status projection requires iss/bis/rev/brv TEL state, got {state.ilk!r}")
+        revoked = state.ilk in {"rev", "brv"}
         return cls(
-            credential_said=acdc["d"],
-            source_registry=acdc["ri"],
-            source_schema_said=acdc["s"],
-            source_issuer_aid=acdc["i"],
+            cred_said=acdc["d"],
+            registry=acdc["ri"],
+            schema_said=acdc["s"],
+            issuer_aid=acdc["i"],
             issuer_did=canonicalize_did_webs(issuer_did),
-            revoked=False,
+            revoked=revoked,
+            status=state.ilk,
+            source_status_said=state.said,
+            source_status_sequence=state.sequence,
+            status_date=state.date,
             updated_at=utc_timestamp(),
         )
 
     def as_status_resource(self, base_url: str) -> dict[str, Any]:
         """Render the record as a W3C-friendly status resource document."""
         return {
-            "id": status_url(base_url, self.credential_said),
+            "id": status_url(base_url, self.cred_said),
             "type": "KERICredentialRegistryStatus",
-            "credentialSaid": self.credential_said,
-            "sourceRegistry": self.source_registry,
-            "sourceSchemaSaid": self.source_schema_said,
-            "sourceIssuerAid": self.source_issuer_aid,
+            "credSaid": self.cred_said,
+            "registry": self.registry,
+            "schemaSaid": self.schema_said,
+            "issuerAid": self.issuer_aid,
             "issuer": self.issuer_did,
             "revoked": self.revoked,
-            "status": "revoked" if self.revoked else "active",
+            "status": self.status,
+            "statusSaid": self.source_status_said,
+            "statusSequence": self.source_status_sequence,
+            "statusDate": self.status_date,
             "updatedAt": self.updated_at,
-            "reason": self.reason,
         }
 
 
 class StatusStore(Protocol):
     """Minimal store protocol used by status projection services."""
 
-    def project_acdc(self, acdc: dict[str, Any], issuer_did: str) -> CredentialStatusRecord:
-        """Project a source ACDC credential into a local status record."""
-        ...
-
-    def set_revoked(self, credential_said: str, revoked: bool, reason: str | None = None) -> CredentialStatusRecord:
-        """Update revocation state for a previously projected credential."""
+    def project_credential(self, acdc: dict[str, Any], issuer_did: str, state: Any) -> CredentialStatusRecord:
+        """Project a source ACDC credential and accepted TEL state into a local status record."""
         ...
 
     def get(self, credential_said: str) -> CredentialStatusRecord | None:
@@ -112,24 +131,11 @@ class JsonFileStatusStore:
             temp_path = Path(handle.name)
         os.replace(temp_path, self.path)
 
-    def project_acdc(self, acdc: dict[str, Any], issuer_did: str) -> CredentialStatusRecord:
-        """Project a source ACDC credential into an active status record."""
+    def project_credential(self, acdc: dict[str, Any], issuer_did: str, state: Any) -> CredentialStatusRecord:
+        """Project a source ACDC credential and accepted TEL state into a status record."""
         data = self._load()
-        record = CredentialStatusRecord.from_acdc(acdc, issuer_did)
-        data[record.credential_said] = asdict(record)
-        self._save(data)
-        return record
-
-    def set_revoked(self, credential_said: str, revoked: bool, reason: str | None = None) -> CredentialStatusRecord:
-        """Update revocation state for a previously projected credential."""
-        data = self._load()
-        if credential_said not in data:
-            raise KeyError(f"unknown credential SAID: {credential_said}")
-        record = CredentialStatusRecord(**data[credential_said])
-        record.revoked = revoked
-        record.reason = reason
-        record.updated_at = utc_timestamp()
-        data[credential_said] = asdict(record)
+        record = CredentialStatusRecord.from_tel_state(acdc, issuer_did=issuer_did, state=state)
+        data[record.cred_said] = asdict(record)
         self._save(data)
         return record
 

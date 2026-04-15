@@ -18,7 +18,6 @@ from typing import Any
 
 from .constants import EDDSA, VC_JWT_TYP, VP_JWT_TYP
 from .common import canonicalize_did_url, canonicalize_did_webs
-from .profile import transpose_acdc_to_w3c_vc
 from .signing import SignerLike
 
 try:
@@ -55,9 +54,13 @@ def verfer_from_public_jwk(jwk: dict[str, Any]) -> coring.Verfer:
 class DecodedJwt:
     """Decoded JWT pieces used during verification and inspection."""
 
+    # JOSE header decoded from the first compact-JWT segment; includes alg, typ, and kid.
     header: dict[str, Any]
+    # JSON payload decoded from the second compact-JWT segment; for VC-JWT this is the W3C VC document.
     payload: dict[str, Any]
+    # Raw signature bytes decoded from the third compact-JWT segment.
     signature: bytes
+    # ASCII bytes of "base64url(header).base64url(payload)" used as the EdDSA signing input.
     signing_input: bytes
 
 def encode_jwt(payload: dict[str, Any], *, typ: str, kid: str, signer: SignerLike) -> str:
@@ -93,22 +96,17 @@ def verify_jwt_signature(token: str, public_jwk: dict[str, Any]) -> bool:
 
 
 def issue_vc_jwt(
-    acdc: dict[str, Any],
+    vc: dict[str, Any],
     *,
-    issuer_did: str,
-    status_base_url: str,
     signer: SignerLike,
+    verification_method: str | None = None,
 ) -> tuple[str, dict[str, Any]]:
-    """Project an ACDC into W3C VC form and issue it as a VC-JWT."""
-    canonical_issuer_did = canonicalize_did_webs(issuer_did)
-    verification_method = canonicalize_did_url(f"{canonical_issuer_did}#{signer.kid}")
-    vc = transpose_acdc_to_w3c_vc(
-        acdc,
-        issuer_did=canonical_issuer_did,
-        verification_method=verification_method,
-        status_base_url=status_base_url,
-    )
-    return encode_jwt(vc, typ=VC_JWT_TYP, kid=verification_method, signer=signer), vc
+    """Issue an already-projected W3C VC document as a VC-JWT."""
+    method = verification_method or vc.get("proof", {}).get("verificationMethod")
+    if not isinstance(method, str) or not method:
+        raise ValueError("VC-JWT issuance requires a verification method")
+    kid = canonicalize_did_url(method)
+    return encode_jwt(vc, typ=VC_JWT_TYP, kid=kid, signer=signer), vc
 
 
 def issue_vp_jwt(

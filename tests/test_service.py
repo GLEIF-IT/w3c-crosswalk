@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
 from falcon import testing
@@ -16,11 +17,25 @@ from w3c_crosswalk.status import JsonFileStatusStore
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 
 
-def test_status_service_health_get_and_revoke(tmp_path):
-    """Serve health, fetch status, and mutate revocation through Falcon resources."""
+@dataclass
+class FakeCredState:
+    """Data fake for the normalized TEL state consumed by status projection."""
+
+    ilk: str
+    said: str
+    sequence: int
+    date: str
+
+
+def test_status_service_health_and_get(tmp_path):
+    """Serve health and fetch projected TEL-backed status resources."""
     acdc = load_json_file(FIXTURES / "vrd-acdc.json")
     store = JsonFileStatusStore(tmp_path / "status-store.json")
-    store.project_acdc(acdc, "did:webs:example.com:dws:ELEGALAID000000000000000000000000000000000000000001")
+    store.project_credential(
+        acdc,
+        "did:webs:example.com:dws:ELEGALAID000000000000000000000000000000000000000001",
+        FakeCredState(ilk="iss", said="EtelEventSaid", sequence=0, date="2026-04-15T00:00:00Z"),
+    )
 
     client = testing.TestClient(create_status_app(store=store, base_url="http://status.example"))
 
@@ -31,13 +46,10 @@ def test_status_service_health_get_and_revoke(tmp_path):
     said = acdc["d"]
     fetched = client.simulate_get(f"/status/{said}")
     assert fetched.status_code == 200
-    assert fetched.json["credentialSaid"] == said
+    assert fetched.json["credSaid"] == said
     assert fetched.json["revoked"] is False
-
-    revoked = client.simulate_post(f"/status/{said}/revoke")
-    assert revoked.status_code == 200
-    assert revoked.json["revoked"] is True
-    assert store.get(said).revoked is True
+    assert fetched.json["status"] == "iss"
+    assert client.simulate_post(f"/status/{said}/revoke").status_code == 404
 
 
 def test_verifier_service_submits_and_manages_operations(tmp_path):

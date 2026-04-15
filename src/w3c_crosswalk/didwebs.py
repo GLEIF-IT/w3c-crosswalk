@@ -21,8 +21,11 @@ class DidWebsResolutionError(RuntimeError):
 class DidResolution:
     """Resolved DID material returned by :class:`DidWebsClient`."""
 
+    # DID that the verifier asked the did:webs resolver to resolve.
     did: str
+    # Normalized DID document used for verificationMethod lookup.
     did_document: dict[str, Any]
+    # Raw resolver JSON response, usually {"didDocument": ...} but preserved for diagnostics.
     raw: dict[str, Any]
 
 

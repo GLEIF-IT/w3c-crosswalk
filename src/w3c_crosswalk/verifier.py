@@ -21,11 +21,17 @@ from .profile import expected_credential_type, subject_aid
 class PreparedVcToken:
     """Decoded VC-JWT envelope plus the dependency hints needed by the runtime."""
 
+    # Original compact VC-JWT string submitted to the verifier.
     token: str
+    # Decoded JOSE header; kid is canonicalized as a DID URL when present.
     header: dict[str, Any]
+    # Decoded W3C VC payload; this is not re-projected from ACDC during verification.
     payload: dict[str, Any]
+    # Canonicalized W3C issuer DID from payload["issuer"], used for did:webs resolution.
     issuer: str | None
+    # Credential status URL from payload["credentialStatus"]["id"], fetched by the runtime if present.
     status_url: str | None
+    # Decode/header validation errors collected before external DID/status dependencies are fetched.
     errors: list[str] = field(default_factory=list)
 
 
@@ -33,11 +39,17 @@ class PreparedVcToken:
 class PreparedVpToken:
     """Decoded VP-JWT envelope plus nested VC tokens for later verification."""
 
+    # Original compact VP-JWT string submitted to the verifier.
     token: str
+    # Decoded JOSE header; kid is canonicalized as a DID URL when present.
     header: dict[str, Any]
+    # Decoded W3C VP payload.
     payload: dict[str, Any]
+    # Holder DID from payload["holder"], canonicalized before did:webs resolution.
     holder: str | None
+    # Embedded VC-JWT strings from payload["verifiableCredential"].
     vc_tokens: list[str]
+    # Decode/header validation errors collected before holder or embedded VC checks run.
     errors: list[str] = field(default_factory=list)
 
 
@@ -45,12 +57,19 @@ class PreparedVpToken:
 class VerificationResult:
     """Normalized verification result returned by the pure verification engine."""
 
+    # Overall verifier outcome; false when any error was recorded.
     ok: bool
+    # Result family such as vc+jwt, vp+jwt, or crosswalk.
     kind: str
+    # Human-readable verification failures surfaced into operation responses.
     errors: list[str] = field(default_factory=list)
+    # Non-fatal verifier observations reserved for future policy checks.
     warnings: list[str] = field(default_factory=list)
+    # Verified W3C VC/VP payload, or the best decoded payload available on failure.
     payload: dict[str, Any] | None = None
+    # Boolean/detail checks for UI/tests, e.g. signatureValid, statusActive, typeMatches.
     checks: dict[str, Any] = field(default_factory=dict)
+    # Nested verification results for VP embedded credentials.
     nested: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
@@ -268,5 +287,6 @@ class VerificationEngine:
 
         status_ok = not bool(status_doc.get("revoked"))
         if not status_ok:
-            errors.append(f"credential {status_doc.get('credentialSaid')} is revoked")
+            credential = status_doc.get("credSaid", status_doc.get("credentialSaid"))
+            errors.append(f"credential {credential} is revoked")
         return status_ok
