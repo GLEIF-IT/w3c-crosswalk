@@ -12,11 +12,14 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass
+import os
 from pathlib import Path
-from typing import Any, Callable, Protocol
-from urllib.request import urlopen
+import tempfile
+from typing import Any, Protocol
 
-from .common import utc_timestamp
+from .common import canonicalize_did_webs, utc_timestamp
+from .constants import STATUS_ROUTE_PREFIX
+from .runtime_http import JsonResponse
 
 
 @dataclass
@@ -40,7 +43,7 @@ class CredentialStatusRecord:
             source_registry=acdc["ri"],
             source_schema_said=acdc["s"],
             source_issuer_aid=acdc["i"],
-            issuer_did=issuer_did,
+            issuer_did=canonicalize_did_webs(issuer_did),
             revoked=False,
             updated_at=utc_timestamp(),
         )
@@ -48,7 +51,7 @@ class CredentialStatusRecord:
     def as_status_resource(self, base_url: str) -> dict[str, Any]:
         """Render the record as a W3C-friendly status resource document."""
         return {
-            "id": f"{base_url.rstrip('/')}/statuses/{self.credential_said}",
+            "id": status_url(base_url, self.credential_said),
             "type": "KERICredentialRegistryStatus",
             "credentialSaid": self.credential_said,
             "sourceRegistry": self.source_registry,
@@ -62,11 +65,19 @@ class CredentialStatusRecord:
         }
 
 
-class StatusResolver(Protocol):
-    """Minimal protocol implemented by status fetch clients."""
+class StatusStore(Protocol):
+    """Minimal store protocol used by status projection services."""
 
-    def fetch(self, url: str) -> dict[str, Any]:
-        """Fetch and decode one status resource from its URL."""
+    def project_acdc(self, acdc: dict[str, Any], issuer_did: str) -> CredentialStatusRecord:
+        """Project a source ACDC credential into a local status record."""
+        ...
+
+    def set_revoked(self, credential_said: str, revoked: bool, reason: str | None = None) -> CredentialStatusRecord:
+        """Update revocation state for a previously projected credential."""
+        ...
+
+    def get(self, credential_said: str) -> CredentialStatusRecord | None:
+        """Load one credential status record by source credential SAID."""
         ...
 
 
@@ -79,18 +90,27 @@ class JsonFileStatusStore:
     """
 
     def __init__(self, path: str | Path):
-        """Initialize the store and create an empty file on first use."""
+        """Initialize the store with a backing path but do not eagerly mutate it."""
         self.path = Path(path)
+
+    def ensure_exists(self) -> None:
+        """Create the backing file and parent directories on first use."""
+        self.path.parent.mkdir(parents=True, exist_ok=True)
         if not self.path.exists():
             self.path.write_text("{}\n", encoding="utf-8")
 
     def _load(self) -> dict[str, Any]:
         """Load the entire status store into memory."""
+        self.ensure_exists()
         return json.loads(self.path.read_text(encoding="utf-8"))
 
     def _save(self, data: dict[str, Any]) -> None:
-        """Write the full in-memory status map back to disk."""
-        self.path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        """Write the full in-memory status map back to disk atomically."""
+        self.ensure_exists()
+        with tempfile.NamedTemporaryFile("w", delete=False, dir=self.path.parent, encoding="utf-8") as handle:
+            handle.write(json.dumps(data, indent=2, sort_keys=True) + "\n")
+            temp_path = Path(handle.name)
+        os.replace(temp_path, self.path)
 
     def project_acdc(self, acdc: dict[str, Any], issuer_did: str) -> CredentialStatusRecord:
         """Project a source ACDC credential into an active status record."""
@@ -121,16 +141,22 @@ class JsonFileStatusStore:
 
 
 class HttpStatusResolver:
-    """Fetch status resources over HTTP or through a test loader hook."""
+    """Namespace for status-service response validation.
 
-    def __init__(self, timeout: float = 5.0, loader: Callable[[str, float], dict[str, Any]] | None = None):
-        """Configure the resolver timeout and optional test loader override."""
-        self.timeout = timeout
-        self.loader = loader
+    Outbound status dereferencing is driven by cooperative HIO doers elsewhere
+    in the runtime. This class intentionally owns only response validation.
+    """
 
-    def fetch(self, url: str) -> dict[str, Any]:
-        """Fetch and decode a remote status resource."""
-        if self.loader is not None:
-            return self.loader(url, self.timeout)
-        with urlopen(url, timeout=self.timeout) as response:
-            return json.loads(response.read().decode("utf-8"))
+    @staticmethod
+    def parse_response(url: str, response: JsonResponse) -> dict[str, Any]:
+        """Validate and normalize one status-service JSON response."""
+        if response.status >= 400:
+            raise RuntimeError(f"status lookup returned HTTP {response.status} for {url}")
+        if not isinstance(response.data, dict):
+            raise RuntimeError(f"status lookup did not return a JSON object for {url}")
+        return response.data
+
+
+def status_url(base_url: str, credential_said: str) -> str:
+    """Return the canonical status resource URL for one credential SAID."""
+    return f"{base_url.rstrip('/')}{STATUS_ROUTE_PREFIX}/{credential_said}"

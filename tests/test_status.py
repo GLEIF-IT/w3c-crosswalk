@@ -17,6 +17,7 @@ def test_status_store_projects_and_revokes_credentials(tmp_path):
     store = JsonFileStatusStore(tmp_path / "status-store.json")
     projected = store.project_acdc(acdc, "did:webs:example.com:dws:ELEGALAID000000000000000000000000000000000000000001")
     assert projected.revoked is False
+    assert projected.as_status_resource("http://status.example")["id"] == f"http://status.example/status/{acdc['d']}"
     revoked = store.set_revoked(acdc["d"], True, reason="test revoke")
     assert revoked.revoked is True
     assert store.get(acdc["d"]).reason == "test revoke"

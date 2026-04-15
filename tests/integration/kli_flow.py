@@ -650,7 +650,7 @@ def init_habery(live_stack: dict, actor: Actor) -> None:
             def ready() -> bool:
                 return hby.db.roobi.cntAll() >= configured_oobis and _well_knowns_ready(hby, well_knowns)
 
-            # debugging facts to be refreshed after each Doist recur cycle.
+            # Observed workflow state to refresh after each scheduler cycle.
             def observe() -> dict[str, object]:
                 return {
                     "actor": actor.alias,
@@ -940,8 +940,9 @@ def wait_for_credential_said(
     timeout: float = 90.0,
 ) -> str:
     """Poll until an actor has a credential SAID matching the requested shape."""
+    get_last_cred_said = lambda: (_credential_saids(live_stack, actor, schema=schema, issued=issued) or [""])[-1]
     return poll_until(
-        lambda: (_credential_saids(live_stack, actor, schema=schema, issued=issued) or [""])[-1],
+        get_last_cred_said,
         ready=lambda said: bool(said),
         timeout=timeout,
         interval=1.0,

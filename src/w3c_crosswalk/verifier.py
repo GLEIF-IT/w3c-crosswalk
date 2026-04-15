@@ -1,12 +1,9 @@
-"""Verify VC-JWT, VP-JWT, and ACDC/W3C crosswalk equivalence.
+"""Pure verification engine for W3C JWT artifacts and crosswalk checks.
 
-This module owns the W3C-side verification rules for the repository. It
-resolves did:webs key material, verifies JWT signatures, checks projected
-status, and compares derived W3C credentials against their source ACDC.
-
-The key boundary is this: the verifier validates the projected W3C representation,
-but its correctness still depends on the KERI-side source credential and status
-projection seams.
+This module intentionally owns only the verification rules themselves. It does
+not perform outbound DID resolution or credential-status dereferencing. Those
+transport concerns belong to the long-running verifier runtime so the service
+can stay fully cooperative under HIO.
 """
 
 from __future__ import annotations
@@ -14,15 +11,39 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from .didwebs import DidWebsClient, DidWebsResolutionError
+from .common import canonicalize_did_url, canonicalize_did_webs
+from .constants import EDDSA, VC_JWT_TYP, VP_JWT_TYP
 from .jwt import decode_jwt, verify_jwt_signature
 from .profile import expected_credential_type, subject_aid
-from .status import HttpStatusResolver
+
+
+@dataclass(frozen=True)
+class PreparedVcToken:
+    """Decoded VC-JWT envelope plus the dependency hints needed by the runtime."""
+
+    token: str
+    header: dict[str, Any]
+    payload: dict[str, Any]
+    issuer: str | None
+    status_url: str | None
+    errors: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class PreparedVpToken:
+    """Decoded VP-JWT envelope plus nested VC tokens for later verification."""
+
+    token: str
+    header: dict[str, Any]
+    payload: dict[str, Any]
+    holder: str | None
+    vc_tokens: list[str]
+    errors: list[str] = field(default_factory=list)
 
 
 @dataclass
 class VerificationResult:
-    """Normalized verification result returned by all verifier entrypoints."""
+    """Normalized verification result returned by the pure verification engine."""
 
     ok: bool
     kind: str
@@ -37,129 +58,150 @@ class VerificationResult:
         return asdict(self)
 
 
-class CrosswalkVerifier:
-    """Verify W3C artifacts and their consistency with source ACDCs.
+class VerificationEngine:
+    """Evaluate decoded W3C artifacts once their external dependencies are known."""
 
-    Verification proceeds in layers:
-    - resolve key state,
-    - verify signature,
-    - dereference projected status, and only then
-    - compare the W3C payload against source ACDC content.
-    """
-
-    def __init__(self, resolver: DidWebsClient | None = None, status_resolver: HttpStatusResolver | None = None):
-        """Create a verifier with overridable DID and status resolvers."""
-        self.resolver = resolver or DidWebsClient()
-        self.status_resolver = status_resolver or HttpStatusResolver()
-
-    def _resolve_method(self, did: str, kid: str, errors: list[str]):
-        """Resolve one verification method and append resolution errors in place."""
+    def prepare_vc_token(self, token: str) -> PreparedVcToken:
+        """Decode a VC-JWT and collect the runtime dependencies it will need."""
         try:
-            resolution = self.resolver.resolve(did)
-            return self.resolver.find_verification_method(resolution.did_document, kid)
-        except DidWebsResolutionError as exc:
-            errors.append(str(exc))
-            return None
+            decoded = decode_jwt(token)
+        except ValueError as exc:
+            return PreparedVcToken(token=token, header={}, payload={}, issuer=None, status_url=None, errors=[str(exc)])
 
-    def _verify_signature(self, *, token: str, method: dict[str, Any] | None, label: str, errors: list[str]) -> bool:
-        """Verify a JWT signature from a resolved method and append errors in place."""
-        if method is None:
-            return False
-
-        public_jwk = method.get("publicKeyJwk")
-        if not isinstance(public_jwk, dict):
-            errors.append(f"resolved verification method did not expose publicKeyJwk for {label}")
-            return False
-
-        signature_ok = verify_jwt_signature(token, public_jwk)
-        if not signature_ok:
-            errors.append(f"{label} signature verification failed")
-        return signature_ok
-
-    def _check_status(self, payload: dict[str, Any], errors: list[str]) -> bool:
-        """Check projected credential status for a VC payload."""
-        status_resource = payload.get("credentialStatus", {})
-        if not isinstance(status_resource, dict) or not status_resource.get("id"):
-            return True
-
-        status_doc = self.status_resolver.fetch(status_resource["id"])
-        status_ok = not bool(status_doc.get("revoked"))
-        if not status_ok:
-            errors.append(f"credential {status_doc.get('credentialSaid')} is revoked")
-        return status_ok
-
-    def verify_vc_jwt(self, token: str) -> VerificationResult:
-        """Verify a VC-JWT through did:webs resolution and status lookup."""
-        decoded = decode_jwt(token)
-        errors: list[str] = []
+        header = dict(decoded.header)
         payload = decoded.payload
-        header = decoded.header
+        errors: list[str] = []
 
-        if header.get("alg") != "EdDSA":
+        if header.get("alg") != EDDSA:
             errors.append(f"unsupported alg: {header.get('alg')}")
-        if header.get("typ") != "vc+jwt":
+        if header.get("typ") != VC_JWT_TYP:
             errors.append(f"unsupported typ: {header.get('typ')}")
+
+        kid = header.get("kid")
+        if isinstance(kid, str):
+            header["kid"] = canonicalize_did_url(kid)
 
         issuer = payload.get("issuer")
         if not issuer:
             errors.append("missing issuer")
+        elif isinstance(issuer, str):
+            issuer = canonicalize_did_webs(issuer)
 
-        method = self._resolve_method(issuer, header.get("kid", ""), errors) if issuer else None
-        signature_ok = self._verify_signature(token=token, method=method, label="VC-JWT", errors=errors)
-        status_ok = self._check_status(payload, errors)
+        status_resource = payload.get("credentialStatus", {})
+        status_url = status_resource.get("id") if isinstance(status_resource, dict) else None
+
+        return PreparedVcToken(
+            token=token,
+            header=header,
+            payload=payload,
+            issuer=issuer,
+            status_url=status_url,
+            errors=errors,
+        )
+
+    def prepare_vp_token(self, token: str) -> PreparedVpToken:
+        """Decode a VP-JWT and collect nested VC tokens for later verification."""
+        try:
+            decoded = decode_jwt(token)
+        except ValueError as exc:
+            return PreparedVpToken(token=token, header={}, payload={}, holder=None, vc_tokens=[], errors=[str(exc)])
+
+        header = dict(decoded.header)
+        payload = decoded.payload
+        errors: list[str] = []
+
+        if header.get("typ") != VP_JWT_TYP:
+            errors.append(f"unsupported typ: {header.get('typ')}")
+
+        kid = header.get("kid")
+        if isinstance(kid, str):
+            header["kid"] = canonicalize_did_url(kid)
+
+        holder = payload.get("holder")
+        if not holder:
+            errors.append("missing holder")
+
+        vc_tokens = payload.get("verifiableCredential", [])
+        if not isinstance(vc_tokens, list):
+            errors.append("verifiableCredential must be a list")
+            vc_tokens = []
+
+        return PreparedVpToken(
+            token=token,
+            header=header,
+            payload=payload,
+            holder=canonicalize_did_webs(holder) if isinstance(holder, str) else holder,
+            vc_tokens=list(vc_tokens),
+            errors=errors,
+        )
+
+    def evaluate_prepared_vc(
+        self,
+        prepared: PreparedVcToken,
+        *,
+        method: dict[str, Any] | None,
+        status_doc: dict[str, Any] | None,
+    ) -> VerificationResult:
+        """Evaluate one prepared VC-JWT using resolved DID and status material."""
+        errors = list(prepared.errors)
+        signature_ok = self._verify_signature(
+            token=prepared.token,
+            method=method,
+            label="VC-JWT",
+            errors=errors,
+        )
+        status_ok = self._check_status_doc(status_doc, errors)
 
         return VerificationResult(
             ok=not errors,
             kind="vc+jwt",
             errors=errors,
-            payload=payload,
+            payload=prepared.payload,
             checks={
-                "issuerResolved": bool(issuer and method is not None),
+                "issuerResolved": bool(prepared.issuer and method is not None),
                 "signatureValid": signature_ok,
                 "statusActive": status_ok,
-                "credentialTypes": payload.get("type", []),
+                "credentialTypes": prepared.payload.get("type", []),
             },
         )
 
-    def verify_vp_jwt(self, token: str) -> VerificationResult:
-        """Verify a VP-JWT and recursively verify embedded VC-JWTs."""
-        decoded = decode_jwt(token)
-        errors: list[str] = []
-        payload = decoded.payload
-        holder = payload.get("holder")
-        header = decoded.header
+    def evaluate_prepared_vp(
+        self,
+        prepared: PreparedVpToken,
+        *,
+        method: dict[str, Any] | None,
+        nested_results: list[VerificationResult],
+    ) -> VerificationResult:
+        """Evaluate one prepared VP-JWT using resolved holder state and nested VC results."""
+        errors = list(prepared.errors)
+        signature_ok = self._verify_signature(
+            token=prepared.token,
+            method=method,
+            label="VP-JWT",
+            errors=errors,
+        )
 
-        if header.get("typ") != "vp+jwt":
-            errors.append(f"unsupported typ: {header.get('typ')}")
-        if not holder:
-            errors.append("missing holder")
-
-        method = self._resolve_method(holder, header.get("kid", ""), errors) if holder else None
-        signature_ok = self._verify_signature(token=token, method=method, label="VP-JWT", errors=errors)
-
-        nested_results = []
-        for vc_token in payload.get("verifiableCredential", []):
-            vc_result = self.verify_vc_jwt(vc_token)
-            nested_results.append(vc_result.to_dict())
-            if not vc_result.ok:
+        nested = []
+        for result in nested_results:
+            nested.append(result.to_dict())
+            if not result.ok:
                 errors.append("embedded VC-JWT verification failed")
 
         return VerificationResult(
             ok=not errors,
             kind="vp+jwt",
             errors=errors,
-            payload=payload,
+            payload=prepared.payload,
             checks={
-                "holderResolved": bool(holder and method is not None),
+                "holderResolved": bool(prepared.holder and method is not None),
                 "signatureValid": signature_ok,
-                "embeddedCredentialCount": len(payload.get("verifiableCredential", [])),
+                "embeddedCredentialCount": len(prepared.vc_tokens),
             },
-            nested=nested_results,
+            nested=nested,
         )
 
-    def verify_crosswalk_pair(self, acdc: dict[str, Any], token: str) -> VerificationResult:
-        """Verify a VC-JWT and compare it against its source ACDC content."""
-        vc_result = self.verify_vc_jwt(token)
+    def evaluate_crosswalk_pair(self, acdc: dict[str, Any], vc_result: VerificationResult) -> VerificationResult:
+        """Compare a successful or unsuccessful VC result against its source ACDC."""
         errors = list(vc_result.errors)
         payload = vc_result.payload or {}
 
@@ -194,3 +236,37 @@ class CrosswalkVerifier:
             payload=payload,
             checks=checks,
         )
+
+    @staticmethod
+    def _verify_signature(
+        *,
+        token: str,
+        method: dict[str, Any] | None,
+        label: str,
+        errors: list[str],
+    ) -> bool:
+        """Verify a JWT signature from a resolved method and append errors in place."""
+        if method is None:
+            errors.append(f"unable to resolve verification method for {label}")
+            return False
+
+        public_jwk = method.get("publicKeyJwk")
+        if not isinstance(public_jwk, dict):
+            errors.append(f"resolved verification method did not expose publicKeyJwk for {label}")
+            return False
+
+        signature_ok = verify_jwt_signature(token, public_jwk)
+        if not signature_ok:
+            errors.append(f"{label} signature verification failed")
+        return signature_ok
+
+    @staticmethod
+    def _check_status_doc(status_doc: dict[str, Any] | None, errors: list[str]) -> bool:
+        """Interpret one fetched status document for a VC result."""
+        if status_doc is None:
+            return True
+
+        status_ok = not bool(status_doc.get("revoked"))
+        if not status_ok:
+            errors.append(f"credential {status_doc.get('credentialSaid')} is revoked")
+        return status_ok

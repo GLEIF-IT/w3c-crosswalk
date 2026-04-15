@@ -1,9 +1,10 @@
-"""Launch and manage the subprocess side of the live integration stack.
+"""Launch and manage the live integration stack.
 
 This module owns the network-facing portion of the end to end integration test:
 - runtime directory setup (test run root and KERI home override),
 - shared staged assets (vLEI schemas, VRD schemas, witness config),
-- long-lived helper subprocesses (witness, vLEI-server, did:webs resolver),
+- long-lived helper subprocesses (witness, vLEI-server),
+- lazily launched in-process did:webs artifact and resolver doers,
 - and the mutable ``live_stack`` contract that later workflow helpers consume.
 
 KERI workflow steps do not run here. They run in-process through
@@ -14,14 +15,24 @@ reachability, schema/helper services, and the local W3C status endpoint.
 from __future__ import annotations
 
 from contextlib import contextmanager
+import importlib
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 
 import pytest
 
-from .helpers import read_log_tail, terminate_process, wait_for_json_health, wait_for_port
+from .helpers import (
+    BackgroundDoistRunner,
+    patched_home,
+    read_log_tail,
+    terminate_process,
+    wait_for_json_health,
+    wait_for_port,
+    wait_for_tcp_port,
+)
 from .constants import WITNESS_AIDS
 from .topology import make_stack_topology, stack_runtime_name
 
@@ -41,13 +52,11 @@ VLEI_OOBI_ROOT = VLEI_ASSET_ROOT / "samples" / "oobis"
 # Local venv Python and binary setup
 PYTHON_BIN = W3C_CROSSWALK_ROOT / ".venv" / "bin" / "python"
 VLEI_SVR_BIN = W3C_CROSSWALK_ROOT / ".venv" / "bin" / "vLEI-server"
-DWS_BIN = W3C_CROSSWALK_ROOT / ".venv" / "bin" / "dws"
 
 # Witness and other service config and script names
 WITNESS_CONFIG_NAMES = ("wan", "wil", "wes")
 SERVICE_SCRIPTS_ROOT = INTEGRATION_ROOT / "_services"
 WITNESS_SERVER_SCRIPT = SERVICE_SCRIPTS_ROOT / "witness_server.py"
-DWS_SERVICE_SCRIPT = SERVICE_SCRIPTS_ROOT / "did_webs_resolver.py"
 
 
 def _require_path(path: Path, label: str) -> str:
@@ -149,6 +158,12 @@ def _terminate_all(procs: list[tuple[str, subprocess.Popen[bytes]]]) -> None:
         terminate_process(proc)
 
 
+def _stop_all_runners(runners: list[BackgroundDoistRunner]) -> None:
+    """Stop all managed background HIO runners in reverse launch order."""
+    for runner in reversed(runners):
+        runner.close()
+
+
 def _wait_process_port(live_stack: dict, proc: subprocess.Popen[bytes], name: str, port: int, log_path: Path) -> None:
     """Wait for one managed subprocess to bind its advertised TCP port."""
     wait_for_port(live_stack["host"], port, proc, name, log_path=log_path)
@@ -168,6 +183,27 @@ def _open_process_log(live_stack: dict, filename: str):
     handle = log_path.open("wb")
     live_stack["open_logs"].append(handle)
     return log_path, handle
+
+
+def _prepare_didwebs_home_snapshot(live_stack: dict, *, label: str) -> Path:
+    """Copy the live stack's `.keri` state into an isolated did:webs HOME.
+
+    The did:webs artifact and resolver doers keep their Habery open for the
+    life of the background runner. The rest of the test continues reopening the
+    original actor keystores for issuance and signing, so we must give did:webs
+    its own snapshot to avoid LMDB's same-process open restriction.
+    """
+    source_keri = Path(live_stack["home"]) / ".keri"
+    if not source_keri.exists():
+        raise RuntimeError(f"did:webs launch requested before KERI home existed at {source_keri}")
+
+    target_home = Path(live_stack["runtime_root"]) / f"did-webs-{label}-home"
+    target_keri = target_home / ".keri"
+    if target_keri.exists():
+        shutil.rmtree(target_keri)
+    target_home.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(source_keri, target_keri)
+    return target_home
 
 
 def _spawn_process(
@@ -195,7 +231,7 @@ def _spawn_process(
     return proc
 
 
-def _lazy_didwebs_launcher(live_stack: dict, *, name: str, alias: str, passcode: str) -> dict[str, str]:
+def _didwebs_launcher(live_stack: dict, *, name: str, alias: str, passcode: str) -> dict[str, str]:
     """Launch did:webs artifact and resolver services on first use.
 
     The service pair is started lazily because only the W3C issuance and
@@ -205,91 +241,57 @@ def _lazy_didwebs_launcher(live_stack: dict, *, name: str, alias: str, passcode:
     if live_stack.get("did_webs_running"):
         return _didwebs_urls(live_stack)
 
-    script = _require_path(DWS_SERVICE_SCRIPT, "did-webs service wrapper")
-    dws_bin = _require_path(DWS_BIN, "did-webs CLI")
-    env = os.environ.copy()
-    env["HOME"] = str(live_stack["home"])
-    cwd = W3C_CROSSWALK_ROOT
+    try:
+        artifact_module = importlib.import_module("dws.app.cli.commands.did.webs.service")
+        resolver_module = importlib.import_module("dws.app.cli.commands.did.webs.resolver-service")
+    except Exception as exc:
+        pytest.skip(f"did:webs in-process modules are unavailable: {exc}")
+        raise exc
 
-    artifact_log_path, artifact_log = _open_process_log(live_stack, "did-webs-artifact.log")
-    resolver_log_path, resolver_log = _open_process_log(live_stack, "did-webs-resolver.log")
+    artifact_home = _prepare_didwebs_home_snapshot(live_stack, label="artifact")
+    with patched_home(artifact_home):
+        artifact_doers = artifact_module.create_artifact_server_doers(
+            name=name,
+            base="",
+            bran=passcode,
+            config_file=None,
+            config_dir=None,
+            alias=alias,
+            meta=False,
+            did_path="dws",
+            http_port=live_stack["topology"].dws_artifact_port,
+            keypath=None,
+            certpath=None,
+            cafilepath=None,
+        )
 
-    artifact_argv = _did_webs_static_process(live_stack, script, dws_bin, name, alias, passcode)
-    _spawn_process(
-        live_stack,
-        proc_name="did-webs-artifact",
-        display_name="did-webs-artifact",
-        argv=artifact_argv,
-        cwd=cwd,
-        env=env,
-        log_path=artifact_log_path,
-        log_handle=artifact_log,
-        port=live_stack["topology"].dws_artifact_port,
-    )
+    resolver_home = _prepare_didwebs_home_snapshot(live_stack, label="resolver")
+    with patched_home(resolver_home):
+        resolver_doers = resolver_module.create_did_webs_doers(
+            name=name,
+            base="",
+            bran=passcode,
+            config_file=None,
+            config_dir=None,
+            static_files_dir=None,
+            did_path="dws",
+            http_port=live_stack["topology"].dws_resolver_port,
+            keypath=None,
+            certpath=None,
+            cafilepath=None,
+        )
 
-    resolver_argv = _did_webs_resolver_process(live_stack, script, dws_bin, name, passcode)
-    _spawn_process(
-        live_stack,
-        proc_name="did-webs-resolver",
-        display_name="did-webs-resolver",
-        argv=resolver_argv,
-        cwd=cwd,
-        env=env,
-        log_path=resolver_log_path,
-        log_handle=resolver_log,
-        port=live_stack["topology"].dws_resolver_port,
-    )
+    artifact_runner = BackgroundDoistRunner(name="did-webs-artifact", doers=artifact_doers)
+    resolver_runner = BackgroundDoistRunner(name="did-webs-resolver", doers=resolver_doers)
+    artifact_runner.start()
+    resolver_runner.start()
+    live_stack["runtime_runners"].extend([artifact_runner, resolver_runner])
+
+    wait_for_tcp_port(live_stack["host"], live_stack["topology"].dws_artifact_port)
+    wait_for_tcp_port(live_stack["host"], live_stack["topology"].dws_resolver_port)
 
     live_stack["did_webs_running"] = True
     return _didwebs_urls(live_stack)
-
-
-def _did_webs_static_process(
-        live_stack, didwebs_runner_script, dws_bin_path, name, alias, passcode
-):
-    """Return argv for the did:webs artifact helper process."""
-    return [
-        str(PYTHON_BIN),
-        "-u",
-        didwebs_runner_script,
-        "--mode",
-        "artifact",
-        "--dws-bin",
-        dws_bin_path,
-        "--name",
-        name,
-        "--alias",
-        alias,
-        "--passcode",
-        passcode,
-        "--http-port",
-        str(live_stack["topology"].dws_artifact_port),
-        "--did-path",
-        "dws",
-    ]
-
-
-def _did_webs_resolver_process(
-        live_stack, didwebs_runner_script, dws_bin_path, name, passcode
-):
-    """Return argv for the did:webs resolver helper process."""
-    return [
-        str(PYTHON_BIN),
-        "-u",
-        didwebs_runner_script,
-        "--mode",
-        "resolver",
-        "--dws-bin",
-        dws_bin_path,
-        "--name",
-        name,
-        "--passcode",
-        passcode,
-        "--http-port",
-        str(live_stack["topology"].dws_resolver_port),
-        "--did-path",
-        "dws",
-    ]
 
 @contextmanager
 def _launch_live_stack(live_stack: dict, *, shared_assets: dict[str, Path]):
@@ -304,7 +306,8 @@ def _launch_live_stack(live_stack: dict, *, shared_assets: dict[str, Path]):
       - wes (dynamic port customized by individual stack run)
     - vLEI-server for ACDC schema resolution via schema OOBIs
     - Credential Status service backed by a simple JSON document credential status registry DB.
-    - did:webs service (lazily executed)
+    - Verifier service backed by a local LMDB long-running operation store.
+    - did:webs services (lazily executed in-process as background doers)
 
     The fixture contract uses subprocesses only for long-lived network-facing
     services. All KERI workflow steps run separately in-process through the
@@ -332,17 +335,21 @@ def _launch_live_stack(live_stack: dict, *, shared_assets: dict[str, Path]):
 
     # Sets up processes and Python binaries to use
     procs: list[tuple[str, subprocess.Popen[bytes]]] = []
+    runners: list[BackgroundDoistRunner] = []
     open_logs: list = []
     live_stack["runtime_procs"] = procs
+    live_stack["runtime_runners"] = runners
     live_stack["open_logs"] = open_logs
     live_stack["witness_aids"] = WITNESS_AIDS
     live_stack["status_store"] = Path(live_stack["runtime_root"]) / "status-store.json"
-    live_stack["launch_did_webs"] = _lazy_didwebs_launcher
+    live_stack["operation_store_root"] = Path(live_stack["runtime_root"]) / "verifier-operations"
+    live_stack["launch_did_webs"] = _didwebs_launcher
     live_stack["did_webs_running"] = False
 
     witness_log_path, witness_log = _open_process_log(live_stack, "witness.log")
     vlei_log_path, vlei_log = _open_process_log(live_stack, "vlei.log")
     status_log_path, status_log = _open_process_log(live_stack, "status.log")
+    verifier_log_path, verifier_log = _open_process_log(live_stack, "verifier.log")
 
     witness_argv = _witness_process(live_stack, witness_python)
     witness = subprocess.Popen(
@@ -381,11 +388,26 @@ def _launch_live_stack(live_stack: dict, *, shared_assets: dict[str, Path]):
         log_handle=status_log,
         port=live_stack["topology"].status_port,
     )
-    wait_for_json_health(f"{live_stack['status_base_url']}/health")
+    wait_for_json_health(f"{live_stack['status_base_url']}/healthz")
+
+    verifier_argv = _verifier_process(live_stack, witness_python)
+    _spawn_process(
+        live_stack,
+        proc_name="verifier-service",
+        display_name="verifier-service",
+        argv=verifier_argv,
+        cwd=cwd,
+        env=shared_env,
+        log_path=verifier_log_path,
+        log_handle=verifier_log,
+        port=live_stack["topology"].verifier_port,
+    )
+    wait_for_json_health(f"{live_stack['verifier_base_url']}/healthz")
 
     try:
         yield live_stack
     finally:
+        _stop_all_runners(runners)
         _terminate_all(procs)
         for handle in open_logs:
             handle.close()
@@ -430,15 +452,38 @@ def _credential_status_process(live_stack, python_bin):
         "-u",
         "-m",
         "w3c_crosswalk.cli",
-        "status-serve",
+        "serve",
+        "status",
         "--host",
         live_stack["host"],
         "--port",
         str(live_stack["topology"].status_port),
-        "--status-store",
+        "--store",
         str(live_stack["status_store"]),
         "--base-url",
         live_stack["status_base_url"],
+    ]
+
+
+def _verifier_process(live_stack, python_bin):
+    """Return argv for the verifier submission/polling API service."""
+    return [
+        python_bin,
+        "-u",
+        "-m",
+        "w3c_crosswalk.cli",
+        "serve",
+        "verifier",
+        "--host",
+        live_stack["host"],
+        "--port",
+        str(live_stack["topology"].verifier_port),
+        "--resolver",
+        live_stack["dws_resolver_url"],
+        "--operation-root",
+        str(live_stack["operation_store_root"]),
+        "--operation-name",
+        "verifier",
     ]
 
 

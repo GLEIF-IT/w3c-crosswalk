@@ -734,13 +734,13 @@ name = "w3c-crosswalk"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "falcon" },
+    { name = "hio" },
     { name = "keri" },
 ]
 
 [package.dev-dependencies]
 dev = [
-    { name = "falcon" },
-    { name = "hio" },
     { name = "pytest" },
 ]
 live = [
@@ -748,29 +748,23 @@ live = [
     { name = "vlei" },
 ]
 test = [
-    { name = "falcon" },
-    { name = "hio" },
     { name = "pytest" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "keri", git = "https://github.com/WebOfTrust/keripy.git?rev=cbbf700fa8091587b96b5475c5f50d1d8bf3ca40" }]
-
-[package.metadata.requires-dev]
-dev = [
+requires-dist = [
     { name = "falcon", specifier = ">=4.0.2" },
     { name = "hio", specifier = "==0.6.14" },
-    { name = "pytest", specifier = ">=8.4,<9" },
+    { name = "keri", git = "https://github.com/WebOfTrust/keripy.git?rev=cbbf700fa8091587b96b5475c5f50d1d8bf3ca40" },
 ]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = ">=8.4,<9" }]
 live = [
     { name = "did-webs-resolver", git = "https://github.com/GLEIF-IT/did-webs-resolver.git?rev=be1679f5629ca4a145db456cc79219d837ae3d2c" },
     { name = "vlei", git = "https://github.com/WebOfTrust/vLEI.git?rev=f514b9431c5f965b5f7f64a8693e19df2f181564" },
 ]
-test = [
-    { name = "falcon", specifier = ">=4.0.2" },
-    { name = "hio", specifier = "==0.6.14" },
-    { name = "pytest", specifier = ">=8.4,<9" },
-]
+test = [{ name = "pytest", specifier = ">=8.4,<9" }]
 
 [[package]]
 name = "wcwidth"

@@ -8,12 +8,13 @@ projected status.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
-from w3c_crosswalk.jwt import KeriHabSigner, issue_vc_jwt
+from w3c_crosswalk.jwt import issue_vc_jwt
+from w3c_crosswalk.signing import KeriHabSigner
 from w3c_crosswalk.status import JsonFileStatusStore
-from w3c_crosswalk.verifier import CrosswalkVerifier
-from w3c_crosswalk.didwebs import DidWebsClient
+from w3c_crosswalk.verifier_client import verify_pair_doer, verify_vc_doer
 from .conftest import INTEGRATION_ROOT, W3C_CROSSWALK_ROOT
 
 from .kli_flow import (
@@ -35,7 +36,7 @@ from .kli_flow import (
     validate_chain,
     witness_oobi,
 )
-from .helpers import patched_home, write_json
+from .helpers import patched_home, run_doers_until, write_json
 
 
 ASSETS = Path(__file__).resolve().parent / "assets"
@@ -272,7 +273,26 @@ def _validate_and_project_status(live_stack: dict, state, issuer_did: str) -> di
 
 
 def _issue_and_verify_w3c_twin(live_stack: dict, state, *, issuer_did: str, vrd: dict) -> None:
-    """Issue the VC-JWT twin and verify both the VC and crosswalk pair."""
+    """Issue the VC-JWT twin and verify both the VC and crosswalk pair through the verifier service."""
+    def _verifier_context(doer) -> dict:
+        return {
+            "error": str(doer.error) if getattr(doer, "error", None) else None,
+            "timeoutError": str(doer.timeout_error) if getattr(doer, "timeout_error", None) else None,
+            "submittedOperation": getattr(doer, "submitted_operation", None),
+            "operation": getattr(doer, "operation", None),
+        }
+
+    def _assert_verifier_ok(doer, *, label: str) -> None:
+        diagnostics = _verifier_context(doer)
+        rendered = json.dumps(diagnostics, indent=2, sort_keys=True)
+        assert doer.error is None, f"{label} request failed\n{rendered}"
+        assert doer.timeout_error is None, f"{label} request timed out\n{rendered}"
+        assert doer.operation is not None, f"{label} missing operation\n{rendered}"
+        assert doer.operation.get("done") is True, f"{label} never reached terminal state\n{rendered}"
+        if "error" in doer.operation:
+            assert False, f"{label} returned terminal error\n{rendered}"
+        return rendered
+
     with patched_home(Path(live_stack["home"])):
         signer = KeriHabSigner.open(name=state.qvi.name, base="", alias=state.qvi.alias, passcode=state.qvi.passcode)
         try:
@@ -280,16 +300,49 @@ def _issue_and_verify_w3c_twin(live_stack: dict, state, *, issuer_did: str, vrd:
         finally:
             signer.close()
 
-    verifier = CrosswalkVerifier(resolver=DidWebsClient(live_stack["dws_resolver_url"]))
-    vc_result = verifier.verify_vc_jwt(token)
-    pair_result = verifier.verify_crosswalk_pair(vrd, token)
+    vc_doer = verify_vc_doer(
+        base_url=live_stack["verifier_base_url"],
+        token=token,
+        timeout=45.0,
+        poll_interval=0.1,
+    )
+    run_doers_until(
+        "verify VC-JWT twin",
+        [vc_doer],
+        ready=lambda: vc_doer.done,
+        observe=lambda: {
+            "vc_done": vc_doer.done,
+            "vc_operation": vc_doer.operation,
+            "vc_error": str(vc_doer.error) if vc_doer.error else None,
+        },
+    )
 
     assert vc["crosswalk"]["sourceCredentialSaid"] == state.vrd_said
-    assert vc_result.ok is True
-    assert vc_result.checks["issuerResolved"] is True
-    assert vc_result.checks["signatureValid"] is True
-    assert vc_result.checks["statusActive"] is True
-    assert pair_result.ok is True
+    vc_rendered = _assert_verifier_ok(vc_doer, label="verify VC-JWT twin")
+    assert vc_doer.operation["response"]["ok"] is True, vc_rendered
+    assert vc_doer.operation["response"]["checks"]["issuerResolved"] is True, vc_rendered
+    assert vc_doer.operation["response"]["checks"]["signatureValid"] is True, vc_rendered
+    assert vc_doer.operation["response"]["checks"]["statusActive"] is True, vc_rendered
+
+    pair_doer = verify_pair_doer(
+        base_url=live_stack["verifier_base_url"],
+        token=token,
+        acdc=vrd,
+        timeout=45.0,
+        poll_interval=0.1,
+    )
+    run_doers_until(
+        "verify crosswalk pair",
+        [pair_doer],
+        ready=lambda: pair_doer.done,
+        observe=lambda: {
+            "pair_done": pair_doer.done,
+            "pair_operation": pair_doer.operation,
+            "pair_error": str(pair_doer.error) if pair_doer.error else None,
+        },
+    )
+    pair_rendered = _assert_verifier_ok(pair_doer, label="verify crosswalk pair")
+    assert pair_doer.operation["response"]["ok"] is True, pair_rendered
 
 
 def test_single_sig_vrd_crosswalk_live(live_stack):
@@ -300,7 +353,7 @@ def test_single_sig_vrd_crosswalk_live(live_stack):
       2. complete the KERI/ACDC issuance chain through grant/admit flow
       3. validate source ACDC chain state directly from local stores
       4. project the final VRD into W3C VC-JWT form
-      5. verify the W3C artifact through did:webs resolution and projected status
+      5. submit long-running verifier operations and poll them to completion
     """
     state = default_workflow_state()
     _bootstrap_workflow_actors(live_stack, state)

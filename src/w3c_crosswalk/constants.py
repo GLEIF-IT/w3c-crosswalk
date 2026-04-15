@@ -34,3 +34,16 @@ SUPPORTED_SCHEMA_TYPES = {
 # Default status and resolver configuration used by the local demo stack.
 STATUS_TYPE = "KERICredentialRegistryStatus"
 RESOLVER_DEFAULT = "http://127.0.0.1:7678/1.0/identifiers"
+
+# Internal-first HTTP route defaults for the local crosswalk services.
+HEALTH_ROUTE = "/healthz"
+STATUS_ROUTE_PREFIX = "/status"
+OPERATIONS_ROUTE_PREFIX = "/operations"
+VERIFY_VC_ROUTE = "/verify/vc"
+VERIFY_VP_ROUTE = "/verify/vp"
+VERIFY_PAIR_ROUTE = "/verify/pair"
+
+# Long-running verifier operation type names.
+VERIFY_VC_OPERATION = "verify-vc"
+VERIFY_VP_OPERATION = "verify-vp"
+VERIFY_PAIR_OPERATION = "verify-pair"

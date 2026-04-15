@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .common import require_mapping
+from .common import canonicalize_did_url, canonicalize_did_webs, require_mapping
 from .constants import (
     CROSSWALK_PROFILE,
     CROSSWALK_VERSION,
@@ -24,6 +24,7 @@ from .constants import (
     VRD_AUTH_SCHEMA,
     VRD_SCHEMA,
 )
+from .status import status_url
 
 
 class CrosswalkProfileError(ValueError):
@@ -94,9 +95,8 @@ def build_status_reference(acdc: dict[str, Any], status_base_url: str) -> dict[s
     The returned object is a projection hook into the local status-service seam,
     not an authoritative status engine of its own.
     """
-    base_url = status_base_url.rstrip("/")
     return {
-        "id": f"{base_url}/statuses/{acdc.get('d', '')}",
+        "id": status_url(status_base_url, acdc.get("d", "")),
         "type": STATUS_TYPE,
         "statusPurpose": "revocation",
     }
@@ -120,12 +120,14 @@ def transpose_acdc_to_w3c_vc(
     attributes = require_mapping("attributes", acdc.get("a", {}))
     rules = require_mapping("rules", acdc.get("r", {}))
     cred_type = schema_type(acdc)
+    canonical_issuer_did = canonicalize_did_webs(issuer_did)
+    canonical_verification_method = canonicalize_did_url(verification_method)
 
     return {
         "@context": [VC_CONTEXT],
         "type": ["VerifiableCredential", cred_type, "KERICrosswalkCredential"],
         "id": f"urn:said:{acdc.get('d', '')}",
-        "issuer": issuer_did,
+        "issuer": canonical_issuer_did,
         "validFrom": attributes.get("dt", ""),
         "credentialSubject": build_subject(acdc),
         "credentialSchema": {
@@ -137,7 +139,7 @@ def transpose_acdc_to_w3c_vc(
         "crosswalk": build_crosswalk_metadata(acdc),
         "proof": {
             "type": "DataDerivedFromKERI",
-            "verificationMethod": verification_method,
+            "verificationMethod": canonical_verification_method,
             "source": "live-hab-derived",
         },
     }

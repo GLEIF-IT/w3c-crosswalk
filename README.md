@@ -35,6 +35,9 @@ Read
 [`docs/integration-maintainer-guide.md`](docs/integration-maintainer-guide.md)
 for the live stack, workflow, and projection mental model.
 
+Read [`docs/cli-e2e-walkthrough.md`](docs/cli-e2e-walkthrough.md) for a
+copy-pasteable CLI walkthrough of the crosswalk-specific end-to-end flow.
+
 ## Local Setup
 
 This repo uses `uv` and expects a local `.venv`.
@@ -85,18 +88,23 @@ crosswalk --help
 
 Current subcommands include:
 
-- `issue-vc`
-- `issue-vp`
-- `verify-vc`
-- `verify-vp`
-- `verify-crosswalk`
-- `status-project`
-- `status-revoke`
-- `status-serve`
-- `verifier-serve`
+- `crosswalk issue vc`
+- `crosswalk issue vp`
+- `crosswalk verify vc`
+- `crosswalk verify vp`
+- `crosswalk verify pair`
+- `crosswalk status project|revoke`
+- `crosswalk serve status|verifier`
 
 All signing commands require a live KERI habitat signer. This repo does not use
-demo signers.
+demo signers. All verify commands talk to the long-running verifier operation
+service rather than invoking verifier logic directly in the CLI process. They
+wait for completion and use the process exit code for pass/fail instead of
+printing verifier operation documents.
+
+For an end-to-end CLI walkthrough, including status projection, VC issuance,
+and verifier checks, see
+[`docs/cli-e2e-walkthrough.md`](docs/cli-e2e-walkthrough.md).
 
 ## Fixtures
 
@@ -157,7 +165,8 @@ What it currently proves:
 - real QVI, LE, VRD Auth, and VRD ACDC issuance and admit flows
 - `did:webs` service launch from local KERI state
 - VC-JWT issuance from the live VRD ACDC
-- VC-JWT verification through the crosswalk verifier and `did:webs`
+- verifier-operation submission, polling, and final VC-JWT / crosswalk-pair
+  verification through `did:webs`
 
 This test owns the current truth of the repo more than any prose doc.
 

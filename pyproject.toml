@@ -10,18 +10,16 @@ authors = [
 ]
 keywords = ["keri", "vlei", "acdc", "w3c", "vc-jwt", "did:webs"]
 dependencies = [
+    "falcon>=4.0.2",
+    "hio==0.6.14",
     "keri>=1.2.13,<2",
 ]
 
 [dependency-groups]
 dev = [
-    "falcon>=4.0.2",
-    "hio==0.6.14",
     "pytest>=8.4,<9",
 ]
 test = [
-    "falcon>=4.0.2",
-    "hio==0.6.14",
     "pytest>=8.4,<9",
 ]
 live = [

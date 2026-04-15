@@ -65,6 +65,7 @@ class IntegrationStackTopology:
     dws_artifact_port: int
     dws_resolver_port: int
     status_port: int
+    verifier_port: int
 
     @property
     def vlei_schema_url(self) -> str:
@@ -98,6 +99,11 @@ class IntegrationStackTopology:
     def status_base_url(self) -> str:
         """Return the base URL of the local status projection service."""
         return f"http://{self.host}:{self.status_port}"
+
+    @property
+    def verifier_base_url(self) -> str:
+        """Return the base URL of the local verifier operation service."""
+        return f"http://{self.host}:{self.verifier_port}"
 
     @property
     def witness_oobis(self) -> list[str]:
@@ -145,6 +151,7 @@ class IntegrationStackTopology:
             "dws_artifact_url": self.dws_artifact_url,
             "dws_resolver_url": self.dws_resolver_url,
             "status_base_url": self.status_base_url,
+            "verifier_base_url": self.verifier_base_url,
         }
 
 
@@ -166,9 +173,9 @@ def make_stack_topology(
     log_root.mkdir(parents=True, exist_ok=True)
     temp_root.mkdir(parents=True, exist_ok=True)
 
-    allocated_ports = ports or reserve_random_ports(count=7, host=host)
+    allocated_ports = ports or reserve_random_ports(count=8, host=host)
     witness_ports = tuple(allocated_ports[:3])
-    vlei_port, dws_artifact_port, dws_resolver_port, status_port = allocated_ports[3:]
+    vlei_port, dws_artifact_port, dws_resolver_port, status_port, verifier_port = allocated_ports[3:]
 
     return IntegrationStackTopology(
         stack_id=stack_id or f"{mode}-{_slug(worker_id)}-{secrets.token_hex(4)}",
@@ -185,6 +192,7 @@ def make_stack_topology(
         dws_artifact_port=dws_artifact_port,
         dws_resolver_port=dws_resolver_port,
         status_port=status_port,
+        verifier_port=verifier_port,
     )
 
 

@@ -1,19 +1,16 @@
-"""Resolve did:webs identifiers through the configured resolver service.
+"""Pure did:webs resolver parsing helpers.
 
 The W3C verification path in this repo must not trust embedded keys or raw
-`did.json` fetches. This client is the narrow seam that enforces resolver-based
-key-state lookup.
+`did.json` fetches. Outbound resolver HTTP is performed by cooperative doers;
+this module only owns URL construction and response validation.
 """
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
-from typing import Any, Callable
-from urllib.parse import quote
-from urllib.request import urlopen
+from typing import Any
 
-from .constants import RESOLVER_DEFAULT
+from .runtime_http import JsonResponse
 
 
 class DidWebsResolutionError(RuntimeError):
@@ -30,34 +27,19 @@ class DidResolution:
 
 
 class DidWebsClient:
-    """Resolve did:webs DIDs and locate verification methods within them.
+    """Namespace for did:webs resolver response validation and method lookup."""
 
-    This client is the narrow trust boundary for W3C verification. Verifiers in
-    this repo are expected to resolve key state through this seam instead of
-    trusting embedded keys or direct ``did.json`` fetches.
-    """
+    @staticmethod
+    def parse_resolution(did: str, response: JsonResponse) -> DidResolution:
+        """Validate and normalize one resolver JSON response."""
+        if response.status >= 400:
+            raise DidWebsResolutionError(
+                f"resolver returned HTTP {response.status} while resolving did:webs DID {did}"
+            )
 
-    def __init__(
-        self,
-        base_url: str = RESOLVER_DEFAULT,
-        timeout: float = 5.0,
-        loader: Callable[[str, float], dict[str, Any]] | None = None,
-    ):
-        self.base_url = base_url.rstrip("/")
-        self.timeout = timeout
-        self.loader = loader
-
-    def resolve(self, did: str) -> DidResolution:
-        """Resolve a did:webs DID and return the resolver response details."""
-        url = f"{self.base_url}/{quote(did, safe='')}"
-        try:
-            if self.loader is not None:
-                data = self.loader(url, self.timeout)
-            else:
-                with urlopen(url, timeout=self.timeout) as response:
-                    data = json.loads(response.read().decode("utf-8"))
-        except Exception as exc:  # pragma: no cover - error path is exercised in higher-level tests
-            raise DidWebsResolutionError(f"failed to resolve did:webs DID {did}: {exc}") from exc
+        data = response.data
+        if not isinstance(data, dict):
+            raise DidWebsResolutionError(f"resolver response was not a JSON object for {did}")
 
         did_document = data.get("didDocument", data)
         if not isinstance(did_document, dict) or "verificationMethod" not in did_document:
@@ -75,3 +57,11 @@ class DidWebsClient:
             if method_id in full_matches or method_id.endswith(f"#{fragment}"):
                 return method
         raise DidWebsResolutionError(f"verification method {kid} not found in resolved DID document")
+
+
+def resolution_url(base_url: str, did: str) -> str:
+    """Return the canonical resolver URL for one did:webs DID."""
+    # Do not percent-encode here. HIO clienting quotes the request path during
+    # transport, and did-webs-resolver's didding.requote expects exactly that
+    # one path-encoding layer before it repairs the DID for parsing.
+    return f"{base_url.rstrip('/')}/{did}"

@@ -4,8 +4,9 @@ This module keeps the JOSE mechanics intentionally small and explicit so the
 repository can bind W3C JWT artifacts to live KERI Ed25519 signing keys
 without pulling in a heavier JWT abstraction.
 
-This module is the cryptographic binding seam between the
-projected W3C payload and a live KERI habitat signer.
+This module is the cryptographic binding seam between the projected W3C payload
+and a signer adapter. Habitat lifecycle and keystore opening live in
+``signing.py``.
 """
 
 from __future__ import annotations
@@ -13,15 +14,15 @@ from __future__ import annotations
 import base64
 import json
 from dataclasses import dataclass
-from typing import Any, Protocol
-
-from keri.app import habbing
+from typing import Any
 
 from .constants import EDDSA, VC_JWT_TYP, VP_JWT_TYP
+from .common import canonicalize_did_url, canonicalize_did_webs
 from .profile import transpose_acdc_to_w3c_vc
+from .signing import SignerLike
 
 try:
-    from keri.core import coring, signing
+    from keri.core import coring
 except ImportError as exc:  # pragma: no cover - exercised only in misconfigured envs
     raise RuntimeError("w3c-crosswalk requires the 'keri' package in the active Python environment") from exc
 
@@ -50,19 +51,6 @@ def verfer_from_public_jwk(jwk: dict[str, Any]) -> coring.Verfer:
     return coring.Verfer(raw=raw, code=coring.MtrDex.Ed25519N)
 
 
-class SignerLike(Protocol):
-    """Minimal signer interface required by the JWT helpers."""
-
-    @property
-    def kid(self) -> str:
-        """Return the signer-specific key identifier fragment."""
-        ...
-
-    def sign(self, message: bytes) -> bytes:
-        """Sign the supplied JWT signing input bytes."""
-        ...
-
-
 @dataclass(frozen=True)
 class DecodedJwt:
     """Decoded JWT pieces used during verification and inspection."""
@@ -71,55 +59,6 @@ class DecodedJwt:
     payload: dict[str, Any]
     signature: bytes
     signing_input: bytes
-
-
-class KeriHabSigner:
-    """Adapter for a live KERI habitat signer.
-
-    This object is intentionally small: it exposes the minimum JWT-signing
-    interface while preserving the ability to close the owned habery when the
-    signer opened it.
-    """
-
-    def __init__(self, hab: Any, hby: habbing.Habery | None = None):
-        """Wrap a habitat and optional habery owner for later cleanup."""
-        self._hab = hab
-        self._hby = hby
-
-    @classmethod
-    def open(cls, *, name: str, base: str, alias: str, passcode: str | None) -> "KeriHabSigner":
-        """Open a live habitat signer from a KERIpy keystore."""
-        hby = habbing.Habery(name=name, base=base, bran=passcode)
-        hab = hby.habByName(alias)
-        if hab is None:
-            hby.close()
-            raise ValueError(f"unable to locate habitat alias '{alias}' in habery '{name}'")
-        return cls(hab=hab, hby=hby)
-
-    @property
-    def kid(self) -> str:
-        """Return the qb64 public key identifier used in JWT `kid` fragments."""
-        return self._hab.kever.verfers[0].qb64
-
-    @property
-    def public_jwk(self) -> dict[str, str]:
-        """Expose the habitat's current signing key as an Ed25519 OKP JWK."""
-        return {
-            "kid": self.kid,
-            "kty": "OKP",
-            "crv": "Ed25519",
-            "x": b64url_encode(self._hab.kever.verfers[0].raw),
-        }
-
-    def sign(self, message: bytes) -> bytes:
-        """Sign raw bytes with the habitat's current Ed25519 key."""
-        return self._hab.sign(message)[0].raw
-
-    def close(self) -> None:
-        """Close the owned habery when this signer opened it."""
-        if self._hby is not None:
-            self._hby.close()
-
 
 def encode_jwt(payload: dict[str, Any], *, typ: str, kid: str, signer: SignerLike) -> str:
     """Encode and sign a compact JWT with an EdDSA header."""
@@ -161,10 +100,11 @@ def issue_vc_jwt(
     signer: SignerLike,
 ) -> tuple[str, dict[str, Any]]:
     """Project an ACDC into W3C VC form and issue it as a VC-JWT."""
-    verification_method = f"{issuer_did}#{signer.kid}"
+    canonical_issuer_did = canonicalize_did_webs(issuer_did)
+    verification_method = canonicalize_did_url(f"{canonical_issuer_did}#{signer.kid}")
     vc = transpose_acdc_to_w3c_vc(
         acdc,
-        issuer_did=issuer_did,
+        issuer_did=canonical_issuer_did,
         verification_method=verification_method,
         status_base_url=status_base_url,
     )
@@ -180,15 +120,21 @@ def issue_vp_jwt(
     nonce: str | None = None,
 ) -> tuple[str, dict[str, Any]]:
     """Wrap one or more VC-JWTs in a signed VP-JWT payload."""
+    canonical_holder_did = canonicalize_did_webs(holder_did)
     payload: dict[str, Any] = {
         "@context": ["https://www.w3.org/ns/credentials/v2"],
         "type": ["VerifiablePresentation"],
-        "holder": holder_did,
+        "holder": canonical_holder_did,
         "verifiableCredential": vc_tokens,
     }
     if audience:
         payload["aud"] = audience
     if nonce:
         payload["nonce"] = nonce
-    token = encode_jwt(payload, typ=VP_JWT_TYP, kid=f"{holder_did}#{signer.kid}", signer=signer)
+    token = encode_jwt(
+        payload,
+        typ=VP_JWT_TYP,
+        kid=canonicalize_did_url(f"{canonical_holder_did}#{signer.kid}"),
+        signer=signer,
+    )
     return token, payload

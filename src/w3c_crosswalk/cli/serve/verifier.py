@@ -1,0 +1,32 @@
+"""`crosswalk serve verifier` command."""
+
+from __future__ import annotations
+
+import argparse
+
+from w3c_crosswalk.service import VerifierServerConfig, setup_verifier_doers
+
+
+def handle(args: argparse.Namespace):
+    """Return the long-running doers for `crosswalk serve verifier`."""
+    _server, doers = setup_verifier_doers(
+        VerifierServerConfig(
+            host=args.host,
+            port=args.port,
+            resolver_url=args.resolver,
+            operation_store_root=args.operation_root,
+            operation_store_name=args.operation_name,
+        )
+    )
+    return doers
+
+
+def add_verifier_command(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    """Register `crosswalk serve verifier`."""
+    verifier_serve = subparsers.add_parser("verifier", help="Serve the verifier operation HTTP API")
+    verifier_serve.add_argument("--host", default="127.0.0.1")
+    verifier_serve.add_argument("--port", type=int, default=8788)
+    verifier_serve.add_argument("--resolver", required=True)
+    verifier_serve.add_argument("--operation-root", required=True)
+    verifier_serve.add_argument("--operation-name", default="verifier")
+    verifier_serve.set_defaults(handler=handle)

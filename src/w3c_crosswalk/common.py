@@ -39,3 +39,35 @@ def require_mapping(name: str, value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ValueError(f"{name} block must be present as a full object, not a SAID reference")
     return value
+
+
+def canonicalize_did_webs(did: str) -> str:
+    """Return one did:webs DID in canonical form.
+
+    The canonical did:webs form encodes the host/port separator as ``%3A``
+    inside the DID value itself. This helper leaves already-canonical DIDs
+    untouched and repairs the common malformed ``did:webs:host:port:...``
+    variant that can slip in from local stack assembly.
+    """
+    if not did.startswith("did:webs:"):
+        return did
+
+    if "%3a" in did.lower():
+        return did
+
+    body, query_separator, query = did.partition("?")
+    segments = body[len("did:webs:") :].split(":")
+    if len(segments) < 3 or not segments[1].isdigit():
+        return did
+
+    domain, port = segments[0], segments[1]
+    remainder = ":".join(segments[2:])
+    encoded = f"did:webs:{domain}%3A{port}:{remainder}"
+    return f"{encoded}{query_separator}{query}" if query_separator else encoded
+
+
+def canonicalize_did_url(value: str) -> str:
+    """Canonicalize the DID portion of one DID URL while preserving fragments."""
+    did, separator, fragment = value.partition("#")
+    normalized = canonicalize_did_webs(did)
+    return f"{normalized}{separator}{fragment}" if separator else normalized

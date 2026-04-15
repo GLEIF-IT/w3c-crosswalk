@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import socket
 import subprocess
+import threading
 import time
 from typing import Iterable
 from urllib.request import urlopen
@@ -128,6 +129,67 @@ def wait_for_json_health(url: str, *, timeout: float = 45.0) -> dict:
 
     return poll_until(_fetch, ready=lambda body: bool(body.get("ok")), timeout=timeout, interval=POLL_INTERVAL, describe=url)
 
+
+def wait_for_tcp_port(host: str, port: int, *, timeout: float = 45.0) -> None:
+    """Wait until one TCP port accepts connections without requiring a subprocess."""
+    def _fetch() -> bool:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(0.5)
+            return sock.connect_ex((host, port)) == 0
+
+    poll_until(_fetch, ready=bool, timeout=timeout, interval=PORT_POLL_INTERVAL, describe=f"{host}:{port}")
+
+
+class UntilReadyDoer(doing.DoDoer):
+    """Own child doers until an external readiness predicate succeeds.
+
+    This deliberately routes ``run_doers_until(...)`` through ``Doist.do()``
+    instead of letting the helper call ``Doist.recur(...)`` in its own tight
+    wall-clock loop. HIO doers advance on scheduler ticks, but some child doers
+    also wait on real sockets, subprocesses, or other wall-clock resources. If
+    a test helper repeatedly calls ``recur`` as fast as Python can loop, HIO
+    logical time can run far ahead of real I/O progress and make "30 HIO
+    seconds" much shorter than 30 elapsed seconds for those external systems.
+
+    The supervisor gives HIO one normal root doer to run with
+    ``Doist.do(real=True, limit=...)``. That preserves real-time pacing while
+    still allowing the integration harness to stop early on an external
+    readiness predicate that is not the same thing as child-doer completion.
+    """
+
+    def __init__(self, *, target_doers: list, ready, observe, tock: float = 0.03125):
+        self.target_doers = list(target_doers)
+        self.ready = ready
+        self.observe = observe
+        self.last_state = None
+        self.ready_reached = False
+        super().__init__(doers=self.target_doers, tock=tock)
+
+    def recur(self, tyme, deeds=None):
+        """Observe readiness before and after child recurrence."""
+        self.last_state = self.observe()
+        if self.ready():
+            self.ready_reached = True
+            self._remove_remaining_children()
+            return True
+
+        done = super().recur(tyme=tyme, deeds=deeds)
+
+        self.last_state = self.observe()
+        if self.ready():
+            self.ready_reached = True
+            self._remove_remaining_children()
+            return True
+
+        return done
+
+    def _remove_remaining_children(self) -> None:
+        """Stop any child doers still owned by this supervisor."""
+        remaining = [doer for doer in self.target_doers if doer in self.doers]
+        if remaining:
+            self.remove(remaining)
+
+
 def run_doers_until(
     step: str,
     doers: list,
@@ -168,41 +230,84 @@ def run_doers_until(
             drive progress; it exists only so timeout errors can report what the
             world looked like while the step was running.
         cleanup: Optional callable receiving the original ``doers`` list after
-            ``doist.exit(...)``. Use this to close resources that the doers own
-            but do not release deterministically on their own, such as hidden
-            LMDB-backed notifier or registry handles.
+            ``Doist.do(...)`` exits. Use this to close resources that the doers
+            own but do not release deterministically on their own, such as
+            hidden LMDB-backed notifier or registry handles.
 
     Returns:
         The last value returned by ``observe()`` when the step becomes ready.
         When no custom observer is supplied, returns the default doer ``done``
         snapshot.
     """
-    doist = doing.Doist(limit=timeout, tock=tock, real=True)
-    deeds = doist.enter(doers=doers)
-
     if ready is None:
         ready = lambda: all(getattr(doer, "done", False) for doer in doers)
 
     if observe is None:
         observe = lambda: {"done": {type(doer).__name__: getattr(doer, "done", False) for doer in doers}}
 
-    deadline = time.monotonic() + timeout
-    last_state = None
+    supervisor = UntilReadyDoer(target_doers=doers, ready=ready, observe=observe, tock=tock)
+    doist = doing.Doist(limit=timeout, tock=tock, real=True)
 
     try:
-        while time.monotonic() < deadline:
-            last_state = observe()
-            if ready():
-                return last_state
-            doist.recur(deeds=deeds)
-            last_state = observe()
-            if ready():
-                return last_state
-        raise TimeoutError(f"timed out waiting for {step}; last_state={_format_poll_value(last_state)}")
+        doist.do(doers=[supervisor], limit=timeout)
+        if supervisor.ready_reached:
+            return supervisor.last_state
+        raise TimeoutError(
+            f"timed out waiting for {step}; "
+            f"last_state={_format_poll_value(supervisor.last_state)}"
+        )
     finally:
-        doist.exit(deeds=deeds)
         if cleanup is not None:
             cleanup(doers)
+
+
+class BackgroundDoistRunner:
+    """Run one long-lived HIO doer set in a background thread."""
+
+    def __init__(self, *, name: str, doers: list, tock: float = 0.03125):
+        self.name = name
+        self.doers = doers
+        self.tock = tock
+        self._ready = threading.Event()
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, name=name, daemon=True)
+        self._error: BaseException | None = None
+
+    def start(self, *, timeout: float = 10.0) -> None:
+        """Start the background doist thread and fail early on startup errors."""
+        self._thread.start()
+        if not self._ready.wait(timeout=timeout):
+            raise TimeoutError(f"timed out starting background doist runner {self.name}")
+        self.raise_if_error()
+
+    def close(self, *, timeout: float = 10.0) -> None:
+        """Stop the background doist thread and surface any internal error."""
+        self._stop.set()
+        self._thread.join(timeout=timeout)
+        if self._thread.is_alive():
+            raise TimeoutError(f"timed out stopping background doist runner {self.name}")
+        self.raise_if_error()
+
+    def raise_if_error(self) -> None:
+        """Raise a runtime error when the background thread failed."""
+        if self._error is not None:
+            raise RuntimeError(f"background doist runner {self.name} failed: {self._error}") from self._error
+
+    def _run(self) -> None:
+        """Drive the owned doers until the runner is asked to stop."""
+        doist = doing.Doist(limit=0.0, tock=self.tock, real=True)
+        deeds = None
+        try:
+            deeds = doist.enter(doers=self.doers)
+            self._ready.set()
+            while not self._stop.is_set():
+                doist.recur(deeds=deeds)
+        except BaseException as exc:
+            self._error = exc
+            self._ready.set()
+        finally:
+            if deeds is not None:
+                doist.exit(deeds=deeds)
 
 
 def write_json(path: Path, body: dict) -> Path:
