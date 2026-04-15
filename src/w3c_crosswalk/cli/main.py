@@ -7,7 +7,7 @@ import sys
 
 from w3c_crosswalk.controller import run_controller
 
-from .common import exit_code_for_doers
+from .common import report_failure_for_doers
 from .issue import add_issue_commands
 from .serve import add_serve_commands
 from .status import add_status_commands
@@ -42,4 +42,10 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:
         print(f"ERR: {exc}", file=sys.stderr)
         return -1
-    return exit_code_for_doers(doers)
+    exit_code = report_failure_for_doers(doers)
+    if exit_code != 0:
+        return exit_code
+    success_reporter = getattr(args, "success_reporter", None)
+    if success_reporter is not None:
+        success_reporter(doers)
+    return 0

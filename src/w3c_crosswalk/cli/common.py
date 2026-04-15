@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 from pathlib import Path
 
 from w3c_crosswalk.common import write_json_file
@@ -62,18 +63,31 @@ def add_verifier_wait_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--poll", type=float, default=0.25, help="Polling interval in seconds while waiting")
 
 
-def exit_code_for_doers(doers) -> int:
-    """Return a process exit code from completed command doers without printing."""
+def failure_message_for_doers(doers) -> str | None:
+    """Return a compact human-readable failure message for completed command doers."""
     for doer in doers:
-        if getattr(doer, "error", None) is not None:
-            return 1
-        if getattr(doer, "timeout_error", None) is not None:
-            return 1
+        error = getattr(doer, "error", None)
+        if error is not None:
+            return str(error)
+    return None
+
+
+def response_for_doers(doers) -> dict | None:
+    """Return the first terminal verifier response available on completed doers."""
+    for doer in doers:
         operation = getattr(doer, "operation", None)
-        if isinstance(operation, dict):
-            if "error" in operation:
-                return 1
-            response = operation.get("response")
-            if isinstance(response, dict) and response.get("ok") is False:
-                return 1
-    return 0
+        if not isinstance(operation, dict):
+            continue
+        response = operation.get("response")
+        if isinstance(response, dict):
+            return response
+    return None
+
+
+def report_failure_for_doers(doers) -> int:
+    """Print a compact failure message to stderr and return a process exit code."""
+    message = failure_message_for_doers(doers)
+    if message is None:
+        return 0
+    print(message, file=sys.stderr)
+    return 1

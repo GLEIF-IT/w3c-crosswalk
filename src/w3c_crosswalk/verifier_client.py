@@ -124,96 +124,6 @@ class VerifierApiDoDoer(doing.DoDoer):
         return json.loads(bytes(response.body).decode("utf-8"))
 
 
-class SubmitVerificationDoDoer(VerifierApiDoDoer):
-    """Submit one VC, VP, or pair verification request."""
-
-    def __init__(
-        self,
-        *,
-        base_url: str,
-        route: str,
-        body: dict[str, Any],
-        clienter: Clienter | None = None,
-        tock: float = 0.03125,
-    ):
-        self.route = route
-        self.body = body
-        self.operation: dict[str, Any] | None = None
-        super().__init__(base_url=base_url, clienter=clienter, tock=tock)
-
-    def run(self, tymth=None, tock=0.0, **kwa):
-        """Submit one verification request and store the pending operation."""
-        try:
-            step = self._step(tock)
-            result = yield from self._request_json(
-                method="POST",
-                path=self.route,
-                expected_status=202,
-                body=self.body,
-                step=step,
-            )
-            if not isinstance(result, dict):
-                raise VerifierApiError("verification submission did not return an operation object")
-            self.operation = result
-            return True
-        except Exception as exc:
-            self.error = exc
-            return True
-        finally:
-            self._close_clienter()
-
-
-class WaitOperationDoDoer(VerifierApiDoDoer):
-    """Poll one operation resource cooperatively until it reaches terminal state."""
-
-    def __init__(
-        self,
-        *,
-        base_url: str,
-        name: str,
-        timeout: float,
-        poll_interval: float,
-        clienter: Clienter | None = None,
-        tock: float = 0.03125,
-    ):
-        self.name = name
-        self.timeout = timeout
-        self.poll_interval = poll_interval
-        self.operation: dict[str, Any] | None = None
-        self.timeout_error: TimeoutError | None = None
-        super().__init__(base_url=base_url, clienter=clienter, tock=tock)
-
-    def run(self, tymth=None, tock=0.0, **kwa):
-        """Poll the operation resource without blocking the surrounding doist."""
-        try:
-            step = self._step(tock)
-            deadline = self.tyme + self.timeout
-
-            while True:
-                result = yield from self._request_json(
-                    method="GET",
-                    path=f"{OPERATIONS_ROUTE_PREFIX}/{self.name}",
-                    expected_status=200,
-                    step=step,
-                )
-                if not isinstance(result, dict):
-                    raise VerifierApiError("operation fetch did not return an operation object")
-                self.operation = result
-                if result.get("done") is True:
-                    return True
-                if self.tyme >= deadline:
-                    self.timeout_error = TimeoutError(
-                        f"timed out waiting for operation {self.name}; last_seen={result!r}"
-                    )
-                    return True
-                yield self.poll_interval
-        except Exception as exc:
-            self.error = exc
-            return True
-        finally:
-            self._close_clienter()
-
-
 class VerifyOperationDoDoer(VerifierApiDoDoer):
     """Submit one verification request and wait for the terminal operation."""
 
@@ -232,9 +142,7 @@ class VerifyOperationDoDoer(VerifierApiDoDoer):
         self.body = body
         self.timeout = timeout
         self.poll_interval = poll_interval
-        self.submitted_operation: dict[str, Any] | None = None
         self.operation: dict[str, Any] | None = None
-        self.timeout_error: TimeoutError | None = None
         super().__init__(base_url=base_url, clienter=clienter, tock=tock)
 
     def run(self, tymth=None, tock=0.0, **kwa):
@@ -251,7 +159,6 @@ class VerifyOperationDoDoer(VerifierApiDoDoer):
             )
             if not isinstance(result, dict):
                 raise VerifierApiError("verification submission did not return an operation object")
-            self.submitted_operation = result
 
             name = self._operation_name(result)
             deadline = self.tyme + self.timeout
@@ -266,9 +173,10 @@ class VerifyOperationDoDoer(VerifierApiDoDoer):
                     raise VerifierApiError("operation fetch did not return an operation object")
                 self.operation = operation
                 if operation.get("done") is True:
+                    self.error = self._operation_error(operation)
                     return True
                 if self.tyme >= deadline:
-                    self.timeout_error = TimeoutError(
+                    self.error = TimeoutError(
                         f"timed out waiting for operation {name}; last_seen={operation!r}"
                     )
                     return True
@@ -288,6 +196,24 @@ class VerifyOperationDoDoer(VerifierApiDoDoer):
         if not isinstance(name, str) or not name:
             raise VerifierApiError("verification submission did not return an operation name")
         return name
+
+    @staticmethod
+    def _operation_error(operation: dict[str, Any]) -> VerifierApiError | None:
+        """Return a compact error when a terminal verifier operation failed."""
+        error_body = operation.get("error")
+        if isinstance(error_body, dict):
+            message = error_body.get("message") or error_body.get("code") or "operation failed"
+            return VerifierApiError(f"verification failed: {message}")
+        if error_body is not None:
+            return VerifierApiError(f"verification failed: {error_body}")
+
+        response = operation.get("response")
+        if isinstance(response, dict) and response.get("ok") is False:
+            errors = response.get("errors")
+            if isinstance(errors, list) and errors:
+                return VerifierApiError(f"verification failed: {errors[0]}")
+            return VerifierApiError("verification failed: verifier response was not ok")
+        return None
 
 
 class ListOperationsDoDoer(VerifierApiDoDoer):
@@ -457,54 +383,3 @@ def verify_pair_doer(
         tock=tock,
     )
 
-
-def submit_verify_vc_doer(
-    *,
-    base_url: str,
-    token: str,
-    clienter: Clienter | None = None,
-    tock: float = 0.03125,
-) -> SubmitVerificationDoDoer:
-    """Create one cooperative VC submission doer."""
-    return SubmitVerificationDoDoer(
-        base_url=base_url,
-        route=VERIFY_VC_ROUTE,
-        body={"token": token},
-        clienter=clienter,
-        tock=tock,
-    )
-
-
-def submit_verify_vp_doer(
-    *,
-    base_url: str,
-    token: str,
-    clienter: Clienter | None = None,
-    tock: float = 0.03125,
-) -> SubmitVerificationDoDoer:
-    """Create one cooperative VP submission doer."""
-    return SubmitVerificationDoDoer(
-        base_url=base_url,
-        route=VERIFY_VP_ROUTE,
-        body={"token": token},
-        clienter=clienter,
-        tock=tock,
-    )
-
-
-def submit_verify_pair_doer(
-    *,
-    base_url: str,
-    token: str,
-    acdc: dict[str, Any],
-    clienter: Clienter | None = None,
-    tock: float = 0.03125,
-) -> SubmitVerificationDoDoer:
-    """Create one cooperative pair submission doer."""
-    return SubmitVerificationDoDoer(
-        base_url=base_url,
-        route=VERIFY_PAIR_ROUTE,
-        body={"token": token, "acdc": acdc},
-        clienter=clienter,
-        tock=tock,
-    )

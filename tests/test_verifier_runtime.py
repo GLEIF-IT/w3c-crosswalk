@@ -74,7 +74,6 @@ def _verify_state(verify_doer) -> dict:
         "done": verify_doer.done,
         "operation": verify_doer.operation,
         "error": str(verify_doer.error) if verify_doer.error else None,
-        "timeout_error": str(verify_doer.timeout_error) if verify_doer.timeout_error else None,
     }
 
 
@@ -142,7 +141,7 @@ def test_verifier_runtime_completes_vc_operation_via_hio_doers(tmp_path):
             observe=lambda: _verify_state(verify_doer),
         )
 
-        assert verify_doer.timeout_error is None
+        assert verify_doer.error is None
         assert verify_doer.operation is not None
         assert verify_doer.operation["done"] is True
         assert verify_doer.operation["response"]["ok"] is True
@@ -183,7 +182,8 @@ def test_verifier_runtime_marks_malformed_token_as_failed_operation(tmp_path):
         observe=lambda: _verify_state(verify_doer),
     )
 
-    assert verify_doer.timeout_error is None
+    assert verify_doer.error is not None
+    assert str(verify_doer.error).startswith("verification failed:")
     assert verify_doer.operation is not None
     assert verify_doer.operation["done"] is True
     assert verify_doer.operation["error"]["code"] == 400

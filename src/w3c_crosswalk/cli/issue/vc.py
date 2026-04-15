@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 from hio.base import doing
 
@@ -11,6 +12,11 @@ from w3c_crosswalk.common import load_json_file
 from w3c_crosswalk.services import issue_vc_artifact
 from w3c_crosswalk.signing import KeriHabSigner
 from w3c_crosswalk.status import JsonFileStatusStore
+
+
+def default_token_output_path(output: str) -> Path:
+    """Return the default token path beside the JSON artifact output."""
+    return Path(output).with_suffix(".token")
 
 
 class IssueVcDoer(doing.Doer):
@@ -38,6 +44,13 @@ class IssueVcDoer(doing.Doer):
                 status_store=store,
             )
             emit_json(result.to_dict(), output=self.args.output)
+            if self.args.output:
+                json_path = Path(self.args.output)
+                token_path = Path(self.args.token_output) if self.args.token_output else default_token_output_path(self.args.output)
+                token_path.parent.mkdir(parents=True, exist_ok=True)
+                token_path.write_text(result.token, encoding="utf-8")
+                print(f"vc: {json_path}")
+                print(f"jwt: {token_path}")
         finally:
             signer.close()
         return True
@@ -55,6 +68,7 @@ def add_vc_command(subparsers: argparse._SubParsersAction[argparse.ArgumentParse
     issue_vc.add_argument("--issuer-did", required=True)
     issue_vc.add_argument("--status-base-url", required=True)
     issue_vc.add_argument("--store")
+    issue_vc.add_argument("--token-output", help="Optional raw VC-JWT path; defaults beside --output with .token suffix")
     add_live_signer_args(issue_vc)
     add_common_output_args(issue_vc)
     issue_vc.set_defaults(handler=handle)
