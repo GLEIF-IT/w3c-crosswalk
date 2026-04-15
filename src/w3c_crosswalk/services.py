@@ -86,6 +86,7 @@ class VerifierOperationService:
 def issue_vc_artifact(
     *,
     projector: ACDCProjector,
+    signer: SignerLike,
     said: str,
     issuer_did: str,
     status_base_url: str,
@@ -96,7 +97,6 @@ def issue_vc_artifact(
     if projection.state.revoked:
         raise ProjectorError(f"credential {said} is revoked in accepted TEL state")
 
-    signer = projector.signer()
     canonical_issuer = canonicalize_did_webs(issuer_did)
     verification_method = canonicalize_did_url(f"{canonical_issuer}#{signer.kid}")
     document = projector.project_vc(

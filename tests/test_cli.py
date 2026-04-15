@@ -31,6 +31,18 @@ class FakeCredentialProjection:
     acdc: dict[str, Any]
 
 
+@dataclass
+class FakeIsomerRuntime:
+    """Runtime fake for CLI tests that need projector/signer dependencies."""
+
+    projector: Any
+    signer: Any = None
+    closed: bool = False
+
+    def close(self):
+        self.closed = True
+
+
 class _CompletedVerifyDoer(doing.Doer):
     """Tiny fake verifier doer for CLI tests."""
 
@@ -50,8 +62,7 @@ def test_cli_status_project_uses_nested_command_tree(monkeypatch, tmp_path, caps
     store = tmp_path / "status-store.json"
 
     class FakeProjector:
-        def close(self):
-            pass
+        pass
 
     def fake_project_status(**kwargs):
         assert isinstance(kwargs["projector"], FakeProjector)
@@ -59,7 +70,7 @@ def test_cli_status_project_uses_nested_command_tree(monkeypatch, tmp_path, caps
         assert kwargs["store"].path == store
         return {"id": "http://status.example/status/Ecredential", "revoked": False}
 
-    monkeypatch.setattr("w3c_crosswalk.cli.status.project.ACDCProjector.open", lambda **_: FakeProjector())
+    monkeypatch.setattr("w3c_crosswalk.isomer_runtime.open_isomer_runtime", lambda **_: FakeIsomerRuntime(projector=FakeProjector()))
     monkeypatch.setattr("w3c_crosswalk.cli.status.project.project_status", fake_project_status)
     exit_code = main(
         [
@@ -99,8 +110,10 @@ def test_cli_issue_vc_can_write_raw_token_file(monkeypatch, tmp_path, capsys):
     token_output = tmp_path / "vc.token"
 
     class FakeProjector:
-        def close(self):
-            pass
+        pass
+
+    class FakeSigner:
+        pass
 
     fake_artifact = FakeIssueArtifact(
         token="header.payload.signature",
@@ -109,10 +122,14 @@ def test_cli_issue_vc_can_write_raw_token_file(monkeypatch, tmp_path, capsys):
 
     def fake_issue_vc_artifact(**kwargs):
         assert isinstance(kwargs["projector"], FakeProjector)
+        assert isinstance(kwargs["signer"], FakeSigner)
         assert kwargs["said"] == "Ecredential"
         return fake_artifact
 
-    monkeypatch.setattr("w3c_crosswalk.cli.issue.vc.ACDCProjector.open", lambda **_: FakeProjector())
+    monkeypatch.setattr(
+        "w3c_crosswalk.isomer_runtime.open_isomer_runtime",
+        lambda **_: FakeIsomerRuntime(projector=FakeProjector(), signer=FakeSigner()),
+    )
     monkeypatch.setattr("w3c_crosswalk.cli.issue.vc.issue_vc_artifact", fake_issue_vc_artifact)
 
     exit_code = main(
@@ -141,6 +158,55 @@ def test_cli_issue_vc_can_write_raw_token_file(monkeypatch, tmp_path, capsys):
     assert json.loads(output.read_text(encoding="utf-8"))["kind"] == "vc+jwt"
     assert token_output.read_text(encoding="utf-8") == "header.payload.signature"
     assert captured.out.splitlines() == [f"vc: {output}", f"jwt: {token_output}"]
+
+
+def test_cli_issue_vp_uses_signer_runtime(monkeypatch, tmp_path):
+    """Issue VP opens signer-only runtime and passes its signer to the service."""
+    vc_token = tmp_path / "vc.token"
+    output = tmp_path / "vp.json"
+    vc_token.write_text("vc.header.payload", encoding="utf-8")
+
+    class FakeSigner:
+        pass
+
+    fake_artifact = FakeIssueArtifact(
+        token="vp.header.payload",
+        document={"ok": True, "kind": "vp+jwt", "token": "vp.header.payload"},
+    )
+
+    def fake_issue_vp_artifact(**kwargs):
+        assert kwargs["vc_tokens"] == ["vc.header.payload"]
+        assert kwargs["holder_did"] == "did:webs:holder"
+        assert isinstance(kwargs["signer"], FakeSigner)
+        return fake_artifact
+
+    monkeypatch.setattr(
+        "w3c_crosswalk.isomer_runtime.open_isomer_signer_runtime",
+        lambda **_: FakeIsomerRuntime(projector=None, signer=FakeSigner()),
+    )
+    monkeypatch.setattr("w3c_crosswalk.cli.issue.vp.issue_vp_artifact", fake_issue_vp_artifact)
+
+    exit_code = main(
+        [
+            "issue",
+            "vp",
+            "--vc-token",
+            str(vc_token),
+            "--holder-did",
+            "did:webs:holder",
+            "--name",
+            "qvi",
+            "--alias",
+            "qvi",
+            "--passcode",
+            "0123456789abcdefghijk",
+            "--output",
+            str(output),
+        ]
+    )
+
+    assert exit_code == 0
+    assert json.loads(output.read_text(encoding="utf-8"))["kind"] == "vp+jwt"
 
 
 def test_cli_verify_vc_runs_operation_without_emitting_terminal_json(monkeypatch, capsys):
@@ -222,9 +288,6 @@ def test_cli_verify_pair_reports_success_summary(monkeypatch, capsys):
             assert said == "Ecredential"
             return FakeCredentialProjection(acdc={"d": "Ecredential"})
 
-        def close(self):
-            pass
-
     fake_doer = _CompletedVerifyDoer(
         operation={
             "done": True,
@@ -243,7 +306,7 @@ def test_cli_verify_pair_reports_success_summary(monkeypatch, capsys):
         assert kwargs["acdc"] == {"d": "Ecredential"}
         return fake_doer
 
-    monkeypatch.setattr("w3c_crosswalk.cli.verify.pair.ACDCProjector.open", lambda **_: FakeProjector())
+    monkeypatch.setattr("w3c_crosswalk.isomer_runtime.open_isomer_runtime", lambda **_: FakeIsomerRuntime(projector=FakeProjector()))
     monkeypatch.setattr("w3c_crosswalk.cli.verify.pair.verify_pair_doer", fake_verify_pair_doer)
 
     exit_code = main(

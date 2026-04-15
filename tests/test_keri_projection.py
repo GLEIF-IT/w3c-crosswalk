@@ -172,6 +172,7 @@ def test_revoked_credential_cannot_be_issued_as_new_vc():
     with pytest.raises(ProjectorError, match="revoked in accepted TEL state"):
         issue_vc_artifact(
             projector=projector,
+            signer=object(),
             said=acdc["d"],
             issuer_did="did:webs:example.com:dws:Eissuer",
             status_base_url="http://status.example",

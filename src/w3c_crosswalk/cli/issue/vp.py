@@ -5,39 +5,34 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from hio.base import doing
-
 from w3c_crosswalk.cli.common import add_common_output_args, add_live_signer_args, emit_json, load_passcode
+from w3c_crosswalk.isomer_runtime import IsomerSignerRuntimeDoer
 from w3c_crosswalk.services import issue_vp_artifact
-from w3c_crosswalk.signing import HabSigner
 
 
-class IssueVpDoer(doing.Doer):
+class IssueVpDoer(IsomerSignerRuntimeDoer):
     """Issue one VP-JWT artifact as a single explicit CLI doer."""
 
     def __init__(self, *, args: argparse.Namespace, **kwa):
         self.args = args
-        super().__init__(**kwa)
+        super().__init__(
+            name=args.name,
+            base=args.base,
+            alias=args.alias,
+            passcode=load_passcode(args),
+            **kwa,
+        )
 
     def recur(self, tyme):
         vc_tokens = [Path(path).read_text(encoding="utf-8").strip() for path in self.args.vc_token]
-        signer = HabSigner.open(
-            name=self.args.name,
-            base=self.args.base,
-            alias=self.args.alias,
-            passcode=load_passcode(self.args),
+        result = issue_vp_artifact(
+            vc_tokens=vc_tokens,
+            holder_did=self.args.holder_did,
+            signer=self.signer,
+            audience=self.args.audience,
+            nonce=self.args.nonce,
         )
-        try:
-            result = issue_vp_artifact(
-                vc_tokens=vc_tokens,
-                holder_did=self.args.holder_did,
-                signer=signer,
-                audience=self.args.audience,
-                nonce=self.args.nonce,
-            )
-            emit_json(result.to_dict(), output=self.args.output)
-        finally:
-            signer.close()
+        emit_json(result.to_dict(), output=self.args.output)
         return True
 
 

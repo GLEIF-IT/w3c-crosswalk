@@ -2,15 +2,12 @@
 
 This module is the KERI-facing signing seam for the package. JWT helpers only
 depend on the small ``SignerLike`` protocol; habitat lifecycle and keystore
-opening live here instead of inside the JOSE utility module.
+opening live in runtime components instead of signer adapters or JOSE helpers.
 """
 
 from __future__ import annotations
 
 from typing import Any, Protocol
-
-from keri.app import habbing
-
 
 class SignerLike(Protocol):
     """Minimal signer interface required by crosswalk issuance services."""
@@ -34,24 +31,13 @@ class HabSigner:
     """Adapter for a live KERI habitat signing key.
 
     The object intentionally stays narrow: it exposes the minimum surface the
-    service layer needs while preserving deterministic cleanup of the owned
-    habery when the signer opened it.
+    service layer needs over an already-opened habitat. It does not own or close
+    Habery resources; that lifecycle belongs to an isomer runtime.
     """
 
-    def __init__(self, hab: Any, hby: habbing.Habery | None = None):
-        """Wrap a habitat and optional habery owner for later cleanup."""
+    def __init__(self, hab: Any):
+        """Wrap an already-opened habitat."""
         self._hab = hab
-        self._hby = hby
-
-    @classmethod
-    def open(cls, *, name: str, base: str, alias: str, passcode: str | None) -> "HabSigner":
-        """Open a live habitat signer from a KERIpy keystore."""
-        hby = habbing.Habery(name=name, base=base, bran=passcode)
-        hab = hby.habByName(alias)
-        if hab is None:
-            hby.close()
-            raise ValueError(f"unable to locate habitat alias '{alias}' in habery '{name}'")
-        return cls(hab=hab, hby=hby)
 
     @property
     def kid(self) -> str:
@@ -71,11 +57,6 @@ class HabSigner:
     def sign(self, message: bytes) -> bytes:
         """Sign raw bytes with the habitat's current Ed25519 key."""
         return self._hab.sign(message)[0].raw
-
-    def close(self) -> None:
-        """Close the owned habery when this signer opened it."""
-        if self._hby is not None:
-            self._hby.close()
 
 
 def _b64url_encode(data: bytes) -> str:

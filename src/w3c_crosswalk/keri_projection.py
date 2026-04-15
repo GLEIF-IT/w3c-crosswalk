@@ -5,13 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from keri.app.cli.common import existing
 from keri.core import coring
-from keri.vdr import credentialing
 
 from .common import canonicalize_did_url, canonicalize_did_webs
 from .profile import transpose_acdc_to_w3c_vc
-from .signing import HabSigner
 from .status import CredentialStatusRecord
 
 
@@ -60,47 +57,14 @@ class CredProjection:
 class ACDCProjector:
     """Project accepted local KEL, TEL, and ACDC credential state into W3C-facing artifacts.
 
-    This adapter owns the KERIpy Habery/Regery lifecycle used by CLI commands.
-    It deliberately does not sign JWTs itself; signing remains isolated in
-    :class:`HabSigner` so projection and cryptographic binding stay separate.
+    This adapter receives already-opened KERIpy state. It does not own or close
+    Habery, Hab, or Regery resources; that lifecycle belongs to IsomerRuntime.
     """
 
-    def __init__(self, *, hby: Any, hab: Any, rgy: Any, owns_hby: bool = False):
+    def __init__(self, *, hby: Any, hab: Any, rgy: Any):
         self.hby = hby
         self.hab = hab
         self.rgy = rgy
-        self.owns_hby = owns_hby
-
-    @classmethod
-    def open(cls, *, name: str, base: str = "", alias: str, passcode: str | None = None) -> "ACDCProjector":
-        """Open local KERIpy state from an existing KLI keystore."""
-        hby = existing.setupHby(name=name, base=base, bran=passcode)
-        try:
-            hab = hby.habByName(alias)
-            if hab is None:
-                raise ProjectorError(f"unable to locate habitat alias '{alias}' in habery '{name}'")
-            rgy = credentialing.Regery(hby=hby, name=name, base=base)
-            return cls(hby=hby, hab=hab, rgy=rgy, owns_hby=True)
-        except Exception:
-            hby.close()
-            raise
-
-    def close(self) -> None:
-        """Close owned KERI resources."""
-        if hasattr(self.rgy, "close"):
-            self.rgy.close()
-        if self.owns_hby:
-            self.hby.close()
-
-    def __enter__(self) -> "ACDCProjector":
-        return self
-
-    def __exit__(self, exc_type, exc, tb) -> None:
-        self.close()
-
-    def signer(self) -> HabSigner:
-        """Return a signer bound to the same opened habitat without owning it."""
-        return HabSigner(hab=self.hab)
 
     def clone_credential(self, said: str) -> dict[str, Any]:
         """Clone one accepted ACDC credential from local KERI credential state."""
