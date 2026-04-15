@@ -1,4 +1,4 @@
-"""`crosswalk verify pair` command."""
+"""`crosswalk vc verify-pair` command."""
 
 from __future__ import annotations
 
@@ -48,7 +48,7 @@ class VerifyPairCommandDoer(IsomerRuntimeDoDoer):
 
 
 def handle(args: argparse.Namespace):
-    """Return doers for `crosswalk verify pair`."""
+    """Return doers for `crosswalk vc verify-pair`."""
     return [VerifyPairCommandDoer(args=args)]
 
 
@@ -78,9 +78,9 @@ def report_success(doers) -> None:
     )
 
 
-def add_pair_command(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    """Register `crosswalk verify pair`."""
-    verify_pair = subparsers.add_parser("pair", help="Verify a VC-JWT against its source ACDC")
+def add_verify_pair_command(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    """Register `crosswalk vc verify-pair`."""
+    verify_pair = subparsers.add_parser("verify-pair", help="Verify a VC-JWT against its source ACDC")
     verify_pair.add_argument("--said", required=True, help="Source ACDC credential SAID to compare against the VC-JWT")
     verify_pair.add_argument("--token", required=True)
     add_live_signer_args(verify_pair)

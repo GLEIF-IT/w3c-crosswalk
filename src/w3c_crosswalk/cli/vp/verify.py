@@ -1,4 +1,4 @@
-"""`crosswalk verify vp` command."""
+"""`crosswalk vp verify` command."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from w3c_crosswalk.verifier_client import verify_vp_doer
 
 
 def handle(args: argparse.Namespace):
-    """Return doers for `crosswalk verify vp`."""
+    """Return doers for `crosswalk vp verify`."""
     return [
         verify_vp_doer(
             base_url=args.server,
@@ -36,9 +36,9 @@ def report_success(doers) -> None:
     )
 
 
-def add_vp_command(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    """Register `crosswalk verify vp`."""
-    verify_vp = subparsers.add_parser("vp", help="Verify a VP-JWT")
+def add_verify_command(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    """Register `crosswalk vp verify`."""
+    verify_vp = subparsers.add_parser("verify", help="Verify a VP-JWT")
     verify_vp.add_argument("--token", required=True)
     add_verifier_wait_args(verify_vp)
     verify_vp.set_defaults(handler=handle, success_reporter=report_success)

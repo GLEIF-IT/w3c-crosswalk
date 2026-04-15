@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 
 from .project import add_project_command
+from .serve import add_serve_command
 
 
 def add_status_commands(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -13,3 +14,4 @@ def add_status_commands(subparsers: argparse._SubParsersAction[argparse.Argument
     status_subparsers = status.add_subparsers(dest="status_command", required=True)
 
     add_project_command(status_subparsers)
+    add_serve_command(status_subparsers)

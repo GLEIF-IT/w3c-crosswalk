@@ -1,4 +1,4 @@
-"""`crosswalk issue vc` command."""
+"""`crosswalk vc issue` command."""
 
 from __future__ import annotations
 
@@ -51,13 +51,13 @@ class IssueVcDoer(IsomerRuntimeDoer):
 
 
 def handle(args: argparse.Namespace):
-    """Return doers for `crosswalk issue vc`."""
+    """Return doers for `crosswalk vc issue`."""
     return [IssueVcDoer(args=args)]
 
 
-def add_vc_command(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    """Register `crosswalk issue vc`."""
-    issue_vc = subparsers.add_parser("vc", help="Issue a VC-JWT from accepted local KERI credential state")
+def add_issue_command(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    """Register `crosswalk vc issue`."""
+    issue_vc = subparsers.add_parser("issue", help="Issue a VC-JWT from accepted local KERI credential state")
     issue_vc.add_argument("--said", required=True, help="Source ACDC credential SAID to project")
     issue_vc.add_argument("--issuer-did", required=True)
     issue_vc.add_argument("--status-base-url", required=True)

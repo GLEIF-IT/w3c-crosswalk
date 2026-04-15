@@ -8,7 +8,7 @@ set -euo pipefail
 # - GEDA/QVI/LE registries exist.
 # - QVI, LE, VRD Auth, and VRD credentials have been issued, granted, mailbox
 #   synced, and admitted.
-# - The final VRD ACDC is exported as JSON for `crosswalk issue vc`.
+# - The final VRD ACDC is exported as JSON for `crosswalk vc issue`.
 #
 # By default this uses KERIpy's normal KLI home resolution. On macOS that means
 # ~/.keri; on Linux that means /usr/local/var/keri. Set KERI_HOME only when you

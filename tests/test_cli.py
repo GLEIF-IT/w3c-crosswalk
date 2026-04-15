@@ -26,7 +26,7 @@ class FakeIssueArtifact:
 
 @dataclass
 class FakeCredentialProjection:
-    """Data fake for projected source credential state used by verify pair."""
+    """Data fake for projected source credential state used by vc verify-pair."""
 
     acdc: dict[str, Any]
 
@@ -104,8 +104,27 @@ def test_cli_status_revoke_command_is_removed():
         build_parser().parse_args(["status", "revoke"])
 
 
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["issue", "vc"],
+        ["issue", "vp"],
+        ["verify", "vc"],
+        ["verify", "vp"],
+        ["verify", "pair"],
+        ["serve", "status"],
+        ["serve", "verifier"],
+        ["serve", "verifier-worker"],
+    ],
+)
+def test_cli_old_action_first_routes_are_removed(argv):
+    """The CLI is intentionally noun-first; old action-first routes do not parse."""
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(argv)
+
+
 def test_cli_issue_vc_can_write_raw_token_file(monkeypatch, tmp_path, capsys):
-    """Allow `issue vc` to emit both the JSON artifact and raw token file."""
+    """Allow `vc issue` to emit both the JSON artifact and raw token file."""
     output = tmp_path / "vc.json"
     token_output = tmp_path / "vc.token"
 
@@ -130,12 +149,12 @@ def test_cli_issue_vc_can_write_raw_token_file(monkeypatch, tmp_path, capsys):
         "w3c_crosswalk.isomer_runtime.open_isomer_runtime",
         lambda **_: FakeIsomerRuntime(projector=FakeProjector(), signer=FakeSigner()),
     )
-    monkeypatch.setattr("w3c_crosswalk.cli.issue.vc.issue_vc_artifact", fake_issue_vc_artifact)
+    monkeypatch.setattr("w3c_crosswalk.cli.vc.issue.issue_vc_artifact", fake_issue_vc_artifact)
 
     exit_code = main(
         [
-            "issue",
             "vc",
+            "issue",
             "--said",
             "Ecredential",
             "--issuer-did",
@@ -184,12 +203,12 @@ def test_cli_issue_vp_uses_signer_runtime(monkeypatch, tmp_path):
         "w3c_crosswalk.isomer_runtime.open_isomer_signer_runtime",
         lambda **_: FakeIsomerRuntime(projector=None, signer=FakeSigner()),
     )
-    monkeypatch.setattr("w3c_crosswalk.cli.issue.vp.issue_vp_artifact", fake_issue_vp_artifact)
+    monkeypatch.setattr("w3c_crosswalk.cli.vp.issue.issue_vp_artifact", fake_issue_vp_artifact)
 
     exit_code = main(
         [
-            "issue",
             "vp",
+            "issue",
             "--vc-token",
             str(vc_token),
             "--holder-did",
@@ -232,12 +251,12 @@ def test_cli_verify_vc_runs_operation_without_emitting_terminal_json(monkeypatch
         seen["wait"] = {"timeout": timeout, "poll": poll_interval}
         return fake_doer
 
-    monkeypatch.setattr("w3c_crosswalk.cli.verify.vc.verify_vc_doer", fake_verify_vc_doer)
+    monkeypatch.setattr("w3c_crosswalk.cli.vc.verify.verify_vc_doer", fake_verify_vc_doer)
 
     exit_code = main(
         [
-            "verify",
             "vc",
+            "verify",
             "--token",
             "inline-token",
             "--server",
@@ -269,9 +288,9 @@ def test_cli_verify_vp_reports_success_summary(monkeypatch, capsys):
             },
         }
     )
-    monkeypatch.setattr("w3c_crosswalk.cli.verify.vp.verify_vp_doer", lambda **_: fake_doer)
+    monkeypatch.setattr("w3c_crosswalk.cli.vp.verify.verify_vp_doer", lambda **_: fake_doer)
 
-    exit_code = main(["verify", "vp", "--token", "inline-token", "--server", "http://verifier.example"])
+    exit_code = main(["vp", "verify", "--token", "inline-token", "--server", "http://verifier.example"])
 
     assert exit_code == 0
     assert capsys.readouterr().out.strip() == (
@@ -307,12 +326,12 @@ def test_cli_verify_pair_reports_success_summary(monkeypatch, capsys):
         return fake_doer
 
     monkeypatch.setattr("w3c_crosswalk.isomer_runtime.open_isomer_runtime", lambda **_: FakeIsomerRuntime(projector=FakeProjector()))
-    monkeypatch.setattr("w3c_crosswalk.cli.verify.pair.verify_pair_doer", fake_verify_pair_doer)
+    monkeypatch.setattr("w3c_crosswalk.cli.vc.verify_pair.verify_pair_doer", fake_verify_pair_doer)
 
     exit_code = main(
         [
-            "verify",
-            "pair",
+            "vc",
+            "verify-pair",
             "--said",
             "Ecredential",
             "--token",
@@ -340,11 +359,11 @@ def test_cli_verify_pair_reports_success_summary(monkeypatch, capsys):
 def test_cli_verify_reports_doer_error(monkeypatch, capsys):
     """Print a compact verifier API error instead of dumping operation JSON."""
     monkeypatch.setattr(
-        "w3c_crosswalk.cli.verify.vc.verify_vc_doer",
+        "w3c_crosswalk.cli.vc.verify.verify_vc_doer",
         lambda **_: _CompletedVerifyDoer(error=RuntimeError("verification request failed: could not connect")),
     )
 
-    exit_code = main(["verify", "vc", "--token", "inline-token", "--server", "http://verifier.example"])
+    exit_code = main(["vc", "verify", "--token", "inline-token", "--server", "http://verifier.example"])
 
     captured = capsys.readouterr()
     assert exit_code == 1
@@ -355,11 +374,11 @@ def test_cli_verify_reports_doer_error(monkeypatch, capsys):
 def test_cli_verify_reports_timeout(monkeypatch, capsys):
     """Print verifier timeout errors without exposing full operation resources."""
     monkeypatch.setattr(
-        "w3c_crosswalk.cli.verify.vc.verify_vc_doer",
+        "w3c_crosswalk.cli.vc.verify.verify_vc_doer",
         lambda **_: _CompletedVerifyDoer(error=TimeoutError("timed out waiting for operation verify-vc.1")),
     )
 
-    exit_code = main(["verify", "vc", "--token", "inline-token", "--server", "http://verifier.example"])
+    exit_code = main(["vc", "verify", "--token", "inline-token", "--server", "http://verifier.example"])
 
     captured = capsys.readouterr()
     assert exit_code == 1
@@ -370,11 +389,11 @@ def test_cli_verify_reports_timeout(monkeypatch, capsys):
 def test_cli_verify_reports_terminal_operation_error(monkeypatch, capsys):
     """Print terminal operation error messages in a short human form."""
     monkeypatch.setattr(
-        "w3c_crosswalk.cli.verify.vc.verify_vc_doer",
+        "w3c_crosswalk.cli.vc.verify.verify_vc_doer",
         lambda **_: _CompletedVerifyDoer(error=RuntimeError("verification failed: invalid token")),
     )
 
-    exit_code = main(["verify", "vc", "--token", "inline-token", "--server", "http://verifier.example"])
+    exit_code = main(["vc", "verify", "--token", "inline-token", "--server", "http://verifier.example"])
 
     captured = capsys.readouterr()
     assert exit_code == 1
@@ -385,11 +404,11 @@ def test_cli_verify_reports_terminal_operation_error(monkeypatch, capsys):
 def test_cli_verify_reports_not_ok_response(monkeypatch, capsys):
     """Print the first verifier response error for ok=false results."""
     monkeypatch.setattr(
-        "w3c_crosswalk.cli.verify.vc.verify_vc_doer",
+        "w3c_crosswalk.cli.vc.verify.verify_vc_doer",
         lambda **_: _CompletedVerifyDoer(error=RuntimeError("verification failed: credential is revoked")),
     )
 
-    exit_code = main(["verify", "vc", "--token", "inline-token", "--server", "http://verifier.example"])
+    exit_code = main(["vc", "verify", "--token", "inline-token", "--server", "http://verifier.example"])
 
     captured = capsys.readouterr()
     assert exit_code == 1
@@ -398,19 +417,19 @@ def test_cli_verify_reports_not_ok_response(monkeypatch, capsys):
 
 
 def test_cli_serve_status_returns_service_doers(monkeypatch):
-    """Dispatch the nested serve status command into the doer-assembly path."""
+    """Dispatch the nested status serve command into the doer-assembly path."""
     seen = {}
 
     def fake_setup_status_doers(config):
         seen["config"] = config
         return object(), []
 
-    monkeypatch.setattr("w3c_crosswalk.cli.serve.status.setup_status_doers", fake_setup_status_doers)
+    monkeypatch.setattr("w3c_crosswalk.cli.status.serve.setup_status_doers", fake_setup_status_doers)
 
     exit_code = main(
         [
-            "serve",
             "status",
+            "serve",
             "--host",
             "127.0.0.1",
             "--port",
@@ -428,19 +447,19 @@ def test_cli_serve_status_returns_service_doers(monkeypatch):
 
 
 def test_cli_serve_verifier_returns_service_doers(monkeypatch):
-    """Dispatch the nested serve verifier command into the doer-assembly path."""
+    """Dispatch the nested verifier serve command into the doer-assembly path."""
     seen = {}
 
     def fake_setup_verifier_doers(config):
         seen["config"] = config
         return object(), []
 
-    monkeypatch.setattr("w3c_crosswalk.cli.serve.verifier.setup_verifier_doers", fake_setup_verifier_doers)
+    monkeypatch.setattr("w3c_crosswalk.cli.verifier.serve.setup_verifier_doers", fake_setup_verifier_doers)
 
     exit_code = main(
         [
-            "serve",
             "verifier",
+            "serve",
             "--host",
             "127.0.0.1",
             "--port",
@@ -458,19 +477,23 @@ def test_cli_serve_verifier_returns_service_doers(monkeypatch):
 
 
 def test_cli_serve_verifier_worker_returns_worker_doers(monkeypatch):
-    """Dispatch the nested serve verifier-worker command into worker doer assembly."""
+    """Dispatch the nested verifier worker serve command into worker doer assembly."""
     seen = {}
 
     def fake_setup_verifier_worker_doers(config):
         seen["config"] = config
         return []
 
-    monkeypatch.setattr("w3c_crosswalk.cli.serve.verifier_worker.setup_verifier_worker_doers", fake_setup_verifier_worker_doers)
+    monkeypatch.setattr(
+        "w3c_crosswalk.cli.verifier.worker.serve.setup_verifier_worker_doers",
+        fake_setup_verifier_worker_doers,
+    )
 
     exit_code = main(
         [
+            "verifier",
+            "worker",
             "serve",
-            "verifier-worker",
             "--host",
             "127.0.0.1",
             "--port",

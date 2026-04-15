@@ -32,9 +32,9 @@ as a crosswalk boundary tool:
 
 1. `crosswalk status project` reads the accepted source ACDC and TEL state from
    local KERIpy state, then writes the W3C-facing status projection.
-2. `crosswalk issue vc` reads that same accepted source credential by SAID and
+2. `crosswalk vc issue` reads that same accepted source credential by SAID and
    signs a VC-JWT twin with a live KERI habitat signer.
-3. `crosswalk verify vc|vp|pair` submits verification work to the verifier
+3. `crosswalk vc verify`, `crosswalk vp verify`, and `crosswalk vc verify-pair` submit verification work to the verifier
    service, waits for completion, and returns pass/fail.
 4. Revocation starts with `kli vc revoke`. W3C revocation is only a projection
    after local KERI TEL state says the source credential is revoked.
@@ -192,13 +192,13 @@ Source the same env vars from the "Set Environment Variables section" first.
 Start the status service in one terminal:
 
 ```bash
-crosswalk serve status \
+crosswalk status serve \
   --host 127.0.0.1 \
   --port "$STATUS_PORT" \
   --store "$STATUS_STORE" \
   --base-url "$STATUS_BASE"
 # Alternative syntax:
-#   ./.venv/bin/python -m w3c_crosswalk.cli serve status ...
+#   ./.venv/bin/python -m w3c_crosswalk.cli status serve ...
 ```
 
 ### W3C Verifier Service
@@ -208,13 +208,13 @@ Source the same env vars from the "Set Environment Variables section" first.
 Start the verifier service in a second terminal:
 
 ```bash
-crosswalk serve verifier \
+crosswalk verifier serve \
   --host 127.0.0.1 \
   --port "$VERIFIER_PORT" \
   --resolver "$RESOLVER_BASE" \
   --operation-root "$OP_ROOT"
 # Alternative syntax:
-#   ./.venv/bin/python -m w3c_crosswalk.cli serve verifier ...
+#   ./.venv/bin/python -m w3c_crosswalk.cli verifier serve ...
 ```
 
 ### Health checks
@@ -229,8 +229,8 @@ curl -fsS "${VERIFIER_BASE}/healthz"
 ```
 
 The default verifier command runs the API and worker together in one process.
-There is also a `serve verifier-worker` command for split deployments, but the
-single-process `serve verifier` shape is the right default for this PoC and for
+There is also a `verifier worker serve` command for split deployments, but the
+single-process `verifier serve` shape is the right default for this PoC and for
 this walkthrough.
 
 ## 3. Project Status From TEL State
@@ -277,7 +277,7 @@ signer:
 
 ```bash
 SIGNER_PASS="$SIGNER_PASSCODE" \
-crosswalk issue vc \
+crosswalk vc issue \
   --said "$VRD_SAID" \
   --issuer-did "$ISSUER_DID" \
   --status-base-url "$STATUS_BASE" \
@@ -287,7 +287,7 @@ crosswalk issue vc \
   --passcode-env SIGNER_PASS \
   --output "$OUT_DIR/vc.json"
 # Alternative syntax:
-#   ./.venv/bin/python -m w3c_crosswalk.cli issue vc ...
+#   ./.venv/bin/python -m w3c_crosswalk.cli vc issue ...
 ```
 
 The command writes both the full JSON artifact and a sibling raw VC-JWT token
@@ -309,20 +309,20 @@ The real point of this step is:
 Submit and wait for plain VC verification:
 
 ```bash
-crosswalk verify vc \
+crosswalk vc verify \
   --token "$OUT_DIR/vc.token" \
   --server "$VERIFIER_BASE" \
   --timeout 45 \
   --poll 0.25
 # Alternative syntax:
-#   ./.venv/bin/python -m w3c_crosswalk.cli verify vc ...
+#   ./.venv/bin/python -m w3c_crosswalk.cli vc verify ...
 ```
 
 Submit and wait for crosswalk pair verification:
 
 ```bash
 SIGNER_PASS="$SIGNER_PASSCODE" \
-crosswalk verify pair \
+crosswalk vc verify-pair \
   --said "$VRD_SAID" \
   --token "$OUT_DIR/vc.token" \
   --server "$VERIFIER_BASE" \
@@ -332,7 +332,7 @@ crosswalk verify pair \
   --timeout 45 \
   --poll 0.25
 # Alternative syntax:
-#   ./.venv/bin/python -m w3c_crosswalk.cli verify pair ...
+#   ./.venv/bin/python -m w3c_crosswalk.cli vc verify-pair ...
 ```
 
 These commands do not run verification inline inside the CLI process. They submit
@@ -368,7 +368,7 @@ The verifier checks are:
 - JWT signature verification against the resolved verification method
 - projected credential-status lookup
 - crosswalk equivalence between the VC-JWT and source ACDC cloned from local
-  KERIpy state for `verify pair`
+  KERIpy state for `vc verify-pair`
 
 ## 6. Revoke The Source ACDC And Reproject Status
 
@@ -432,13 +432,13 @@ point at the same file you just updated.
 Now re-run VC verification:
 
 ```bash
-crosswalk verify vc \
+crosswalk vc verify \
   --token "$OUT_DIR/vc.token" \
   --server "$VERIFIER_BASE" \
   --timeout 45 \
   --poll 0.25
 # Alternative syntax:
-#   ./.venv/bin/python -m w3c_crosswalk.cli verify vc ...
+#   ./.venv/bin/python -m w3c_crosswalk.cli vc verify ...
 ```
 
 The expected outcome is:
@@ -462,7 +462,7 @@ If you also want to issue and verify a VP-JWT:
 
 ```bash
 SIGNER_PASS="$SIGNER_PASSCODE" \
-crosswalk issue vp \
+crosswalk vp issue \
   --vc-token "$OUT_DIR/vc.token" \
   --holder-did "$ISSUER_DID" \
   --name "$SIGNER_NAME" \
@@ -470,7 +470,7 @@ crosswalk issue vp \
   --passcode-env SIGNER_PASS \
   --output "$OUT_DIR/vp.json"
 # Alternative syntax:
-#   ./.venv/bin/python -m w3c_crosswalk.cli issue vp ...
+#   ./.venv/bin/python -m w3c_crosswalk.cli vp issue ...
 ```
 
 Extract the VP token:
@@ -488,13 +488,13 @@ PY
 Verify it:
 
 ```bash
-crosswalk verify vp \
+crosswalk vp verify \
   --token "$OUT_DIR/vp.token" \
   --server "$VERIFIER_BASE" \
   --timeout 45 \
   --poll 0.25
 # Alternative syntax:
-#   ./.venv/bin/python -m w3c_crosswalk.cli verify vp ...
+#   ./.venv/bin/python -m w3c_crosswalk.cli vp verify ...
 ```
 
 Successful VP verification prints:

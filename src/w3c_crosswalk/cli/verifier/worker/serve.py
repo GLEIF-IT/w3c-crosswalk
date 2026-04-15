@@ -1,4 +1,4 @@
-"""`crosswalk serve verifier-worker` command."""
+"""`crosswalk verifier worker serve` command."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from w3c_crosswalk.service import VerifierServerConfig, setup_verifier_worker_do
 
 
 def handle(args: argparse.Namespace):
-    """Return the long-running doers for `crosswalk serve verifier-worker`."""
+    """Return the long-running doers for `crosswalk verifier worker serve`."""
     return setup_verifier_worker_doers(
         VerifierServerConfig(
             host=args.host,
@@ -20,10 +20,10 @@ def handle(args: argparse.Namespace):
     )
 
 
-def add_verifier_worker_command(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    """Register `crosswalk serve verifier-worker`."""
+def add_serve_command(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    """Register `crosswalk verifier worker serve`."""
     verifier_worker = subparsers.add_parser(
-        "verifier-worker",
+        "serve",
         help="Run background verifier workers against the shared operation store",
     )
     verifier_worker.add_argument("--host", default="127.0.0.1")

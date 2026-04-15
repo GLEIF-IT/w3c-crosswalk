@@ -8,10 +8,10 @@ import sys
 from w3c_crosswalk.controller import run_controller
 
 from .common import report_failure_for_doers
-from .issue import add_issue_commands
-from .serve import add_serve_commands
 from .status import add_status_commands
-from .verify import add_verify_commands
+from .vc import add_vc_commands
+from .verifier import add_verifier_commands
+from .vp import add_vp_commands
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -19,10 +19,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="crosswalk", description="W3C VRD crosswalk CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    add_issue_commands(subparsers)
-    add_verify_commands(subparsers)
+    add_vc_commands(subparsers)
+    add_vp_commands(subparsers)
     add_status_commands(subparsers)
-    add_serve_commands(subparsers)
+    add_verifier_commands(subparsers)
 
     return parser
 

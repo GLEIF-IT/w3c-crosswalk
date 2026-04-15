@@ -1,4 +1,4 @@
-"""`crosswalk serve verifier` command."""
+"""`crosswalk verifier serve` command."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from w3c_crosswalk.service import VerifierServerConfig, setup_verifier_doers
 
 
 def handle(args: argparse.Namespace):
-    """Return the long-running doers for `crosswalk serve verifier`."""
+    """Return the long-running doers for `crosswalk verifier serve`."""
     _server, doers = setup_verifier_doers(
         VerifierServerConfig(
             host=args.host,
@@ -21,9 +21,9 @@ def handle(args: argparse.Namespace):
     return doers
 
 
-def add_verifier_command(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    """Register `crosswalk serve verifier`."""
-    verifier_serve = subparsers.add_parser("verifier", help="Serve the verifier operation HTTP API")
+def add_serve_command(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    """Register `crosswalk verifier serve`."""
+    verifier_serve = subparsers.add_parser("serve", help="Serve the verifier operation HTTP API")
     verifier_serve.add_argument("--host", default="127.0.0.1")
     verifier_serve.add_argument("--port", type=int, default=8788)
     verifier_serve.add_argument("--resolver", required=True)

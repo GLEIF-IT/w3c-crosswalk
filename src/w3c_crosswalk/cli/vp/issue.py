@@ -1,4 +1,4 @@
-"""`crosswalk issue vp` command."""
+"""`crosswalk vp issue` command."""
 
 from __future__ import annotations
 
@@ -37,13 +37,13 @@ class IssueVpDoer(IsomerSignerRuntimeDoer):
 
 
 def handle(args: argparse.Namespace):
-    """Return doers for `crosswalk issue vp`."""
+    """Return doers for `crosswalk vp issue`."""
     return [IssueVpDoer(args=args)]
 
 
-def add_vp_command(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    """Register `crosswalk issue vp`."""
-    issue_vp = subparsers.add_parser("vp", help="Wrap one or more VC-JWTs in a VP-JWT")
+def add_issue_command(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    """Register `crosswalk vp issue`."""
+    issue_vp = subparsers.add_parser("issue", help="Wrap one or more VC-JWTs in a VP-JWT")
     issue_vp.add_argument("--vc-token", action="append", required=True)
     issue_vp.add_argument("--holder-did", required=True)
     issue_vp.add_argument("--audience")
