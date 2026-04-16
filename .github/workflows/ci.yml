@@ -17,26 +17,81 @@ permissions:
 
 jobs:
   test:
-    name: Smoke and Test Suite
+    name: Smoke, Python Tests, and Three-Verifier Acceptance
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
+
+    defaults:
+      run:
+        working-directory: w3c-crosswalk
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          path: w3c-crosswalk
+
+      - name: Checkout did-jwt-vc sibling
+        uses: actions/checkout@v6
+        with:
+          repository: decentralized-identity/did-jwt-vc
+          path: did-jwt-vc
+
+      - name: Checkout vc-go sibling
+        uses: actions/checkout@v6
+        with:
+          repository: trustbloc/vc-go
+          path: vc-go
 
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version-file: pyproject.toml
+          python-version-file: w3c-crosswalk/pyproject.toml
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
+          working-directory: w3c-crosswalk
           cache-dependency-glob: |
-            pyproject.toml
-            uv.lock
+            w3c-crosswalk/pyproject.toml
+            w3c-crosswalk/uv.lock
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: yarn
+          cache-dependency-path: did-jwt-vc/yarn.lock
+
+      - name: Enable Corepack Yarn
+        run: |
+          corepack enable
+          corepack prepare yarn@1.22.22 --activate
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: w3c-crosswalk/apps/isomer-go/go.mod
+          cache-dependency-path: |
+            w3c-crosswalk/apps/isomer-go/go.sum
+            vc-go/go.sum
+
+      - name: Cache npm downloads for isomer-node
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-isomer-node-npm-${{ hashFiles('w3c-crosswalk/apps/isomer-node/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-isomer-node-npm-
+
+      - name: Cache Go build outputs for sidecar checks
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.cache/isomer-go-build
+          key: ${{ runner.os }}-isomer-go-build-${{ hashFiles('w3c-crosswalk/apps/isomer-go/go.sum', 'vc-go/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-isomer-go-build-
 
       - name: Sync locked environment
         run: uv sync --locked
@@ -46,3 +101,8 @@ jobs:
 
       - name: Run full Python test suite
         run: make test
+
+      - name: Run three-verifier acceptance test
+        run: make test-external-w3c-all
+        env:
+          GO_CACHE: ${{ github.workspace }}/.cache/isomer-go-build
