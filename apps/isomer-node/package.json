@@ -1,0 +1,27 @@
+{
+  "name": "isomer-node",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "External Node verifier sidecar for Isomer VCDM 1.1 VC-JWT and VP-JWT artifacts",
+  "scripts": {
+    "serve": "tsx src/main.ts",
+    "check": "tsc --noEmit",
+    "test": "node --import tsx --test \"src/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.6",
+    "did-jwt": "^8.0.18",
+    "did-jwt-vc": "file:../../../did-jwt-vc",
+    "did-resolver": "^4.1.0",
+    "effection": "^3.6.0",
+    "hono": "^4.10.7",
+    "jsonld": "^8.3.3"
+  },
+  "devDependencies": {
+    "@types/jsonld": "^1.5.15",
+    "@types/node": "^25.0.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}
