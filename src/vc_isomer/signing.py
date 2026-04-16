@@ -22,6 +22,11 @@ class SignerLike(Protocol):
         """Expose the current verification key as a JWK."""
         ...
 
+    @property
+    def public_key_multibase(self) -> str:
+        """Expose the current verification key as a Multikey value."""
+        ...
+
     def sign(self, message: bytes) -> bytes:
         """Sign the supplied JWT signing input bytes."""
         ...
@@ -46,13 +51,27 @@ class HabSigner:
 
     @property
     def public_jwk(self) -> dict[str, str]:
-        """Expose the habitat's current signing key as an Ed25519 OKP JWK."""
+        """Expose the habitat's current signing key as an Ed25519 OKP JWK.
+
+        For OKP JWKs such as Ed25519, ``x`` is the base64url-encoded public-key
+        octet string. It is not an affine x-coordinate the way maintainers might
+        expect from EC JWKs.
+        """
         return {
             "kid": self.kid,
             "kty": "OKP",
             "crv": "Ed25519",
+            # For OKP/Ed25519 JWKs, "x" carries the raw public-key octets after
+            # base64url encoding, not an elliptic-curve x-coordinate.
             "x": _b64url_encode(self._hab.kever.verfers[0].raw),
         }
+
+    @property
+    def public_key_multibase(self) -> str:
+        """Expose the habitat's current signing key as an Ed25519 Multikey."""
+        from .data_integrity import public_key_multibase_from_jwk
+
+        return public_key_multibase_from_jwk(self.public_jwk)
 
     def sign(self, message: bytes) -> bytes:
         """Sign raw bytes with the habitat's current Ed25519 key."""

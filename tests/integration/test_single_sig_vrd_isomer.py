@@ -11,10 +11,16 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from vc_isomer.jwt import issue_vc_jwt
+from vc_isomer.interop.external_verifiers import (
+    ExternalVerifierConfig,
+    ExternalVerifierProcess,
+    assert_external_result_ok,
+    requested_external_verifiers,
+)
+from vc_isomer.jwt import issue_vc_jwt, issue_vp_jwt
 from vc_isomer.isomer_runtime import open_isomer_runtime
 from vc_isomer.status import JsonFileStatusStore
-from vc_isomer.verifier_client import verify_pair_doer, verify_vc_doer
+from vc_isomer.verifier_client import verify_pair_doer, verify_vc_doer, verify_vp_doer
 from .conftest import INTEGRATION_ROOT, W3C_ISOMER_ROOT
 
 from .kli_flow import (
@@ -285,7 +291,7 @@ def _validate_and_project_status(live_stack: dict, state, issuer_did: str) -> di
 
 
 def _issue_and_verify_w3c_twin(live_stack: dict, state, *, issuer_did: str, vrd: dict) -> None:
-    """Issue the VC-JWT twin and verify both the VC and isomer pair through the verifier service."""
+    """Issue VC/VP JWT twins and verify them through Python and external sidecars."""
     def _verifier_context(doer) -> dict:
         return {
             "error": str(doer.error) if getattr(doer, "error", None) else None,
@@ -300,6 +306,9 @@ def _issue_and_verify_w3c_twin(live_stack: dict, state, *, issuer_did: str, vrd:
         assert doer.operation.get("done") is True, f"{label} never reached terminal state\n{rendered}"
         return rendered
 
+    vp_audience = "https://verifier.example/isomer-e2e"
+    vp_nonce = "isomer-e2e-nonce"
+
     with patched_home(Path(live_stack["home"])):
         runtime = open_isomer_runtime(name=state.qvi.name, base="", alias=state.qvi.alias, passcode=state.qvi.passcode)
         try:
@@ -308,10 +317,16 @@ def _issue_and_verify_w3c_twin(live_stack: dict, state, *, issuer_did: str, vrd:
             vc = runtime.projector.project_vc(
                 said=state.vrd_said,
                 issuer_did=issuer_did,
-                verification_method=verification_method,
                 status_base_url=live_stack["status_base_url"],
             )
             token, vc = issue_vc_jwt(vc, signer=signer, verification_method=verification_method)
+            vp_token, _vp = issue_vp_jwt(
+                [token],
+                holder_did=issuer_did,
+                signer=signer,
+                audience=vp_audience,
+                nonce=vp_nonce,
+            )
         finally:
             runtime.close()
 
@@ -358,6 +373,60 @@ def _issue_and_verify_w3c_twin(live_stack: dict, state, *, issuer_did: str, vrd:
     )
     pair_rendered = _assert_verifier_ok(pair_doer, label="verify isomer pair")
     assert pair_doer.operation["response"]["ok"] is True, pair_rendered
+
+    vp_doer = verify_vp_doer(
+        base_url=live_stack["verifier_base_url"],
+        token=vp_token,
+        timeout=45.0,
+        poll_interval=0.1,
+    )
+    run_doers_until(
+        "verify VP-JWT presentation",
+        [vp_doer],
+        ready=lambda: vp_doer.done,
+        observe=lambda: {
+            "vp_done": vp_doer.done,
+            "vp_operation": vp_doer.operation,
+            "vp_error": str(vp_doer.error) if vp_doer.error else None,
+        },
+    )
+    vp_rendered = _assert_verifier_ok(vp_doer, label="verify VP-JWT presentation")
+    assert vp_doer.operation["response"]["ok"] is True, vp_rendered
+
+    _verify_external_sidecars(
+        live_stack,
+        vc_token=token,
+        vp_token=vp_token,
+        audience=vp_audience,
+        nonce=vp_nonce,
+    )
+
+
+def _verify_external_sidecars(
+    live_stack: dict,
+    *,
+    vc_token: str,
+    vp_token: str,
+    audience: str,
+    nonce: str,
+) -> None:
+    """Optionally verify live artifacts through external Node/Go sidecars."""
+    for kind in requested_external_verifiers():
+        config = ExternalVerifierConfig(
+            kind=kind,
+            repo_root=W3C_ISOMER_ROOT,
+            resolver_url=live_stack["dws_resolver_url"],
+            log_dir=Path(live_stack["log_root"]),
+            host=live_stack["host"],
+        )
+        with ExternalVerifierProcess(config) as verifier:
+            vc_result = verifier.verify_vc(vc_token)
+            assert_external_result_ok(kind, "VC-JWT", vc_result, verifier.log_path)
+            assert vc_result["checks"]["statusActive"] is True
+
+            vp_result = verifier.verify_vp(vp_token, audience=audience, nonce=nonce)
+            assert_external_result_ok(kind, "VP-JWT", vp_result, verifier.log_path)
+            assert vp_result["checks"]["embeddedCredentialsVerified"] == 1
 
 
 def test_single_sig_vrd_isomer_live(live_stack):

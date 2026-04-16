@@ -1,0 +1,274 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://www.gleif.org/schemas/isomer/v1/vrd-credential.json",
+  "title": "Isomer VRD VCDM 1.1 Verifiable Credential",
+  "description": "VCDM 1.1 JSON-LD projection of vLEI VRD and VRD Authorization ACDC credentials.",
+  "type": "object",
+  "required": [
+    "@context",
+    "type",
+    "id",
+    "issuer",
+    "issuanceDate",
+    "credentialSubject",
+    "credentialSchema",
+    "credentialStatus",
+    "termsOfUse",
+    "isomer",
+    "proof"
+  ],
+  "properties": {
+    "@context": {
+      "type": "array",
+      "contains": {
+        "const": "https://www.w3.org/2018/credentials/v1"
+      },
+      "minItems": 3
+    },
+    "type": {
+      "type": "array",
+      "contains": {
+        "const": "VerifiableCredential"
+      },
+      "minItems": 3
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^urn:said:"
+    },
+    "issuer": {
+      "type": "string",
+      "pattern": "^did:webs:"
+    },
+    "issuanceDate": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "credentialSubject": {
+      "type": "object",
+      "required": [
+        "id",
+        "AID",
+        "legalName",
+        "address",
+        "legalEntityCredential"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^did:webs:"
+        },
+        "AID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "legalName": {
+          "type": "string"
+        },
+        "address": {
+          "type": "object",
+          "required": [
+            "type",
+            "streetAddress",
+            "addressLocality",
+            "addressCountry"
+          ],
+          "properties": {
+            "type": {
+              "const": "PostalAddress"
+            },
+            "streetAddress": {
+              "type": "string"
+            },
+            "addressLocality": {
+              "type": "string"
+            },
+            "addressRegion": {
+              "type": "string"
+            },
+            "postalCode": {
+              "type": "string"
+            },
+            "addressCountry": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "legalEntityCredential": {
+          "type": "object",
+          "required": [
+            "id",
+            "type",
+            "schema"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^urn:said:"
+            },
+            "type": {
+              "const": "LegalEntityvLEICredential"
+            },
+            "schema": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "authorizedQviAid": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "credentialSchema": {
+      "type": "object",
+      "required": [
+        "id",
+        "type"
+      ],
+      "properties": {
+        "id": {
+          "const": "https://www.gleif.org/schemas/isomer/v1/vrd-credential.json"
+        },
+        "type": {
+          "const": "JsonSchemaValidator2018"
+        }
+      },
+      "additionalProperties": false
+    },
+    "credentialStatus": {
+      "type": "object",
+      "required": [
+        "id",
+        "type",
+        "statusPurpose",
+        "statusRegistryId"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uri"
+        },
+        "type": {
+          "const": "KERICredentialStatus"
+        },
+        "statusPurpose": {
+          "const": "revocation"
+        },
+        "statusRegistryId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "termsOfUse": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "type": "object",
+        "required": [
+          "type",
+          "text"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "vLEIUsageDisclaimer",
+              "vLEIIssuanceDisclaimer",
+              "vLEIPrivacyDisclaimer"
+            ]
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "isomer": {
+      "type": "object",
+      "required": [
+        "profile",
+        "version",
+        "sourceCredentialSaid",
+        "sourceSchemaSaid",
+        "sourceIssuerAid",
+        "sourceRegistry",
+        "sourceCredentialType",
+        "sourceLegalEntityCredentialSaid",
+        "sourceLegalEntityCredentialSchema"
+      ],
+      "properties": {
+        "profile": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "sourceCredentialSaid": {
+          "type": "string"
+        },
+        "sourceSchemaSaid": {
+          "type": "string"
+        },
+        "sourceIssuerAid": {
+          "type": "string"
+        },
+        "sourceRegistry": {
+          "type": "string"
+        },
+        "sourceCredentialType": {
+          "type": "string"
+        },
+        "sourceLegalEntityCredentialSaid": {
+          "type": "string"
+        },
+        "sourceLegalEntityCredentialSchema": {
+          "type": "string"
+        },
+        "sourceAuthorizedQviAid": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "proof": {
+      "type": "object",
+      "required": [
+        "type",
+        "cryptosuite",
+        "created",
+        "verificationMethod",
+        "proofPurpose",
+        "proofValue"
+      ],
+      "properties": {
+        "type": {
+          "const": "DataIntegrityProof"
+        },
+        "cryptosuite": {
+          "const": "eddsa-rdfc-2022"
+        },
+        "created": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "verificationMethod": {
+          "type": "string",
+          "pattern": "^did:webs:"
+        },
+        "proofPurpose": {
+          "const": "assertionMethod"
+        },
+        "proofValue": {
+          "type": "string",
+          "pattern": "^z[1-9A-HJ-NP-Za-km-z]+$"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

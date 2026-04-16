@@ -8,13 +8,16 @@ DIST_DIR := dist
 PYTHON := ./.venv/bin/python
 UV := uv
 TWINE := uvx --from twine twine
+DID_JWT_VC_ROOT := ../did-jwt-vc
+VC_GO_ROOT := ../vc-go
+GO_CACHE ?= /tmp/isomer-go-cache
 
 PYPI_UPLOAD_URL := https://upload.pypi.org/legacy/
 PYPI_CHECK_URL := https://pypi.org/simple/$(PACKAGE)/
 TEST_PYPI_UPLOAD_URL := https://test.pypi.org/legacy/
 TEST_PYPI_CHECK_URL := https://test.pypi.org/simple/$(PACKAGE)/
 
-.PHONY: help sync clean test-cli test-fast test-integration test smoke build dist-check check-clean prepublish publish-test publish
+.PHONY: help sync clean test-cli test-fast test-integration test smoke external-node-sync external-node-check external-go-check test-external-w3c-node test-external-w3c-go test-external-w3c-all build dist-check check-clean prepublish publish-test publish
 
 help:
 	@printf '%s\n' \
@@ -27,6 +30,10 @@ help:
 		'  make test-integration  Run the focused live integration test' \
 		'  make test              Run all tests used before publishing' \
 		'  make smoke             Check import/package/CLI wiring' \
+		'  make external-node-sync  Install/build the Node W3C verifier sidecar' \
+		'  make external-node-check Check the Node W3C verifier sidecar' \
+		'  make external-go-check   Check the Go W3C verifier sidecar' \
+		'  make test-external-w3c-all Run live e2e through Node and Go sidecars' \
 		'  make build             Build sdist and wheel into dist/' \
 		'  make dist-check        Build and validate artifacts with twine check' \
 		'' \
@@ -82,6 +89,29 @@ smoke:
 		echo 'unexpected installed distribution metadata: isomer'; \
 		exit 1; \
 	fi
+
+external-node-sync:
+	@test -f "$(DID_JWT_VC_ROOT)/package.json" || { echo 'missing sibling did-jwt-vc clone at $(DID_JWT_VC_ROOT)'; exit 1; }
+	yarn --cwd "$(DID_JWT_VC_ROOT)" install --frozen-lockfile
+	yarn --cwd "$(DID_JWT_VC_ROOT)" build
+	npm --prefix apps/isomer-node install
+
+external-node-check:
+	npm --prefix apps/isomer-node run check
+	npm --prefix apps/isomer-node test
+
+external-go-check:
+	@test -f "$(VC_GO_ROOT)/go.mod" || { echo 'missing sibling vc-go clone at $(VC_GO_ROOT)'; exit 1; }
+	cd apps/isomer-go && env GOCACHE="$(GO_CACHE)" go test ./...
+
+test-external-w3c-node: external-node-sync external-node-check
+	ISOMER_EXTERNAL_VERIFIERS=node $(PYTHON) -m pytest tests/integration/test_single_sig_vrd_isomer.py -q --tb=short
+
+test-external-w3c-go: external-go-check
+	ISOMER_EXTERNAL_VERIFIERS=go $(PYTHON) -m pytest tests/integration/test_single_sig_vrd_isomer.py -q --tb=short
+
+test-external-w3c-all: external-node-sync external-node-check external-go-check
+	ISOMER_EXTERNAL_VERIFIERS=node,go $(PYTHON) -m pytest tests/integration/test_single_sig_vrd_isomer.py -q --tb=short
 
 build: clean
 	$(UV) build

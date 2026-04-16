@@ -29,7 +29,6 @@ def _issue_projected_fixture(acdc: dict, *, issuer_did: str, status_base_url: st
     vc = transpose_acdc_to_w3c_vc(
         acdc,
         issuer_did=canonical_issuer,
-        verification_method=verification_method,
         status_base_url=status_base_url,
     )
     return issue_vc_jwt(vc, signer=signer, verification_method=verification_method)

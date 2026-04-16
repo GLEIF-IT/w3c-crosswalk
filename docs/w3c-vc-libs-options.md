@@ -23,14 +23,17 @@ Our verifier in [`src/vc_isomer/verifier.py`](src/vc_isomer/verifier.py)
 is legitimate as a project verifier because it:
 
 - resolves issuer DID state through `did:webs`
-- verifies EdDSA signatures against the resolved JWK
+- verifies VCDM 1.1 VC-JWT/VP-JWT EdDSA signatures against the resolved JWK
+- verifies embedded VC Data Integrity proofs with `eddsa-rdfc-2022`
 - checks projected status/revocation
 - verifies embedded VC-JWTs inside VP-JWTs
 - enforces isomer-specific ACDC/W3C equivalence rules
 
 It is not yet a spec-grade or ecosystem-grade verifier because it does not try
 to implement the full breadth of JOSE/VC validation expected by external W3C
-libraries, and our emitted VC-JWT shape is still an isomer-specific profile.
+libraries. It is now intentionally closer to mainstream VCDM 1.1 interop:
+the compact JWT payload uses `vc`/`vp` claims and mirrored registered JWT
+claims, while the inner VC remains JSON-LD with a Data Integrity proof.
 
 ## Primary Candidates
 
@@ -150,12 +153,24 @@ libraries, and our emitted VC-JWT shape is still an isomer-specific profile.
 
 ## Recommended Next Step
 
-1. Add a small Node-based secondary verification harness using `did-jwt-vc`.
-2. Feed it the VC-JWTs produced by the live isomer integration test.
-3. Record whether it accepts or rejects them, and why.
-4. If it rejects them, compare the failure against [W3C VC JOSE/COSE](https://www.w3.org/TR/vc-jose-cose/) expectations before changing our payload shape.
-5. If `did-jwt-vc` proves too outdated for the shape we want, move to Veramo as
-   the next serious cross-check.
+1. Use `interop/openid4vci-credential-configuration.json` and
+   `interop/openid4vp-presentation-definition.json` as the OpenID-facing shape
+   examples for the current VCDM 1.1 `jwt_vc_json-ld` profile.
+2. Keep `apps/isomer-node` as the first external verifier gate. It uses the
+   local sibling `../did-jwt-vc` clone for VC-JWT/VP-JWT envelope verification
+   and strict local JSON-LD context loading for the embedded
+   `eddsa-rdfc-2022` Data Integrity proof.
+3. Keep `apps/isomer-go` as the second external verifier gate. It uses the
+   local sibling `../vc-go` clone through a Go module `replace`, parses
+   artifacts with `vc-go/verifiable`, and verifies the same live VC/VP
+   transmission contract as the Node sidecar.
+   The current Go VP path verifies the VP JOSE signature and claims directly,
+   then verifies nested VC-JWTs through the VC path; VP JSON-LD checks are
+   disabled until the local `vc-go` stack can accept Isomer's VP shape cleanly.
+4. Run the sidecars through pytest with `ISOMER_EXTERNAL_VERIFIERS=node,go`
+   once the sibling clones and dependencies are present.
+5. If either external library rejects a standards-valid Isomer artifact, record
+   the reason here before changing the Isomer wire shape.
 
 ## Working Mental Model
 

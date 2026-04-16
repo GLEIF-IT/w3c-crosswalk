@@ -1,0 +1,42 @@
+{
+  "@context": {
+    "@version": 1.1,
+    "id": "@id",
+    "type": "@type",
+    "cred": "https://www.w3.org/2018/credentials#",
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "VerifiableCredential": "cred:VerifiableCredential",
+    "VerifiablePresentation": "cred:VerifiablePresentation",
+    "credentialSubject": {
+      "@id": "cred:credentialSubject"
+    },
+    "credentialSchema": {
+      "@id": "cred:credentialSchema"
+    },
+    "credentialStatus": {
+      "@id": "cred:credentialStatus"
+    },
+    "termsOfUse": {
+      "@id": "cred:termsOfUse"
+    },
+    "issuer": {
+      "@id": "cred:issuer",
+      "@type": "@id"
+    },
+    "holder": {
+      "@id": "cred:holder",
+      "@type": "@id"
+    },
+    "issuanceDate": {
+      "@id": "cred:issuanceDate",
+      "@type": "xsd:dateTime"
+    },
+    "expirationDate": {
+      "@id": "cred:expirationDate",
+      "@type": "xsd:dateTime"
+    },
+    "verifiableCredential": {
+      "@id": "cred:verifiableCredential"
+    }
+  }
+}

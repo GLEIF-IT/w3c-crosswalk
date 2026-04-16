@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .runtime_http import JsonResponse
+from .data_integrity import public_key_multibase_from_jwk
 
 
 class DidWebsResolutionError(RuntimeError):
@@ -52,13 +53,26 @@ class DidWebsClient:
 
     @staticmethod
     def find_verification_method(did_document: dict[str, Any], kid: str) -> dict[str, Any]:
-        """Find the verification method referenced by a JWT `kid` value."""
+        """Find the verification method referenced by a JWT `kid` value.
+
+        When the resolved method exposes an Ed25519 ``publicKeyJwk`` but not a
+        Multikey form, this helper patches in ``publicKeyMultibase`` for local
+        consumers that verify Data Integrity proofs against Multikey-oriented
+        tooling. The DID document remains JWK-first; the synthesized Multikey is
+        just a normalized view over the same raw public key bytes.
+        """
         fragment = kid.split("#", 1)[1] if "#" in kid else kid.lstrip("#")
         full_matches = {kid, f"#{fragment}"}
         for method in did_document.get("verificationMethod", []):
             method_id = method.get("id", "")
             if method_id in full_matches or method_id.endswith(f"#{fragment}"):
-                return method
+                normalized = dict(method)
+                public_jwk = normalized.get("publicKeyJwk")
+                if isinstance(public_jwk, dict) and "publicKeyMultibase" not in normalized:
+                    # Patch in Multikey form for Data Integrity consumers that
+                    # expect publicKeyMultibase, while keeping the original JWK.
+                    normalized["publicKeyMultibase"] = public_key_multibase_from_jwk(public_jwk)
+                return normalized
         raise DidWebsResolutionError(f"verification method {kid} not found in resolved DID document")
 
 

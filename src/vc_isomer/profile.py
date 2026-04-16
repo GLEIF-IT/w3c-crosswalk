@@ -13,9 +13,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from .common import canonicalize_did_url, canonicalize_did_webs, require_mapping
+from .common import canonicalize_did_webs, require_mapping
 from .constants import (
+    DATA_INTEGRITY_CONTEXT,
+    ISOMER_CONTEXT,
     ISOMER_PROFILE,
+    ISOMER_VRD_SCHEMA_ID,
     ISOMER_VERSION,
     LE_SCHEMA,
     STATUS_TYPE,
@@ -41,7 +44,12 @@ def schema_type(acdc: dict[str, Any]) -> str:
 
 def subject_aid(attributes: dict[str, Any]) -> str:
     """Return the subject AID field used by the current credential flavor."""
-    return attributes.get("AID") or attributes.get("LE") or ""
+    return attributes.get("AID") or ""
+
+
+def said_urn(said: str) -> str:
+    """Represent one KERI/ACDC SAID as an absolute JSON-LD identifier."""
+    return f"urn:said:{said}" if said else ""
 
 
 def build_terms_of_use(rules: dict[str, Any]) -> list[dict[str, str]]:
@@ -53,20 +61,48 @@ def build_terms_of_use(rules: dict[str, Any]) -> list[dict[str, str]]:
     ]
 
 
+def parse_address(address_string: str) -> dict[str, str]:
+    """Parse a vLEI comma-separated headquarters address into PostalAddress."""
+    parts = [part.strip() for part in address_string.split(",")]
+    address = {
+        "type": "PostalAddress",
+        "streetAddress": "",
+        "addressLocality": "",
+        "addressCountry": "",
+    }
+    if len(parts) >= 1:
+        address["streetAddress"] = parts[0]
+    if len(parts) >= 2 and parts[1]:
+        address["streetAddress"] = f"{address['streetAddress']}, {parts[1]}" if address["streetAddress"] else parts[1]
+    if len(parts) >= 3:
+        address["addressLocality"] = parts[2]
+    if len(parts) >= 4:
+        region_postal = parts[3].split()
+        if region_postal:
+            address["addressRegion"] = region_postal[0]
+        if len(region_postal) >= 2:
+            address["postalCode"] = region_postal[1]
+    if len(parts) >= 5:
+        address["addressCountry"] = parts[4]
+    return address
+
+
 def build_subject(acdc: dict[str, Any]) -> dict[str, Any]:
     """Build the W3C `credentialSubject` block from the source ACDC."""
     attributes = require_mapping("attributes", acdc.get("a", {}))
     edges = require_mapping("edges", acdc.get("e", {}))
     cred_type = schema_type(acdc)
+    legal_entity_edge = edges.get("le", {})
 
     subject = {
         "id": attributes.get("DID", ""),
-        "aid": subject_aid(attributes),
+        "AID": subject_aid(attributes),
         "legalName": attributes.get("LegalName", ""),
-        "headquartersAddress": attributes.get("HeadquartersAddress", ""),
-        "legalEntityVleiCredential": {
-            "said": edges.get("le", {}).get("n", ""),
-            "schema": edges.get("le", {}).get("s", LE_SCHEMA),
+        "address": parse_address(attributes.get("HeadquartersAddress", "")),
+        "legalEntityCredential": {
+            "id": said_urn(legal_entity_edge.get("n", "")),
+            "type": "LegalEntityvLEICredential",
+            "schema": legal_entity_edge.get("s", LE_SCHEMA),
         },
     }
     if cred_type == "VRDAuthorizationCredential":
@@ -76,8 +112,10 @@ def build_subject(acdc: dict[str, Any]) -> dict[str, Any]:
 
 def build_isomer_metadata(acdc: dict[str, Any]) -> dict[str, Any]:
     """Build the isomer provenance block embedded in the W3C VC."""
+    attributes = require_mapping("attributes", acdc.get("a", {}))
     edges = require_mapping("edges", acdc.get("e", {}))
-    return {
+    legal_entity_edge = edges.get("le", {})
+    metadata = {
         "profile": ISOMER_PROFILE,
         "version": ISOMER_VERSION,
         "sourceCredentialSaid": acdc.get("d", ""),
@@ -85,8 +123,12 @@ def build_isomer_metadata(acdc: dict[str, Any]) -> dict[str, Any]:
         "sourceIssuerAid": acdc.get("i", ""),
         "sourceRegistry": acdc.get("ri", ""),
         "sourceCredentialType": schema_type(acdc),
-        "sourceEdges": edges,
+        "sourceLegalEntityCredentialSaid": legal_entity_edge.get("n", ""),
+        "sourceLegalEntityCredentialSchema": legal_entity_edge.get("s", LE_SCHEMA),
     }
+    if schema_type(acdc) == "VRDAuthorizationCredential":
+        metadata["sourceAuthorizedQviAid"] = attributes.get("i", "")
+    return metadata
 
 
 def build_status_reference(acdc: dict[str, Any], status_base_url: str) -> dict[str, str]:
@@ -99,6 +141,7 @@ def build_status_reference(acdc: dict[str, Any], status_base_url: str) -> dict[s
         "id": status_url(status_base_url, acdc.get("d", "")),
         "type": STATUS_TYPE,
         "statusPurpose": "revocation",
+        "statusRegistryId": acdc.get("ri", ""),
     }
 
 
@@ -106,7 +149,6 @@ def transpose_acdc_to_w3c_vc(
     acdc: dict[str, Any],
     *,
     issuer_did: str,
-    verification_method: str,
     status_base_url: str,
 ) -> dict[str, Any]:
     """Transpose a supported ACDC credential into the repository's W3C VC shape.
@@ -114,34 +156,27 @@ def transpose_acdc_to_w3c_vc(
     Args:
         acdc: Expanded ACDC credential body.
         issuer_did: DID used as the W3C issuer identifier.
-        verification_method: DID URL that points to the signing key.
         status_base_url: Base URL for the projected credential status service.
     """
     attributes = require_mapping("attributes", acdc.get("a", {}))
     rules = require_mapping("rules", acdc.get("r", {}))
     cred_type = schema_type(acdc)
     canonical_issuer_did = canonicalize_did_webs(issuer_did)
-    canonical_verification_method = canonicalize_did_url(verification_method)
 
     return {
-        "@context": [VC_CONTEXT],
+        "@context": [VC_CONTEXT, DATA_INTEGRITY_CONTEXT, ISOMER_CONTEXT],
         "type": ["VerifiableCredential", cred_type, "KERIIsomerCredential"],
         "id": f"urn:said:{acdc.get('d', '')}",
         "issuer": canonical_issuer_did,
-        "validFrom": attributes.get("dt", ""),
+        "issuanceDate": attributes.get("dt", ""),
         "credentialSubject": build_subject(acdc),
         "credentialSchema": {
-            "id": f"urn:said:{acdc.get('s', '')}",
-            "type": "JsonSchemaCredential",
+            "id": ISOMER_VRD_SCHEMA_ID,
+            "type": "JsonSchemaValidator2018",
         },
         "credentialStatus": build_status_reference(acdc, status_base_url),
         "termsOfUse": build_terms_of_use(rules),
         "isomer": build_isomer_metadata(acdc),
-        "proof": {
-            "type": "DataDerivedFromKERI",
-            "verificationMethod": canonical_verification_method,
-            "source": "live-hab-derived",
-        },
     }
 
 

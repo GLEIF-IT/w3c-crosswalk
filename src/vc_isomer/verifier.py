@@ -13,8 +13,9 @@ from typing import Any
 
 from .common import canonicalize_did_url, canonicalize_did_webs
 from .constants import EDDSA, VC_JWT_TYP, VP_JWT_TYP
-from .jwt import decode_jwt, verify_jwt_signature
-from .profile import expected_credential_type, subject_aid
+from .data_integrity import JsonLdCanonicalizationError, verify_proof
+from .jwt import decode_jwt, unix_timestamp, verify_jwt_signature
+from .profile import expected_credential_type, parse_address, subject_aid
 
 
 @dataclass(frozen=True)
@@ -25,7 +26,9 @@ class PreparedVcToken:
     token: str
     # Decoded JOSE header; kid is canonicalized as a DID URL when present.
     header: dict[str, Any]
-    # Decoded W3C VC payload; this is not re-projected from ACDC during verification.
+    # Raw VCDM 1.1 JWT claims decoded from the compact token.
+    jwt_payload: dict[str, Any]
+    # Decoded W3C VC payload from the VCDM 1.1 "vc" claim.
     payload: dict[str, Any]
     # Canonicalized W3C issuer DID from payload["issuer"], used for did:webs resolution.
     issuer: str | None
@@ -43,7 +46,9 @@ class PreparedVpToken:
     token: str
     # Decoded JOSE header; kid is canonicalized as a DID URL when present.
     header: dict[str, Any]
-    # Decoded W3C VP payload.
+    # Raw VCDM 1.1 JWT claims decoded from the compact token.
+    jwt_payload: dict[str, Any]
+    # Decoded W3C VP payload from the VCDM 1.1 "vp" claim.
     payload: dict[str, Any]
     # Holder DID from payload["holder"], canonicalized before did:webs resolution.
     holder: str | None
@@ -85,10 +90,18 @@ class VerificationEngine:
         try:
             decoded = decode_jwt(token)
         except ValueError as exc:
-            return PreparedVcToken(token=token, header={}, payload={}, issuer=None, status_url=None, errors=[str(exc)])
+            return PreparedVcToken(
+                token=token,
+                header={},
+                jwt_payload={},
+                payload={},
+                issuer=None,
+                status_url=None,
+                errors=[str(exc)],
+            )
 
         header = dict(decoded.header)
-        payload = decoded.payload
+        jwt_payload = decoded.payload
         errors: list[str] = []
 
         if header.get("alg") != EDDSA:
@@ -99,6 +112,13 @@ class VerificationEngine:
         kid = header.get("kid")
         if isinstance(kid, str):
             header["kid"] = canonicalize_did_url(kid)
+
+        payload = jwt_payload.get("vc")
+        if not isinstance(payload, dict):
+            errors.append("missing vc claim")
+            payload = {}
+        else:
+            errors.extend(self._validate_vc_jwt_claims(jwt_payload, payload))
 
         issuer = payload.get("issuer")
         if not issuer:
@@ -112,6 +132,7 @@ class VerificationEngine:
         return PreparedVcToken(
             token=token,
             header=header,
+            jwt_payload=jwt_payload,
             payload=payload,
             issuer=issuer,
             status_url=status_url,
@@ -123,18 +144,27 @@ class VerificationEngine:
         try:
             decoded = decode_jwt(token)
         except ValueError as exc:
-            return PreparedVpToken(token=token, header={}, payload={}, holder=None, vc_tokens=[], errors=[str(exc)])
+            return PreparedVpToken(token=token, header={}, jwt_payload={}, payload={}, holder=None, vc_tokens=[], errors=[str(exc)])
 
         header = dict(decoded.header)
-        payload = decoded.payload
+        jwt_payload = decoded.payload
         errors: list[str] = []
 
+        if header.get("alg") != EDDSA:
+            errors.append(f"unsupported alg: {header.get('alg')}")
         if header.get("typ") != VP_JWT_TYP:
             errors.append(f"unsupported typ: {header.get('typ')}")
 
         kid = header.get("kid")
         if isinstance(kid, str):
             header["kid"] = canonicalize_did_url(kid)
+
+        payload = jwt_payload.get("vp")
+        if not isinstance(payload, dict):
+            errors.append("missing vp claim")
+            payload = {}
+        else:
+            errors.extend(self._validate_vp_jwt_claims(jwt_payload, payload))
 
         holder = payload.get("holder")
         if not holder:
@@ -148,6 +178,7 @@ class VerificationEngine:
         return PreparedVpToken(
             token=token,
             header=header,
+            jwt_payload=jwt_payload,
             payload=payload,
             holder=canonicalize_did_webs(holder) if isinstance(holder, str) else holder,
             vc_tokens=list(vc_tokens),
@@ -169,6 +200,7 @@ class VerificationEngine:
             label="VC-JWT",
             errors=errors,
         )
+        proof_ok = self._verify_proof(prepared.payload, method, errors)
         status_ok = self._check_status_doc(status_doc, errors)
 
         return VerificationResult(
@@ -179,6 +211,7 @@ class VerificationEngine:
             checks={
                 "issuerResolved": bool(prepared.issuer and method is not None),
                 "signatureValid": signature_ok,
+                "dataIntegrityProofValid": proof_ok,
                 "statusActive": status_ok,
                 "credentialTypes": prepared.payload.get("type", []),
             },
@@ -229,6 +262,8 @@ class VerificationEngine:
 
         subject = payload.get("credentialSubject", {})
         isomer = payload.get("isomer", {})
+        legal_entity_credential = subject.get("legalEntityCredential", {})
+        legal_entity_edge = acdc.get("e", {}).get("le", {})
         expected_type = expected_credential_type(acdc)
         expected_subject_aid = subject_aid(acdc.get("a", {}))
 
@@ -237,10 +272,14 @@ class VerificationEngine:
             "sourceSchemaSaidMatches": isomer.get("sourceSchemaSaid") == acdc.get("s"),
             "sourceIssuerAidMatches": isomer.get("sourceIssuerAid") == acdc.get("i"),
             "sourceRegistryMatches": isomer.get("sourceRegistry") == acdc.get("ri"),
+            "sourceLegalEntityCredentialSaidMatches": isomer.get("sourceLegalEntityCredentialSaid") == legal_entity_edge.get("n"),
+            "sourceLegalEntityCredentialSchemaMatches": isomer.get("sourceLegalEntityCredentialSchema") == legal_entity_edge.get("s"),
             "subjectDidMatches": subject.get("id") == acdc.get("a", {}).get("DID"),
-            "subjectAidMatches": subject.get("aid") == expected_subject_aid,
+            "subjectAidMatches": subject.get("AID") == expected_subject_aid,
             "legalNameMatches": subject.get("legalName") == acdc.get("a", {}).get("LegalName"),
-            "addressMatches": subject.get("headquartersAddress") == acdc.get("a", {}).get("HeadquartersAddress"),
+            "addressMatches": subject.get("address") == parse_address(acdc.get("a", {}).get("HeadquartersAddress", "")),
+            "legalEntityCredentialSaidMatches": legal_entity_credential.get("id") == f"urn:said:{legal_entity_edge.get('n', '')}",
+            "legalEntityCredentialSchemaMatches": legal_entity_credential.get("schema") == legal_entity_edge.get("s"),
             "typeMatches": expected_type in payload.get("type", []),
         }
 
@@ -255,6 +294,42 @@ class VerificationEngine:
             payload=payload,
             checks=checks,
         )
+
+    @staticmethod
+    def _validate_vc_jwt_claims(jwt_payload: dict[str, Any], vc: dict[str, Any]) -> list[str]:
+        """Validate VCDM 1.1 registered JWT claims against the embedded VC."""
+        errors: list[str] = []
+        subject = vc.get("credentialSubject", {})
+        expected_claims = {
+            "iss": vc.get("issuer"),
+            "sub": subject.get("id") if isinstance(subject, dict) else None,
+            "jti": vc.get("id"),
+        }
+        for claim, expected in expected_claims.items():
+            if jwt_payload.get(claim) != expected:
+                errors.append(f"JWT claim {claim} does not match embedded VC")
+
+        try:
+            issuance_numeric_date = unix_timestamp(vc["issuanceDate"])
+        except (KeyError, TypeError, ValueError):
+            errors.append("embedded VC has invalid issuanceDate")
+        else:
+            if jwt_payload.get("nbf") != issuance_numeric_date:
+                errors.append("JWT claim nbf does not match embedded VC issuanceDate")
+        return errors
+
+    @staticmethod
+    def _validate_vp_jwt_claims(jwt_payload: dict[str, Any], vp: dict[str, Any]) -> list[str]:
+        """Validate VCDM 1.1 registered JWT claims against the embedded VP."""
+        errors: list[str] = []
+        expected_claims = {
+            "iss": vp.get("holder"),
+            "jti": vp.get("id"),
+        }
+        for claim, expected in expected_claims.items():
+            if jwt_payload.get(claim) != expected:
+                errors.append(f"JWT claim {claim} does not match embedded VP")
+        return errors
 
     @staticmethod
     def _verify_signature(
@@ -278,6 +353,24 @@ class VerificationEngine:
         if not signature_ok:
             errors.append(f"{label} signature verification failed")
         return signature_ok
+
+    @staticmethod
+    def _verify_proof(payload: dict[str, Any], method: dict[str, Any] | None, errors: list[str]) -> bool:
+        """Verify the embedded VC Data Integrity proof and append failures."""
+        if method is None:
+            errors.append("unable to resolve verification method for VC Data Integrity proof")
+            return False
+        try:
+            proof_ok = verify_proof(payload, method)
+        except JsonLdCanonicalizationError as exc:
+            errors.append(str(exc))
+            return False
+        except ValueError as exc:
+            errors.append(str(exc))
+            return False
+        if not proof_ok:
+            errors.append("VC Data Integrity proof verification failed")
+        return proof_ok
 
     @staticmethod
     def _check_status_doc(status_doc: dict[str, Any] | None, errors: list[str]) -> bool:

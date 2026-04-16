@@ -1,13 +1,16 @@
 # isomer
 
-`isomer` is the Python-first integration repo for projecting KERI ACDC
-VRD credentials into W3C VC-JWT form and verifying them through `did:webs`.
+`isomer` is the Python-first integration repo for projecting KERI KEL, TEL,
+and ACDC VRD state into VCDM 1.1 JSON-LD credentials, enveloping them as
+VC-JWT/VP-JWT artifacts, and verifying them through `did:webs`.
 
 Current repo state:
 
 - canonical isomer profile for VRD Auth and VRD
 - live KERI-habitat-backed VC-JWT and VP-JWT issuance
+- embedded KERI-backed Data Integrity proofs on projected VCs
 - `did:webs`-backed VC-JWT and VP-JWT verification
+- VCDM 1.1 JSON-LD context and JSON Schema resources
 - isomer-specific ACDC/W3C pair verification
 - projected credential status service for revocation checks
 - fixture contract for JSON ACDCs and export-equivalent CESR streams
@@ -25,6 +28,8 @@ isomer profile, not yet a full ecosystem-grade verifier.
 - [`fixtures`](fixtures): stable contract fixtures
 - [`docs/isomer-profile.md`](docs/isomer-profile.md): current profile note
 - [`docs/w3c-vc-libs-options.md`](docs/w3c-vc-libs-options.md): external verifier library options
+- [`interop`](interop): OpenID4VCI/OpenID4VP shape examples for the current
+  `jwt_vc_json-ld` profile
 - [`plans`](plans): execution and architecture plans
 
 The `packages/`, `apps/`, and `scripts/demo/` directories are still repo-shape
@@ -111,6 +116,12 @@ demo signers. All verify commands talk to the long-running verifier operation
 service rather than invoking verifier logic directly in the CLI process. They
 wait for completion and use the process exit code for pass/fail instead of
 printing verifier operation documents.
+
+VC-JWTs use the VCDM 1.1 `vc` claim with mirrored `iss`, `sub`, `jti`, `iat`,
+and `nbf` claims. VP-JWTs use the VCDM 1.1 `vp` claim with holder signing.
+The `vc+jwt` and `vp+jwt` strings in CLI output are result families, not the
+JOSE `typ` header; the JOSE header uses `typ: "JWT"` for VCDM 1.1
+compatibility.
 
 For an end-to-end CLI walkthrough, including status projection, VC issuance,
 and verifier checks, see

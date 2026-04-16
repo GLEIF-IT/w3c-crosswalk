@@ -5,8 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 
 from vc_isomer.common import canonicalize_did_url, canonicalize_did_webs, load_json_file
+from vc_isomer.data_integrity import JsonLdCanonicalizationError
 from vc_isomer.didwebs import DidWebsClient
-from vc_isomer.jwt import issue_vc_jwt, issue_vp_jwt
+from vc_isomer.jwt import decode_jwt, encode_jwt, issue_vc_jwt, issue_vp_jwt
 from vc_isomer.profile import transpose_acdc_to_w3c_vc
 from vc_isomer.signing import HabSigner
 from vc_isomer.verifier import VerificationEngine
@@ -29,7 +30,6 @@ def _issue_projected_fixture(acdc: dict, *, issuer_did: str, status_base_url: st
     vc = transpose_acdc_to_w3c_vc(
         acdc,
         issuer_did=canonical_issuer,
-        verification_method=verification_method,
         status_base_url=status_base_url,
     )
     return issue_vc_jwt(vc, signer=signer, verification_method=verification_method)
@@ -72,6 +72,41 @@ def test_engine_accepts_active_status_when_signature_inputs_are_present():
         assert result.checks["signatureValid"] is True
 
 
+def test_engine_reports_canonicalization_failure_as_verification_error(monkeypatch):
+    """Turn proof canonicalization failures into a normal negative VC result."""
+    acdc = load_json_file(FIXTURES / "vrd-acdc.json")
+    engine = VerificationEngine()
+
+    with open_test_hab("issuer-hab-canon-fail", b"1029384756abcdef") as (_hby, hab):
+        signer = HabSigner(hab)
+        issuer_did = "did:webs:example.com:dws:ELEGALAID000000000000000000000000000000000000000001"
+        did_document = {
+            "id": issuer_did,
+            "verificationMethod": [{
+                "id": f"#{signer.kid}",
+                "type": "JsonWebKey",
+                "controller": issuer_did,
+                "publicKeyJwk": signer.public_jwk,
+            }],
+        }
+        token, _vc = _issue_projected_fixture(acdc, issuer_did=issuer_did, status_base_url="http://status.example", signer=signer)
+        prepared = engine.prepare_vc_token(token)
+
+        def fail_verify_proof(_payload, _method):
+            raise JsonLdCanonicalizationError("proof configuration", "boom")
+
+        monkeypatch.setattr("vc_isomer.verifier.verify_proof", fail_verify_proof)
+        result = engine.evaluate_prepared_vc(
+            prepared,
+            method=_method_for(did_document, prepared.header["kid"]),
+            status_doc=None,
+        )
+
+        assert result.ok is False
+        assert result.checks["dataIntegrityProofValid"] is False
+        assert "JSON-LD canonicalization failed for proof configuration: boom" in result.errors
+
+
 def test_engine_rejects_revoked_status_and_isomer_pair_mismatch():
     """Reject revoked credentials and mismatched ACDC/W3C projections."""
     acdc = load_json_file(FIXTURES / "vrd-auth-acdc.json")
@@ -112,6 +147,25 @@ def test_engine_rejects_revoked_status_and_isomer_pair_mismatch():
         assert any("revoked" in error for error in result.errors)
         assert pair_result.ok is False
         assert any("legalNameMatches" in error for error in pair_result.errors)
+
+
+def test_engine_rejects_vc_jwt_claim_mismatch_even_when_resigned():
+    """Reject VCDM 1.1 JWT claims that drift from the embedded VC."""
+    acdc = load_json_file(FIXTURES / "vrd-acdc.json")
+    engine = VerificationEngine()
+
+    with open_test_hab("issuer-hab-claim-mismatch", b"AAAABBBBCCCCDDDD") as (_hby, hab):
+        signer = HabSigner(hab)
+        issuer_did = "did:webs:example.com:dws:ELEGALAID000000000000000000000000000000000000000001"
+        token, _vc = _issue_projected_fixture(acdc, issuer_did=issuer_did, status_base_url="http://status.example", signer=signer)
+        decoded = decode_jwt(token)
+        tampered_payload = dict(decoded.payload)
+        tampered_payload["iss"] = "did:webs:example.com:dws:Etampered"
+        resigned = encode_jwt(tampered_payload, typ=decoded.header["typ"], kid=decoded.header["kid"], signer=signer)
+
+        prepared = engine.prepare_vc_token(resigned)
+
+        assert prepared.errors == ["JWT claim iss does not match embedded VC"]
 
 
 def test_engine_accepts_signed_vp_with_embedded_vc():

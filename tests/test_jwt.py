@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from vc_isomer.common import canonicalize_did_url, canonicalize_did_webs, load_json_file
+from vc_isomer.data_integrity import JsonLdCanonicalizationError
 from vc_isomer.jwt import decode_jwt, encode_jwt, issue_vc_jwt, verify_jwt_signature
 from vc_isomer.profile import transpose_acdc_to_w3c_vc
 from vc_isomer.signing import HabSigner
@@ -36,7 +39,6 @@ def test_issue_vc_jwt_canonicalizes_did_webs_issuer_and_kid():
         vc = transpose_acdc_to_w3c_vc(
             acdc,
             issuer_did=issuer_did,
-            verification_method=verification_method,
             status_base_url="http://127.0.0.1:8787",
         )
         token, vc = issue_vc_jwt(
@@ -46,6 +48,40 @@ def test_issue_vc_jwt_canonicalizes_did_webs_issuer_and_kid():
         )
 
         decoded = decode_jwt(token)
+        assert decoded.header["typ"] == "JWT"
         assert vc["issuer"] == "did:webs:127.0.0.1%3A7676:dws:ELEGALAID000000000000000000000000000000000000000001"
-        assert decoded.payload["issuer"] == vc["issuer"]
+        assert decoded.payload["iss"] == vc["issuer"]
+        assert decoded.payload["vc"]["issuer"] == vc["issuer"]
+        assert decoded.payload["jti"] == vc["id"]
+        assert decoded.payload["sub"] == vc["credentialSubject"]["id"]
+        assert decoded.payload["nbf"] == decoded.payload["iat"]
+        assert vc["proof"]["type"] == "DataIntegrityProof"
+        assert vc["proof"]["cryptosuite"] == "eddsa-rdfc-2022"
         assert decoded.header["kid"].startswith(f"{vc['issuer']}#")
+
+
+def test_issue_vc_jwt_fails_hard_on_canonicalization_error(monkeypatch):
+    """Abort issuance when JSON-LD canonicalization cannot complete."""
+    acdc = load_json_file(FIXTURES / "vrd-acdc.json")
+
+    with open_test_hab("jwt-test-canonicalization", b"99990000aaaabbbb") as (_hby, hab):
+        signer = HabSigner(hab)
+        issuer_did = canonicalize_did_webs("did:webs:example.com:dws:ELEGALAID000000000000000000000000000000000000000001")
+        verification_method = canonicalize_did_url(f"{issuer_did}#{signer.kid}")
+        vc = transpose_acdc_to_w3c_vc(
+            acdc,
+            issuer_did=issuer_did,
+            status_base_url="http://status.example",
+        )
+
+        def fail_canonicalization(_data):
+            raise JsonLdCanonicalizationError("document", "boom")
+
+        monkeypatch.setattr("vc_isomer.data_integrity.canonicalize_jsonld", fail_canonicalization)
+
+        with pytest.raises(JsonLdCanonicalizationError, match="unsecured document: boom"):
+            issue_vc_jwt(
+                vc,
+                signer=signer,
+                verification_method=verification_method,
+            )

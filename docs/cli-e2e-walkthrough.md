@@ -505,6 +505,42 @@ holder=did:webs:...
 embeddedCredentials=1
 ```
 
+## 8. External W3C Verifier Acceptance
+
+The Python verifier remains authoritative for TEL state and Isomer ACDC/W3C
+pair equivalence. The external sidecars prove the same VC-JWT and VP-JWT are
+understandable by non-Python W3C verifier stacks.
+
+Prepare the Node sidecar, which consumes the local sibling `../did-jwt-vc`
+clone:
+
+```bash
+make external-node-sync
+make external-node-check
+```
+
+Prepare the Go sidecar, which consumes the local sibling `../vc-go` clone:
+
+```bash
+make external-go-check
+```
+
+Run the live e2e test through both external sidecars:
+
+```bash
+ISOMER_EXTERNAL_VERIFIERS=node,go \
+./.venv/bin/python -m pytest \
+  tests/integration/test_single_sig_vrd_isomer.py \
+  -q --tb=short
+```
+
+You can run only one sidecar while iterating:
+
+```bash
+ISOMER_EXTERNAL_VERIFIERS=node ./.venv/bin/python -m pytest tests/integration/test_single_sig_vrd_isomer.py -q --tb=short
+ISOMER_EXTERNAL_VERIFIERS=go ./.venv/bin/python -m pytest tests/integration/test_single_sig_vrd_isomer.py -q --tb=short
+```
+
 ## What This Walkthrough Proves
 
 - the nested `isomer` CLI is wired correctly
@@ -513,6 +549,8 @@ embeddedCredentials=1
 - verify commands expose a simple pass/fail interface
 - verifier operations remain internal service machinery
 - verification consults both `did:webs` resolution and status projection
+- optional external sidecars can verify the same live VC-JWT and VP-JWT without
+  importing Python Isomer verifier code
 
 ## What It Does Not Prove
 

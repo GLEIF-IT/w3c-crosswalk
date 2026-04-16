@@ -5,11 +5,14 @@ behavior, schema identification, and default service expectations used by both
 runtime code and tests.
 """
 
-# W3C envelope constants used when issuing or verifying VC-JWT and VP-JWT
-# artifacts.
-VC_CONTEXT = "https://www.w3.org/ns/credentials/v2"
-VC_JWT_TYP = "vc+jwt"
-VP_JWT_TYP = "vp+jwt"
+# W3C envelope constants used when issuing or verifying VCDM 1.1 VC-JWT and
+# VP-JWT artifacts.
+VC_CONTEXT = "https://www.w3.org/2018/credentials/v1"
+DATA_INTEGRITY_CONTEXT = "https://w3id.org/security/data-integrity/v2"
+ISOMER_CONTEXT = "https://www.gleif.org/contexts/isomer-v1.jsonld"
+ISOMER_VRD_SCHEMA_ID = "https://www.gleif.org/schemas/isomer/v1/vrd-credential.json"
+VC_JWT_TYP = "JWT"
+VP_JWT_TYP = "JWT"
 EDDSA = "EdDSA"
 
 # Isomer profile identity used in generated W3C credential metadata.
@@ -32,7 +35,7 @@ SUPPORTED_SCHEMA_TYPES = {
 }
 
 # Default status and resolver configuration used by the local demo stack.
-STATUS_TYPE = "KERICredentialRegistryStatus"
+STATUS_TYPE = "KERICredentialStatus"
 RESOLVER_DEFAULT = "http://127.0.0.1:7678/1.0/identifiers"
 
 # Internal-first HTTP route defaults for the local isomer services.

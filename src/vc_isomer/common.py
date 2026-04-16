@@ -55,12 +55,20 @@ def canonicalize_did_webs(did: str) -> str:
     if "%3a" in did.lower():
         return did
 
+    # Only canonicalize the DID body. Any DID URL query string is preserved as-is
+    # and reattached after we repair the host/port encoding.
     body, query_separator, query = did.partition("?")
     segments = body[len("did:webs:") :].split(":")
+    # The malformed shape we repair here is specifically:
+    #   did:webs:<host>:<port>:<rest>
+    #          segments[1] ↑
+    # If the second segment is not a decimal port, leave the DID untouched.
     if len(segments) < 3 or not segments[1].isdigit():
         return did
 
     domain, port = segments[0], segments[1]
+    # Everything after host and port remains in the original colon-delimited
+    # structure; only the host/port separator itself becomes %3A.
     remainder = ":".join(segments[2:])
     encoded = f"did:webs:{domain}%3A{port}:{remainder}"
     return f"{encoded}{query_separator}{query}" if query_separator else encoded

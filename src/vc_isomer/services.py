@@ -92,7 +92,12 @@ def issue_vc_artifact(
     status_base_url: str,
     status_store: JsonFileStatusStore | None = None,
 ) -> IssueArtifact:
-    """Issue a VC-JWT from accepted local KERI credential/TEL state."""
+    """Issue a VC-JWT artifact from accepted local KERI credential/TEL state.
+
+    Returns an :class:`IssueArtifact` where `token` is the compact VC-JWT string
+    and `document` is the secured W3C VC JSON document embedded in its `vc`
+    claim.
+    """
     projection = projector.project_credential(said)
     if projection.state.revoked:
         raise ProjectorError(f"credential {said} is revoked in accepted TEL state")
@@ -102,7 +107,6 @@ def issue_vc_artifact(
     document = projector.project_vc(
         said=said,
         issuer_did=canonical_issuer,
-        verification_method=verification_method,
         status_base_url=status_base_url,
     )
     token, document = issue_vc_jwt(
@@ -117,7 +121,7 @@ def issue_vc_artifact(
         kind="vc+jwt",
         token=token,
         document=document,
-        signer={"kid": signer.kid, "publicKeyJwk": signer.public_jwk},
+        signer={"kid": signer.kid, "publicKeyJwk": signer.public_jwk, "publicKeyMultibase": signer.public_key_multibase},
     )
 
 
@@ -129,14 +133,23 @@ def issue_vp_artifact(
     audience: str | None = None,
     nonce: str | None = None,
 ) -> IssueArtifact:
-    """Issue a VP-JWT that wraps one or more VC-JWT strings."""
+    """Issue a VP-JWT artifact that wraps one or more compact VC-JWT strings.
+
+    Args:
+        vc_tokens: Compact VC-JWT strings that become
+            `vp["verifiableCredential"]` in the embedded VP document.
+
+    Returns:
+        :class:`IssueArtifact` where `token` is the compact VP-JWT string and
+        `document` is the embedded VP JSON object carried in the JWT `vp` claim.
+    """
     token, document = issue_vp_jwt(vc_tokens, holder_did=holder_did, signer=signer, audience=audience, nonce=nonce)
     return IssueArtifact(
         ok=True,
         kind="vp+jwt",
         token=token,
         document=document,
-        signer={"kid": signer.kid, "publicKeyJwk": signer.public_jwk},
+        signer={"kid": signer.kid, "publicKeyJwk": signer.public_jwk, "publicKeyMultibase": signer.public_key_multibase},
     )
 
 

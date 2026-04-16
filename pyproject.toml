@@ -13,6 +13,7 @@ dependencies = [
     "falcon>=4.0.2",
     "hio==0.6.14",
     "keri>=1.2.13,<2",
+    "PyLD>=2.0.4,<3",
 ]
 
 [dependency-groups]
@@ -20,6 +21,7 @@ dev = [
     "pytest>=8.4,<9",
 ]
 test = [
+    "jsonschema>=4.0,<5",
     "mockito>=1.5,<2",
     "pytest>=8.4,<9",
 ]

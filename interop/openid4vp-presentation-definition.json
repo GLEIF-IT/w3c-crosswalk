@@ -1,0 +1,49 @@
+{
+  "id": "isomer-vrd-presentation",
+  "name": "Isomer VRD Presentation",
+  "purpose": "Request an Isomer-projected VCDM 1.1 VC-JWT for VRD verification.",
+  "input_descriptors": [
+    {
+      "id": "isomer-vrd-vc-jwt",
+      "name": "Isomer VRD VC-JWT",
+      "format": {
+        "jwt_vc_json-ld": {
+          "alg": [
+            "EdDSA"
+          ]
+        }
+      },
+      "constraints": {
+        "fields": [
+          {
+            "path": [
+              "$.vc.type"
+            ],
+            "filter": {
+              "type": "array",
+              "contains": {
+                "const": "KERIIsomerCredential"
+              }
+            }
+          },
+          {
+            "path": [
+              "$.vc.credentialSchema.id"
+            ],
+            "filter": {
+              "const": "https://www.gleif.org/schemas/isomer/v1/vrd-credential.json"
+            }
+          },
+          {
+            "path": [
+              "$.vc.credentialStatus.type"
+            ],
+            "filter": {
+              "const": "KERICredentialStatus"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

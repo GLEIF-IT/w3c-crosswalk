@@ -18,7 +18,7 @@ import tempfile
 from typing import Any, Protocol
 
 from .common import canonicalize_did_webs, utc_timestamp
-from .constants import STATUS_ROUTE_PREFIX
+from .constants import STATUS_ROUTE_PREFIX, STATUS_TYPE
 from .runtime_http import JsonResponse
 
 
@@ -73,9 +73,10 @@ class CredentialStatusRecord:
         """Render the record as a W3C-friendly status resource document."""
         return {
             "id": status_url(base_url, self.cred_said),
-            "type": "KERICredentialRegistryStatus",
+            "type": STATUS_TYPE,
             "credSaid": self.cred_said,
             "registry": self.registry,
+            "statusRegistryId": self.registry,
             "schemaSaid": self.schema_said,
             "issuerAid": self.issuer_aid,
             "issuer": self.issuer_did,

@@ -7,7 +7,7 @@ from typing import Any
 
 from keri.core import coring
 
-from .common import canonicalize_did_url, canonicalize_did_webs
+from .common import canonicalize_did_webs
 from .profile import transpose_acdc_to_w3c_vc
 from .status import CredentialStatusRecord
 
@@ -113,7 +113,7 @@ class ACDCProjector:
         """Project one credential into a W3C-facing status resource."""
         return self.project_status_record(said=said, issuer_did=issuer_did).as_status_resource(base_url)
 
-    def project_vc(self, *, said: str, issuer_did: str, verification_method: str, status_base_url: str) -> dict[str, Any]:
+    def project_vc(self, *, said: str, issuer_did: str, status_base_url: str) -> dict[str, Any]:
         """Project one active source credential into an unsigned W3C VC document."""
         projection = self.project_credential(said)
         if projection.state.revoked:
@@ -122,7 +122,6 @@ class ACDCProjector:
         return transpose_acdc_to_w3c_vc(
             projection.acdc,
             issuer_did=canonical_issuer,
-            verification_method=canonicalize_did_url(verification_method),
             status_base_url=status_base_url,
         )
 
