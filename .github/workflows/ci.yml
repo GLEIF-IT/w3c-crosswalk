@@ -69,6 +69,25 @@ jobs:
           corepack enable
           corepack prepare yarn@1.22.22 --activate
 
+      - name: Restore did-jwt-vc workspace cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            did-jwt-vc/node_modules
+            did-jwt-vc/lib
+            did-jwt-vc/dist
+          key: ${{ runner.os }}-did-jwt-vc-workspace-${{ hashFiles('did-jwt-vc/package.json', 'did-jwt-vc/yarn.lock', 'did-jwt-vc/src/**/*.ts') }}
+          restore-keys: |
+            ${{ runner.os }}-did-jwt-vc-workspace-
+
+      - name: Restore isomer-node workspace cache
+        uses: actions/cache@v4
+        with:
+          path: w3c-crosswalk/apps/isomer-node/node_modules
+          key: ${{ runner.os }}-isomer-node-workspace-${{ hashFiles('w3c-crosswalk/apps/isomer-node/package.json', 'w3c-crosswalk/apps/isomer-node/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-isomer-node-workspace-
+
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
