@@ -4,6 +4,12 @@ Minimal Go verifier sidecar for external W3C acceptance.
 
 This app verifies the same VC-JWT and VP-JWT artifacts as `apps/isomer-node`,
 but uses the local sibling `../vc-go` clone as the independent Go W3C stack.
+The Go sidecar depends on:
+
+- `vc-go` for VC/VP parsing and Data Integrity verification
+- `did-go` for DID document parsing
+- the HTTP `did-webs-resolver` service for latest-key DID resolution
+
 The module uses:
 
 ```go
@@ -38,6 +44,6 @@ ACDC/W3C equivalence remain Python Isomer verifier responsibilities.
 
 VP-JWT verification is intentionally split: the sidecar validates the VP JOSE
 signature and JWT claims directly, parses the VP with `vc-go/verifiable`, and
-then verifies each nested VC-JWT through the same VC path. VP JSON-LD checks are
-disabled in this pass because the current local `vc-go` stack is not the source
-of truth for Isomer's VP Data Integrity model.
+then verifies each nested VC-JWT through the same VC path. VP JSON-LD checks
+remain disabled in this pass because the current local `vc-go` stack is not yet
+the source of truth for Isomer's VP Data Integrity model.

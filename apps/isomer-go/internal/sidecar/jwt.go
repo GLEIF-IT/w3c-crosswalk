@@ -9,6 +9,7 @@ import (
 	"strings"
 )
 
+// jwtParts stores the structurally decoded pieces of one compact JWT.
 type jwtParts struct {
 	Header       map[string]any
 	Payload      map[string]any
@@ -16,6 +17,8 @@ type jwtParts struct {
 	Signature    []byte
 }
 
+// decodeJWT parses one compact JWT into its decoded header, payload, signing
+// input, and detached signature bytes.
 func decodeJWT(token string) (*jwtParts, error) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
@@ -52,14 +55,16 @@ func decodeJWT(token string) (*jwtParts, error) {
 	}, nil
 }
 
+// verifyJWTSignature checks an EdDSA compact JWT signature against one resolved
+// Ed25519 JWK.
 func verifyJWTSignature(parts *jwtParts, jwk map[string]any) error {
 	if parts.Header["alg"] != "EdDSA" {
 		return fmt.Errorf("unsupported alg: %v", parts.Header["alg"])
 	}
-	x, ok := jwk["x"].(string)
-	if !ok || x == "" {
+	if !isEd25519JWK(jwk) {
 		return errors.New("Ed25519 JWK is missing x")
 	}
+	x := jwk["x"].(string)
 	key, err := base64.RawURLEncoding.DecodeString(x)
 	if err != nil {
 		return fmt.Errorf("decode Ed25519 JWK x: %w", err)
@@ -70,6 +75,7 @@ func verifyJWTSignature(parts *jwtParts, jwk map[string]any) error {
 	return nil
 }
 
+// asMap narrows one generic decoded JSON value to a plain object.
 func asMap(value any) map[string]any {
 	if typed, ok := value.(map[string]any); ok {
 		return typed
@@ -77,9 +83,17 @@ func asMap(value any) map[string]any {
 	return nil
 }
 
+// asString returns the string form of a decoded JSON value when available.
 func asString(value any) string {
 	if typed, ok := value.(string); ok {
 		return typed
 	}
 	return ""
+}
+
+// isEd25519JWK checks whether the sidecar has enough JWK material to perform
+// local Ed25519 signature verification.
+func isEd25519JWK(jwk map[string]any) bool {
+	x := asString(jwk["x"])
+	return x != ""
 }
