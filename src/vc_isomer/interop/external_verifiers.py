@@ -163,11 +163,14 @@ def ensure_prerequisites(kind: str, repo_root: Path) -> None:
     """Fail early with a useful setup hint when a sidecar is not ready."""
     if kind == "node":
         sibling = repo_root.parent / "did-jwt-vc"
+        shared_resolver = repo_root / "packages" / "webs-did-resolver"
         node_modules = repo_root / "apps" / "isomer-node" / "node_modules"
         if not sibling.exists():
             raise RuntimeError(f"missing sibling did-jwt-vc clone at {sibling}")
         if not (sibling / "lib" / "index.module.js").exists():
             raise RuntimeError("sibling did-jwt-vc is not built; run `make external-node-sync`")
+        if not (shared_resolver / "dist" / "index.js").exists():
+            raise RuntimeError("packages/webs-did-resolver is not built; run `make external-node-sync`")
         if not node_modules.exists():
             raise RuntimeError("apps/isomer-node dependencies are missing; run `make external-node-sync`")
         return

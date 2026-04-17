@@ -9,6 +9,7 @@ PYTHON := ./.venv/bin/python
 UV := uv
 TWINE := uvx --from twine twine
 DID_JWT_VC_ROOT := ../did-jwt-vc
+WEBS_DID_RESOLVER_ROOT := packages/webs-did-resolver
 VC_GO_ROOT := ../vc-go
 GO_CACHE ?= /tmp/isomer-go-cache
 
@@ -94,6 +95,8 @@ external-node-sync:
 	@test -f "$(DID_JWT_VC_ROOT)/package.json" || { echo 'missing sibling did-jwt-vc clone at $(DID_JWT_VC_ROOT)'; exit 1; }
 	yarn --cwd "$(DID_JWT_VC_ROOT)" install --frozen-lockfile
 	yarn --cwd "$(DID_JWT_VC_ROOT)" build
+	npm --prefix "$(WEBS_DID_RESOLVER_ROOT)" install
+	npm --prefix "$(WEBS_DID_RESOLVER_ROOT)" run build
 	npm --prefix apps/isomer-node install
 
 external-node-check:

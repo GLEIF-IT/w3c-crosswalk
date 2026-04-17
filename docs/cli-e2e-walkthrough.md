@@ -512,7 +512,7 @@ pair equivalence. The external sidecars prove the same VC-JWT and VP-JWT are
 understandable by non-Python W3C verifier stacks.
 
 Prepare the Node sidecar, which consumes the local sibling `../did-jwt-vc`
-clone:
+clone plus the in-repo `packages/webs-did-resolver` package:
 
 ```bash
 make external-node-sync
