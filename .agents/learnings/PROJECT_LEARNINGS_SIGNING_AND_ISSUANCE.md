@@ -20,6 +20,27 @@ boundaries, and wallet/KLI signer integration notes.
 
 ## Decision Log
 
+### 2026-04-17 - `did:webs` Resolution Moved Into A Shared JS Package
+
+- Changed: Added `packages/webs-did-resolver` as a standalone TypeScript
+  `did:webs` method package with `getResolver(...)`, DID canonicalization,
+  resolver response parsing, verification-method lookup, explicit Multikey to
+  JWK derivation helpers, and the narrow Ed25519 method/relationship
+  normalization still needed by common JS JWT consumers; migrated
+  `apps/isomer-node` to consume it through `new Resolver(getResolver(...))` and
+  removed the app-local resolver class.
+- Why: The sidecar refactor clarified every other verification seam, and the
+  remaining non-idiomatic piece was app-local `did:webs` resolution. Moving it
+  into a method package makes the JS DID integration story standard and fixes
+  the old cache-by-bare-DID shape that would be wrong for query-bearing DID
+  URLs such as `?versionId=...`.
+- Verified: Package unit and integration tests plus the existing
+  `apps/isomer-node` checks/tests after migration.
+- Touched/Risks: `packages/webs-did-resolver`, `apps/isomer-node`, and
+  `adrs/004-create-webs-did-resolver-package.md`. Keep the package
+  compatibility shaping narrow and method-focused; do not pull status, proof,
+  JSON-LD, or Effection concerns back into it.
+
 ### 2026-04-17 - isomer-node Verifier Flow Refactored for Maintainability
 
 - Changed: Split the Node sidecar into a command-level `serve` operation, a

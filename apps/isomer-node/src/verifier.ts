@@ -12,10 +12,12 @@
  * This file owns W3C-side acceptance only. It does not attempt Python Isomer's
  * TEL-aware ACDC/W3C pair semantics.
  */
+import type { Resolvable } from "did-resolver";
 import type { Operation } from "effection";
+import { Resolver } from "did-resolver";
+import { findVerificationMethod, getResolver } from "webs-did-resolver";
 import { verifyDataIntegrityProof } from "./data-integrity.js";
 import { verifyCredentialJwtOp, verifyPresentationJwtOp } from "./did-jwt-vc.js";
-import { DidWebsResolver, findVerificationMethod } from "./did-resolver.js";
 import { promiseToOperation } from "./effection.js";
 import { asRecord, asString, decodeJwt, isRecord } from "./jwt.js";
 import { LocalContextLoader } from "./local-contexts.js";
@@ -37,7 +39,7 @@ import type {
  * instead of reaching through a nested dependency bag.
  */
 export interface VerifierRuntime {
-  resolver: DidWebsResolver;
+  resolver: Resolvable;
   contexts: LocalContextLoader;
   verifyCredentialJwtOp: (token: string) => Operation<void>;
   verifyPresentationJwtOp: (
@@ -58,7 +60,7 @@ export function createVerifierRuntime(
   config: Pick<SidecarConfig, "resolverUrl" | "resourceRoot">,
   overrides: Partial<VerifierRuntime> = {}
 ): VerifierRuntime {
-  const resolver = overrides.resolver ?? new DidWebsResolver(config.resolverUrl);
+  const resolver = overrides.resolver ?? new Resolver(getResolver({ resolverUrl: config.resolverUrl }));
   const contexts = overrides.contexts ?? new LocalContextLoader(config.resourceRoot);
 
   return {
@@ -298,7 +300,7 @@ function requireNestedCredentialList(vp: Record<string, unknown>): unknown[] {
  * `did:webs` state instead of trusting proof material embedded in the VC alone.
  */
 function* resolveProofVerificationMethodOp(
-  resolver: DidWebsResolver,
+  resolver: Resolvable,
   decoded: ReturnType<typeof decodeJwt>,
   vc: Record<string, unknown>
 ): Operation<Record<string, unknown>> {
@@ -307,8 +309,11 @@ function* resolveProofVerificationMethodOp(
   if (!issuer || !kid) {
     throw new Error("VC-JWT requires issuer and kid");
   }
-  const didResolution = yield* resolver.resolveOp(issuer);
+  const didResolution = yield* promiseToOperation(() => resolver.resolve(issuer));
   const didDocument = didResolution.didDocument as unknown as Record<string, unknown>;
+  if (!didDocument) {
+    throw new Error(`did:webs resolution failed for ${issuer}`);
+  }
   return findVerificationMethod(didDocument, kid);
 }
 

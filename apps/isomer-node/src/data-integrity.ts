@@ -8,9 +8,9 @@
  */
 import { createHash, createPublicKey, verify as verifySignature } from "node:crypto";
 import jsonld from "jsonld";
+import { publicJwkFromMethod } from "webs-did-resolver";
 import { decodeBase58btcMultibase } from "./base58.js";
 import { cloneJson, isRecord } from "./jwt.js";
-import { publicJwkFromMethod } from "./did-resolver.js";
 import type { LocalContextLoader } from "./local-contexts.js";
 
 // The sidecar currently supports only the proof shape emitted by Isomer's

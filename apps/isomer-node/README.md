@@ -42,9 +42,6 @@ The sidecar is intentionally small:
   Main verification pipeline and result shaping.
 - `src/did-jwt-vc.ts`
   Thin wrappers around `did-jwt-vc` for VC-JWT and VP-JWT envelope validation.
-- `src/did-resolver.ts`
-  Adapter from Isomer `did:webs` resolver responses into the JWK-oriented shape
-  expected by the Node JWT stack.
 - `src/data-integrity.ts`
   Explicit embedded Data Integrity proof verification.
 - `src/status.ts`
@@ -59,9 +56,9 @@ The sidecar is intentionally small:
 Verification proceeds in layers:
 
 1. `did-jwt-vc` verifies the VC-JWT or VP-JWT envelope and JWT signature.
-2. `src/did-resolver.ts` resolves issuer or presenter key state through the
-   Isomer `did:webs` HTTP resolver and adapts KERI-style verification methods
-   into JWK-shaped material when the Node stack requires it.
+2. `webs-did-resolver` resolves issuer or presenter key state through the
+   Isomer `did:webs` HTTP resolver using the standard `did-resolver`
+   `getResolver(...)` integration shape.
 3. `src/data-integrity.ts` verifies the embedded
    `DataIntegrityProof` / `eddsa-rdfc-2022` block explicitly, because a valid
    VC-JWT envelope does not by itself prove the embedded proof block is intact.
@@ -81,8 +78,9 @@ semantics.
   Owns VC-JWT and VP-JWT envelope validation and JWT signature verification.
 - `did-resolver`
   Defines the resolver interface used by `did-jwt-vc`.
-- local `DidWebsResolver`
-  Adapts Isomer resolver HTTP responses into that interface.
+- `webs-did-resolver`
+  Owns `did:webs` method resolution plus the narrow compatibility shaping used
+  by the sidecar's JS JWT verifier stack.
 - local `LocalContextLoader`
   Pins the JSON-LD contexts used by Isomer artifacts so canonicalization stays
   deterministic and offline.
@@ -162,12 +160,14 @@ The Node sidecar is intentionally narrower:
 
 ## Maintainer Notes
 
-### `did:webs` normalization
+### `did:webs` resolution
 
-The Node JWT stack is JWK-oriented. Isomer resolver output can include
-`publicKeyMultibase` and KERI-style method forms, so `src/did-resolver.ts`
-normalizes those methods into JWK-shaped verification material when needed.
-This is one of the highest-risk interop seams in the sidecar.
+The sidecar now consumes a standalone `webs-did-resolver` package through the
+standard `new Resolver({ ...getResolver(...) })` pattern. That package keeps
+the `did:webs` method seam reusable and preserves query-bearing DID URLs such
+as `?versionId=...` during resolution. It also applies the narrow Ed25519
+method and relationship normalization still required for `did-jwt-vc` to
+consume live Isomer DID documents reliably.
 
 ### Local JSON-LD contexts
 

@@ -258,6 +258,34 @@ test("verifyVpOp surfaces nested VC verification errors", async () => {
   assert.deepEqual(result.errors, ["nested credential: JWT sub does not match credentialSubject.id"]);
 });
 
+test("verifyVcOp resolves proof methods through resolver.resolve at the Effection boundary", async () => {
+  const calls: string[] = [];
+  const runtime = createTestVerifierRuntime({
+    resolver: {
+      resolve: async (didUrl: string) => {
+        calls.push(didUrl);
+        return {
+          didDocument: cloneValue(DID_DOCUMENT),
+          didDocumentMetadata: {},
+          didResolutionMetadata: {}
+        };
+      }
+    } as never
+  });
+
+  const result = await run(() => verifyVcOp(runtime, encodeJwt({
+    iss: "did:webs:issuer",
+    sub: "did:webs:holder",
+    jti: "urn:example:vc",
+    iat: 1704067200,
+    nbf: 1704067200,
+    vc: cloneValue(VC_PAYLOAD)
+  }, { kid: "did:webs:issuer#key-1" })));
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(calls, ["did:webs:issuer"]);
+});
+
 /**
  * Build one verifier runtime with defaults that make semantic tests easy to
  * override one seam at a time.
@@ -276,14 +304,7 @@ function createTestVerifierRuntime(
           didDocument: cloneValue(DID_DOCUMENT),
           didDocumentMetadata: {},
           didResolutionMetadata: {}
-        }),
-        resolveOp: function* () {
-          return {
-            didDocument: cloneValue(DID_DOCUMENT),
-            didDocumentMetadata: {},
-            didResolutionMetadata: {}
-          };
-        }
+        })
       } as never,
       contexts: {} as never,
       ...defaultRuntimeEffects(),

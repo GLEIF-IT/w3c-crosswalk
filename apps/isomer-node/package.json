@@ -15,7 +15,8 @@
     "did-resolver": "^4.1.0",
     "effection": "^3.6.0",
     "hono": "^4.10.7",
-    "jsonld": "^8.3.3"
+    "jsonld": "^8.3.3",
+    "webs-did-resolver": "file:../../packages/webs-did-resolver"
   },
   "devDependencies": {
     "@types/jsonld": "^1.5.15",
