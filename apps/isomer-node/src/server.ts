@@ -9,7 +9,7 @@
 import { serve } from "@hono/node-server";
 import { action, type Operation, run } from "effection";
 import { Hono } from "hono";
-import { createVerifierContext, type VerifierContext, verifyVcOp, verifyVpOp } from "./verifier.js";
+import { createVerifierRuntime, type VerifierRuntime, verifyVcOp, verifyVpOp } from "./verifier.js";
 import type {
   SidecarConfig,
   VcVerificationResult,
@@ -34,13 +34,13 @@ export interface RequestVerifier {
 /**
  * Create the Hono app that exposes the sidecar HTTP contract.
  *
- * The default verifier context and request verifier are injected here so tests
+ * The default verifier runtime and request verifier are injected here so tests
  * can replace them with stubs while production callers keep the one-line setup.
  */
 export function createApp(
   config: SidecarConfig,
-  verifier = createVerifierContext(config),
-  requestVerifier = createRequestVerifier(verifier)
+  runtime = createVerifierRuntime(config),
+  requestVerifier = createRequestVerifier(runtime)
 ): Hono {
   const app = new Hono();
 
@@ -77,9 +77,9 @@ export function createApp(
  */
 export function* serveSidecar(
   config: SidecarConfig,
-  verifier?: VerifierContext
+  runtime?: VerifierRuntime
 ): Operation<void> {
-  const app = createApp(config, verifier);
+  const app = createApp(config, runtime);
   const server = serve({
     fetch: app.fetch,
     hostname: config.host,
@@ -119,11 +119,11 @@ function hasToken(request: VerifyRequest): request is VerifyRequest & { token: s
 }
 
 /**
- * Adapt a verifier context into the narrower HTTP-layer verification hooks.
+ * Adapt a verifier runtime into the narrower HTTP-layer verification hooks.
  */
-function createRequestVerifier(verifier: VerifierContext): RequestVerifier {
+function createRequestVerifier(runtime: VerifierRuntime): RequestVerifier {
   return {
-    verifyVc: (token) => verifyVcOp(verifier, token),
-    verifyVp: (token, options) => verifyVpOp(verifier, token, options)
+    verifyVc: (token) => verifyVcOp(runtime, token),
+    verifyVp: (token, options) => verifyVpOp(runtime, token, options)
   };
 }

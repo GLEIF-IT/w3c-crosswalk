@@ -6,7 +6,7 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createVerifierContext, type VerifierDependencies, verifyVcOp, verifyVpOp } from "./verifier.js";
+import { createVerifierRuntime, type VerifierRuntime, verifyVcOp, verifyVpOp } from "./verifier.js";
 import type { SidecarConfig } from "./types.js";
 import { run } from "effection";
 
@@ -58,9 +58,9 @@ const VP_PAYLOAD = {
 };
 
 test("verifyVcOp returns a fully successful result when all checks pass", async () => {
-  const context = createTestVerifierContext();
+  const runtime = createTestVerifierRuntime();
 
-  const result = await run(() => verifyVcOp(context, encodeJwt({
+  const result = await run(() => verifyVcOp(runtime, encodeJwt({
     iss: "did:webs:issuer",
     sub: "did:webs:holder",
     jti: "urn:example:vc",
@@ -79,9 +79,9 @@ test("verifyVcOp returns a fully successful result when all checks pass", async 
 });
 
 test("verifyVcOp fails when JWT iss does not match vc.issuer", async () => {
-  const context = createTestVerifierContext();
+  const runtime = createTestVerifierRuntime();
 
-  const result = await run(() => verifyVcOp(context, encodeJwt({
+  const result = await run(() => verifyVcOp(runtime, encodeJwt({
     iss: "did:webs:other",
     sub: "did:webs:holder",
     jti: "urn:example:vc",
@@ -96,9 +96,9 @@ test("verifyVcOp fails when JWT iss does not match vc.issuer", async () => {
 });
 
 test("verifyVcOp fails when JWT jti does not match vc.id", async () => {
-  const context = createTestVerifierContext();
+  const runtime = createTestVerifierRuntime();
 
-  const result = await run(() => verifyVcOp(context, encodeJwt({
+  const result = await run(() => verifyVcOp(runtime, encodeJwt({
     iss: "did:webs:issuer",
     sub: "did:webs:holder",
     jti: "urn:example:other",
@@ -112,9 +112,9 @@ test("verifyVcOp fails when JWT jti does not match vc.id", async () => {
 });
 
 test("verifyVcOp fails when JWT sub does not match credentialSubject.id", async () => {
-  const context = createTestVerifierContext();
+  const runtime = createTestVerifierRuntime();
 
-  const result = await run(() => verifyVcOp(context, encodeJwt({
+  const result = await run(() => verifyVcOp(runtime, encodeJwt({
     iss: "did:webs:issuer",
     sub: "did:webs:other",
     jti: "urn:example:vc",
@@ -128,21 +128,14 @@ test("verifyVcOp fails when JWT sub does not match credentialSubject.id", async 
 });
 
 test("verifyVcOp fails when status marks the credential revoked", async () => {
-  const context = createTestVerifierContext({
-    fetchStatus: function* (url) {
+  const runtime = createTestVerifierRuntime({
+    fetchStatusOp: function* (url) {
       assert.equal(url, "https://status.example/credentials/test-vc");
       return { revoked: true, credSaid: "test-vc" };
-    },
-    checkStatus: (status, errors) => {
-      if (status?.revoked) {
-        errors.push(`credential ${String(status.credSaid ?? "unknown")} is revoked`);
-        return false;
-      }
-      return true;
     }
   });
 
-  const result = await run(() => verifyVcOp(context, encodeJwt({
+  const result = await run(() => verifyVcOp(runtime, encodeJwt({
     iss: "did:webs:issuer",
     sub: "did:webs:holder",
     jti: "urn:example:vc",
@@ -157,7 +150,7 @@ test("verifyVcOp fails when status marks the credential revoked", async () => {
 });
 
 test("verifyVpOp succeeds for a valid VP with one valid nested VC", async () => {
-  const context = createTestVerifierContext();
+  const runtime = createTestVerifierRuntime();
   const embedded = encodeJwt({
     iss: "did:webs:issuer",
     sub: "did:webs:holder",
@@ -167,7 +160,7 @@ test("verifyVpOp succeeds for a valid VP with one valid nested VC", async () => 
     vc: cloneValue(VC_PAYLOAD)
   }, { kid: "did:webs:issuer#key-1" });
 
-  const result = await run(() => verifyVpOp(context, encodeJwt({
+  const result = await run(() => verifyVpOp(runtime, encodeJwt({
     iss: "did:webs:holder",
     aud: "https://verifier.example",
     nonce: "expected-nonce",
@@ -186,9 +179,9 @@ test("verifyVpOp succeeds for a valid VP with one valid nested VC", async () => 
 });
 
 test("verifyVpOp fails when audience does not match expected value", async () => {
-  const context = createTestVerifierContext();
+  const runtime = createTestVerifierRuntime();
 
-  const result = await run(() => verifyVpOp(context, encodeJwt({
+  const result = await run(() => verifyVpOp(runtime, encodeJwt({
     iss: "did:webs:holder",
     aud: "https://verifier.example",
     nonce: "expected-nonce",
@@ -204,9 +197,9 @@ test("verifyVpOp fails when audience does not match expected value", async () =>
 });
 
 test("verifyVpOp fails when nonce does not match expected value", async () => {
-  const context = createTestVerifierContext();
+  const runtime = createTestVerifierRuntime();
 
-  const result = await run(() => verifyVpOp(context, encodeJwt({
+  const result = await run(() => verifyVpOp(runtime, encodeJwt({
     iss: "did:webs:holder",
     aud: "https://verifier.example",
     nonce: "expected-nonce",
@@ -222,9 +215,9 @@ test("verifyVpOp fails when nonce does not match expected value", async () => {
 });
 
 test("verifyVpOp rejects non-string embedded credentials", async () => {
-  const context = createTestVerifierContext();
+  const runtime = createTestVerifierRuntime();
 
-  const result = await run(() => verifyVpOp(context, encodeJwt({
+  const result = await run(() => verifyVpOp(runtime, encodeJwt({
     iss: "did:webs:holder",
     aud: "https://verifier.example",
     nonce: "expected-nonce",
@@ -240,7 +233,7 @@ test("verifyVpOp rejects non-string embedded credentials", async () => {
 });
 
 test("verifyVpOp surfaces nested VC verification errors", async () => {
-  const context = createTestVerifierContext();
+  const runtime = createTestVerifierRuntime();
   const embedded = encodeJwt({
     iss: "did:webs:issuer",
     sub: "did:webs:wrong",
@@ -250,7 +243,7 @@ test("verifyVpOp surfaces nested VC verification errors", async () => {
     vc: cloneValue(VC_PAYLOAD)
   }, { kid: "did:webs:issuer#key-1" });
 
-  const result = await run(() => verifyVpOp(context, encodeJwt({
+  const result = await run(() => verifyVpOp(runtime, encodeJwt({
     iss: "did:webs:holder",
     aud: "https://verifier.example",
     nonce: "expected-nonce",
@@ -266,13 +259,13 @@ test("verifyVpOp surfaces nested VC verification errors", async () => {
 });
 
 /**
- * Build one verifier context with defaults that make semantic tests easy to
+ * Build one verifier runtime with defaults that make semantic tests easy to
  * override one seam at a time.
  */
-function createTestVerifierContext(
-  overrides: Partial<VerifierDependencies> = {}
+function createTestVerifierRuntime(
+  overrides: Partial<VerifierRuntime> = {}
 ) {
-  return createVerifierContext(
+  return createVerifierRuntime(
     {
       resolverUrl: "http://resolver.test/1.0/identifiers",
       resourceRoot: "/tmp/resources"
@@ -293,31 +286,27 @@ function createTestVerifierContext(
         }
       } as never,
       contexts: {} as never,
-      dependencies: {
-        ...defaultDependencies(),
-        ...overrides
-      }
+      ...defaultRuntimeEffects(),
+      ...overrides
     }
   );
 }
 
 /**
- * Return the default seam implementations used across verifier tests.
+ * Return the default effectful runtime seams used across verifier tests.
  */
-function defaultDependencies(): VerifierDependencies {
+function defaultRuntimeEffects(): Pick<
+  VerifierRuntime,
+  "verifyCredentialJwtOp" | "verifyPresentationJwtOp" | "verifyDataIntegrityProofOp" | "fetchStatusOp"
+> {
   return {
     verifyCredentialJwtOp: function* () {},
     verifyPresentationJwtOp: function* () {},
-    verifyDataIntegrityProof: async () => true,
-    fetchStatus: function* () {
-      return { revoked: false };
-    },
-    checkStatus: (status, errors) => {
-      if (status?.revoked) {
-        errors.push("revoked");
-        return false;
-      }
+    verifyDataIntegrityProofOp: function* () {
       return true;
+    },
+    fetchStatusOp: function* () {
+      return { revoked: false };
     }
   };
 }

@@ -30,64 +30,48 @@ import type {
 } from "./types.js";
 
 /**
- * Overrideable verification operations used by the core verifier pipeline.
+ * Runtime-owned effectful collaborators used by the verifier workflows.
  *
- * These seams exist so tests can replace network or library-backed behavior
- * with focused stubs without forking the pipeline itself.
+ * The runtime owns the long-lived resolver/context state plus the effectful
+ * verification steps. Tests replace these seams at runtime construction time
+ * instead of reaching through a nested dependency bag.
  */
-export interface VerifierDependencies {
-  verifyCredentialJwtOp: (token: string, resolver: DidWebsResolver) => Operation<void>;
-  verifyPresentationJwtOp: (
-    token: string,
-    resolver: DidWebsResolver,
-    options: { audience?: string; nonce?: string }
-  ) => Operation<void>;
-  verifyDataIntegrityProof: (
-    document: Record<string, unknown>,
-    method: Record<string, unknown>,
-    contexts: LocalContextLoader
-  ) => Promise<boolean>;
-  fetchStatus: (url: string | undefined) => Operation<Record<string, unknown> | null>;
-  checkStatus: (status: Record<string, unknown> | null, errors: string[]) => boolean;
-}
-
-/**
- * Runtime context shared across one verification pass.
- *
- * The context collects the resolver, JSON-LD context loader, and any
- * dependency overrides so the exported verifier operations stay small.
- */
-export interface VerifierContext {
+export interface VerifierRuntime {
   resolver: DidWebsResolver;
   contexts: LocalContextLoader;
-  dependencies: VerifierDependencies;
+  verifyCredentialJwtOp: (token: string) => Operation<void>;
+  verifyPresentationJwtOp: (
+    token: string,
+    options: { audience?: string; nonce?: string }
+  ) => Operation<void>;
+  verifyDataIntegrityProofOp: (
+    document: Record<string, unknown>,
+    method: Record<string, unknown>
+  ) => Operation<boolean>;
+  fetchStatusOp: (url: string | undefined) => Operation<Record<string, unknown> | null>;
 }
 
-// Default dependencies are overrideable because tests need to isolate JWT,
-// resolver, Data Integrity, and status behavior without rewriting the verifier
-// control flow.
-const DEFAULT_DEPENDENCIES: VerifierDependencies = {
-  verifyCredentialJwtOp,
-  verifyPresentationJwtOp,
-  verifyDataIntegrityProof,
-  fetchStatus,
-  checkStatus
-};
-
 /**
- * Construct one verifier context from runtime config and optional test hooks.
+ * Construct one verifier runtime from config and optional test hooks.
  */
-export function createVerifierContext(
+export function createVerifierRuntime(
   config: Pick<SidecarConfig, "resolverUrl" | "resourceRoot">,
-  overrides: Partial<VerifierContext> = {}
-): VerifierContext {
+  overrides: Partial<VerifierRuntime> = {}
+): VerifierRuntime {
+  const resolver = overrides.resolver ?? new DidWebsResolver(config.resolverUrl);
+  const contexts = overrides.contexts ?? new LocalContextLoader(config.resourceRoot);
+
   return {
-    resolver: overrides.resolver ?? new DidWebsResolver(config.resolverUrl),
-    contexts: overrides.contexts ?? new LocalContextLoader(config.resourceRoot),
-    dependencies: {
-      ...DEFAULT_DEPENDENCIES,
-      ...overrides.dependencies
-    }
+    resolver,
+    contexts,
+    verifyCredentialJwtOp: overrides.verifyCredentialJwtOp ?? ((token) => verifyCredentialJwtOp(token, resolver)),
+    verifyPresentationJwtOp: overrides.verifyPresentationJwtOp ?? (
+      (token, options) => verifyPresentationJwtOp(token, resolver, options)
+    ),
+    verifyDataIntegrityProofOp: overrides.verifyDataIntegrityProofOp ?? (
+      (document, method) => promiseToOperation(() => verifyDataIntegrityProof(document, method, contexts))
+    ),
+    fetchStatusOp: overrides.fetchStatusOp ?? fetchStatus
   };
 }
 
@@ -103,7 +87,7 @@ export function createVerifierContext(
  *   revoked
  */
 export function* verifyVcOp(
-  context: VerifierContext,
+  runtime: VerifierRuntime,
   token: string
 ): Operation<VcVerificationResult> {
   const errors: string[] = [];
@@ -123,19 +107,20 @@ export function* verifyVcOp(
     checks.jwtEnvelopeValid = true;
 
     // Stage 2: validate the VC-JWT envelope and signature through did-jwt-vc.
-    yield* context.dependencies.verifyCredentialJwtOp(token, context.resolver);
+    yield* runtime.verifyCredentialJwtOp(token);
     checks.signatureValid = true;
 
     // Stage 3: verify the embedded proof and projected status explicitly.
     // JWT validation proves the VC-JWT envelope. The embedded proof and status
     // still need explicit checks because they carry Isomer-specific semantics.
-    const method = yield* resolveProofVerificationMethodOp(context, decoded, payload);
-    checks.dataIntegrityProofValid = yield* promiseToOperation(() =>
-      context.dependencies.verifyDataIntegrityProof(payload as Record<string, unknown>, method, context.contexts)
+    const method = yield* resolveProofVerificationMethodOp(runtime.resolver, decoded, payload);
+    checks.dataIntegrityProofValid = yield* runtime.verifyDataIntegrityProofOp(
+      payload as Record<string, unknown>,
+      method
     );
 
-    const status = yield* context.dependencies.fetchStatus(statusUrl(payload));
-    checks.statusActive = context.dependencies.checkStatus(status, errors);
+    const status = yield* runtime.fetchStatusOp(statusUrl(payload));
+    checks.statusActive = checkStatus(status, errors);
   } catch (error) {
     errors.push(error instanceof Error ? error.message : String(error));
   }
@@ -157,7 +142,7 @@ export function* verifyVcOp(
  * completed successfully under the same VC verification pipeline.
  */
 export function* verifyVpOp(
-  context: VerifierContext,
+  runtime: VerifierRuntime,
   token: string,
   options: { audience?: string; nonce?: string } = {}
 ): Operation<VpVerificationResult> {
@@ -178,7 +163,7 @@ export function* verifyVpOp(
     checks.jwtEnvelopeValid = true;
 
     // Stage 2: validate the VP-JWT envelope and holder signature.
-    yield* context.dependencies.verifyPresentationJwtOp(token, context.resolver, options);
+    yield* runtime.verifyPresentationJwtOp(token, options);
     checks.signatureValid = true;
 
     // Stage 3: recurse through each embedded VC-JWT.
@@ -188,7 +173,7 @@ export function* verifyVpOp(
         errors.push("only nested VC-JWT strings are supported");
         continue;
       }
-      const result = yield* verifyVcOp(context, credential);
+      const result = yield* verifyVcOp(runtime, credential);
       nested.push(result);
       if (!result.ok) {
         errors.push(...result.errors.map((item) => `nested credential: ${item}`));
@@ -313,7 +298,7 @@ function requireNestedCredentialList(vp: Record<string, unknown>): unknown[] {
  * `did:webs` state instead of trusting proof material embedded in the VC alone.
  */
 function* resolveProofVerificationMethodOp(
-  context: VerifierContext,
+  resolver: DidWebsResolver,
   decoded: ReturnType<typeof decodeJwt>,
   vc: Record<string, unknown>
 ): Operation<Record<string, unknown>> {
@@ -322,7 +307,7 @@ function* resolveProofVerificationMethodOp(
   if (!issuer || !kid) {
     throw new Error("VC-JWT requires issuer and kid");
   }
-  const didResolution = yield* context.resolver.resolveOp(issuer);
+  const didResolution = yield* resolver.resolveOp(issuer);
   const didDocument = didResolution.didDocument as unknown as Record<string, unknown>;
   return findVerificationMethod(didDocument, kid);
 }
