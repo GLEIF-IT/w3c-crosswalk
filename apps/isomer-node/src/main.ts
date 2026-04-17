@@ -1,33 +1,13 @@
-import { cwd } from "node:process";
-import { runServer } from "./server.js";
-import type { SidecarConfig } from "./types.js";
+/**
+ * Entrypoint for the isomer-node sidecar process.
+ *
+ * This module stays intentionally small. The real CLI contract lives in
+ * `commands/serve.ts`; this file only bridges the Node process into Effection's
+ * root operation runner.
+ */
+import { main } from "effection";
+import { serveCommand } from "./commands/serve.js";
 
-function parseArgs(argv: string[]): SidecarConfig {
-  const values = new Map<string, string>();
-  for (let index = 0; index < argv.length; index += 1) {
-    const item = argv[index];
-    if (!item.startsWith("--")) {
-      continue;
-    }
-    const key = item.slice(2);
-    const value = argv[index + 1];
-    if (value && !value.startsWith("--")) {
-      values.set(key, value);
-      index += 1;
-    }
-  }
-
-  const resolverUrl = values.get("resolver-url");
-  if (!resolverUrl) {
-    throw new Error("--resolver-url is required");
-  }
-
-  return {
-    host: values.get("host") ?? "127.0.0.1",
-    port: Number(values.get("port") ?? "8787"),
-    resolverUrl,
-    resourceRoot: values.get("resource-root") ?? cwd()
-  };
-}
-
-await runServer(parseArgs(process.argv.slice(2)));
+await main(function*() {
+  yield* serveCommand(process.argv.slice(2));
+});

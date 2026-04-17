@@ -20,6 +20,20 @@ boundaries, and wallet/KLI signer integration notes.
 
 ## Decision Log
 
+### 2026-04-17 - isomer-node Verifier Flow Refactored for Maintainability
+
+- Changed: Split the Node sidecar into a command-level `serve` operation, a
+  small Effection promise adapter, explicit `did-jwt-vc` interop wrappers, and
+  separate VC/VP verification operations with typed check payloads and
+  dependency seams for tests.
+- Why: The sidecar was correct but hard to review because verification,
+  transport, library boundaries, and testability were too entangled.
+- Verified: `npm --prefix apps/isomer-node run check` and
+  `npm --prefix apps/isomer-node test`.
+- Touched/Risks: `apps/isomer-node` only. Behavior stayed stable, but future
+  feature work should keep Promise-based library calls wrapped at the Effection
+  boundary rather than reintroducing ad hoc async seams.
+
 ### 2026-04-15 - External W3C Verifier Sidecars Added
 
 - Changed: Added Node and Go verifier sidecars, a pytest harness in

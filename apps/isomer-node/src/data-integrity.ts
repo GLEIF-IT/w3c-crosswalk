@@ -1,3 +1,11 @@
+/**
+ * Embedded Data Integrity proof verification for Isomer VC payloads.
+ *
+ * The Node sidecar uses `did-jwt-vc` for JWT envelope validation, but that does
+ * not prove the embedded `proof` block inside the VC payload is intact. This
+ * module performs the explicit `eddsa-rdfc-2022` verification pass using local
+ * JSON-LD canonicalization and a resolved verification method from `did:webs`.
+ */
 import { createHash, createPublicKey, verify as verifySignature } from "node:crypto";
 import jsonld from "jsonld";
 import { decodeBase58btcMultibase } from "./base58.js";
@@ -5,9 +13,18 @@ import { cloneJson, isRecord } from "./jwt.js";
 import { publicJwkFromMethod } from "./did-resolver.js";
 import type { LocalContextLoader } from "./local-contexts.js";
 
+// The sidecar currently supports only the proof shape emitted by Isomer's
+// Python bridge: `DataIntegrityProof` with the `eddsa-rdfc-2022` cryptosuite.
 const DATA_INTEGRITY_PROOF = "DataIntegrityProof";
 const EDDSA_RDFC_2022 = "eddsa-rdfc-2022";
 
+/**
+ * Verify the embedded Data Integrity proof on one VC payload.
+ *
+ * This checks the expected proof suite, matches the resolved verification
+ * method against `proof.verificationMethod`, recreates the suite verify-data,
+ * and verifies the detached signature bytes against the resolved public key.
+ */
 export async function verifyDataIntegrityProof(
   document: Record<string, unknown>,
   method: Record<string, unknown>,
@@ -27,7 +44,7 @@ export async function verifyDataIntegrityProof(
   const methodId = typeof method.id === "string" ? method.id : "";
   const proofMethod = typeof proof.verificationMethod === "string" ? proof.verificationMethod : "";
   const fragment = proofMethod.includes("#") ? proofMethod.split("#", 2)[1] : proofMethod;
-  if (methodId && proofMethod && methodId !== proofMethod && methodId !== `#${fragment}` && !methodId.endsWith(`#${fragment}`)) {
+  if (!verificationMethodMatchesProof(methodId, proofMethod, fragment)) {
     throw new Error("resolved verification method does not match proof verificationMethod");
   }
 
@@ -37,6 +54,23 @@ export async function verifyDataIntegrityProof(
   return verifySignature(null, verifyData, key, signature);
 }
 
+function verificationMethodMatchesProof(methodId: string, proofMethod: string, fragment: string): boolean {
+  if (!methodId || !proofMethod) {
+    return true;
+  }
+  const isExactReference = methodId === proofMethod;
+  const isFragmentReference = methodId === `#${fragment}`;
+  const isDocumentScopedReference = methodId.endsWith(`#${fragment}`);
+  return isExactReference || isFragmentReference || isDocumentScopedReference;
+}
+
+/**
+ * Recreate the suite-specific verify-data bytes for `eddsa-rdfc-2022`.
+ *
+ * The proof value itself is removed, the unsecured document and proof config
+ * are canonicalized separately, and the final verify-data is the concatenation
+ * of the two SHA-256 digests.
+ */
 export async function createVerifyData(
   document: Record<string, unknown>,
   proof: Record<string, unknown>,
@@ -58,6 +92,9 @@ export async function createVerifyData(
   ]);
 }
 
+/**
+ * Canonicalize one JSON-LD document using the pinned local context loader.
+ */
 async function canonicalize(document: Record<string, unknown>, contexts: LocalContextLoader): Promise<string> {
   const canonize = jsonld.canonize as unknown as (
     input: Record<string, unknown>,
@@ -70,6 +107,9 @@ async function canonicalize(document: Record<string, unknown>, contexts: LocalCo
   });
 }
 
+/**
+ * Hash one byte sequence with SHA-256.
+ */
 function sha256(data: Uint8Array): Buffer {
   return createHash("sha256").update(data).digest();
 }

@@ -1,9 +1,26 @@
-import { action, type Operation } from "effection";
-import type { DIDResolutionResult, Resolvable } from "did-resolver";
+/**
+ * `did:webs` resolver adaptation for the Node verifier stack.
+ *
+ * Isomer resolves issuer and presenter key state through the HTTP
+ * `did-webs-resolver` service. The Node JWT libraries, however, expect
+ * JWK-oriented verification material. This module bridges that mismatch by
+ * fetching resolved DID documents, normalizing verification methods, and
+ * synthesizing JWK views for Multikey-only Ed25519 methods when required.
+ */
+import type { DIDResolutionOptions, DIDResolutionResult, Resolvable } from "did-resolver";
+import type { Operation } from "effection";
 import { decodeBase58btcMultibase, base64UrlEncode } from "./base58.js";
+import { promiseToOperation } from "./effection.js";
 import { isRecord } from "./jwt.js";
 
+// Multikey Ed25519 public keys begin with the multicodec prefix `0xed01`.
+// When the resolver returns only `publicKeyMultibase`, the sidecar uses this
+// prefix to recognize Ed25519 material and synthesize an equivalent OKP JWK.
 const ED25519_MULTIKEY_PREFIX = Uint8Array.from([0xed, 0x01]);
+
+// did-jwt-oriented consumers only understand a small set of Ed25519 method
+// shapes. Normalization lifts resolver output into one of these compatible
+// forms before JWT libraries consume the DID document.
 const DID_JWT_EDDSA_KEY_TYPES = new Set([
   "ED25519SignatureVerification",
   "Ed25519VerificationKey2018",
@@ -12,15 +29,31 @@ const DID_JWT_EDDSA_KEY_TYPES = new Set([
   "Multikey"
 ]);
 
+/**
+ * Resolve `did:webs` documents through the Isomer resolver HTTP surface.
+ *
+ * Results are cached per DID, not per fragment, because all verification
+ * methods within one document share the same resolver response.
+ */
 export class DidWebsResolver implements Resolvable {
   readonly #baseUrl: string;
   readonly #cache = new Map<string, DIDResolutionResult>();
 
+  /**
+   * Create a resolver rooted at the `did-webs-resolver` identifiers endpoint.
+   */
   constructor(baseUrl: string) {
     this.#baseUrl = baseUrl.replace(/\/+$/, "");
   }
 
-  async resolve(didUrl: string): Promise<DIDResolutionResult> {
+  /**
+   * Resolve one DID URL using the `did-resolver` interface contract.
+   */
+  async resolve(didUrl: string, _options?: DIDResolutionOptions): Promise<DIDResolutionResult> {
+    return await this.#resolveDid(didUrl);
+  }
+
+  async #resolveDid(didUrl: string, signal?: AbortSignal): Promise<DIDResolutionResult> {
     const did = didUrl.split("#", 1)[0];
     const cached = this.#cache.get(did);
     if (cached) {
@@ -28,7 +61,8 @@ export class DidWebsResolver implements Resolvable {
     }
 
     const response = await fetch(`${this.#baseUrl}/${did}`, {
-      headers: { Accept: "application/json" }
+      headers: { Accept: "application/json" },
+      signal
     });
     const body = await response.json();
     if (!response.ok) {
@@ -49,11 +83,18 @@ export class DidWebsResolver implements Resolvable {
     return result;
   }
 
+  /**
+   * Resolve one DID URL as an Effection operation with abort support.
+   */
   resolveOp(didUrl: string): Operation<DIDResolutionResult> {
-    return promiseOp(this.resolve(didUrl));
+    return promiseToOperation((signal) => this.#resolveDid(didUrl, signal));
   }
 }
 
+/**
+ * Find one verification method in a resolved DID document by `kid`-style
+ * reference, fragment, or document-scoped fragment reference.
+ */
 export function findVerificationMethod(
   didDocument: Record<string, unknown>,
   kid: string
@@ -65,13 +106,20 @@ export function findVerificationMethod(
       continue;
     }
     const id = typeof method.id === "string" ? method.id : "";
-    if (id === kid || id === `#${fragment}` || id.endsWith(`#${fragment}`)) {
+    if (isMatchingMethodReference(id, kid, fragment)) {
       return method;
     }
   }
   throw new Error(`verification method ${kid} not found in resolved DID document`);
 }
 
+/**
+ * Return a public JWK view for one resolved verification method.
+ *
+ * If the resolver already exposed `publicKeyJwk`, this function returns it
+ * directly. If the method is Multikey-only, it synthesizes an equivalent OKP
+ * Ed25519 JWK for local consumers.
+ */
 export function publicJwkFromMethod(method: Record<string, unknown>): Record<string, string> {
   if (isRecord(method.publicKeyJwk)) {
     return method.publicKeyJwk as Record<string, string>;
@@ -117,6 +165,12 @@ function normalizeVerificationMethods(didDocument: Record<string, unknown>): voi
   normalizeVerificationRelationship(didDocument, "authentication", methods);
 }
 
+/**
+ * Normalize one verification relationship into embedded method objects.
+ *
+ * `did-jwt` consumers are easier to satisfy when relationship arrays already
+ * contain method objects instead of only string references.
+ */
 function normalizeVerificationRelationship(
   didDocument: Record<string, unknown>,
   relationship: "assertionMethod" | "authentication",
@@ -129,24 +183,34 @@ function normalizeVerificationRelationship(
   didDocument[relationship] = normalized.length > 0 ? normalized : methods.filter(isRecord);
 }
 
+/**
+ * Find one method object by string reference within a method list.
+ */
 function findMethodByReference(methods: unknown[], reference: string): Record<string, unknown> | undefined {
   const fragment = reference.includes("#") ? reference.split("#", 2)[1] : reference.replace(/^#/, "");
   return methods.filter(isRecord).find((method) => {
     const id = typeof method.id === "string" ? method.id : "";
-    return id === reference || id === `#${fragment}` || id.endsWith(`#${fragment}`);
+    return isMatchingMethodReference(id, reference, fragment);
   });
 }
 
+/**
+ * Match method references across exact, fragment-only, and document-scoped
+ * fragment forms.
+ */
+function isMatchingMethodReference(id: string, reference: string, fragment: string): boolean {
+  const isExactReference = id === reference;
+  const isFragmentReference = id === `#${fragment}`;
+  const isDocumentScopedReference = id.endsWith(`#${fragment}`);
+  return isExactReference || isFragmentReference || isDocumentScopedReference;
+}
+
+/**
+ * Check whether one byte sequence begins with a multicodec prefix.
+ */
 function startsWith(value: Uint8Array, prefix: Uint8Array): boolean {
   if (value.length < prefix.length) {
     return false;
   }
   return prefix.every((byte, index) => value[index] === byte);
-}
-
-export function promiseOp<T>(promise: Promise<T>): Operation<T> {
-  return action<T>((resolve, reject) => {
-    promise.then(resolve).catch(reject);
-    return () => {};
-  });
 }

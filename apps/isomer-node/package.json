@@ -11,7 +11,6 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.19.6",
-    "did-jwt": "^8.0.18",
     "did-jwt-vc": "file:../../../did-jwt-vc",
     "did-resolver": "^4.1.0",
     "effection": "^3.6.0",

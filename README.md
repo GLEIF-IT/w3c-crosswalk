@@ -1,4 +1,5 @@
 # isomer
+[![CI](https://github.com/GLEIF-IT/w3c-crosswalk/actions/workflows/ci.yml/badge.svg)](https://github.com/GLEIF-IT/w3c-crosswalk/actions/workflows/ci.yml)
 
 `isomer` is the Python-first integration repo for projecting KERI KEL, TEL,
 and ACDC VRD state into VCDM 1.1 JSON-LD credentials, enveloping them as
