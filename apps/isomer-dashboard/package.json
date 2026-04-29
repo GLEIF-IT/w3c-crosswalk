@@ -1,0 +1,21 @@
+{
+  "name": "isomer-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Webhook dashboard for Isomer verifier presentation events",
+  "scripts": {
+    "serve": "tsx src/main.ts",
+    "check": "tsc --noEmit",
+    "test": "node --import tsx --test \"src/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.6",
+    "hono": "^4.10.7"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,0 +1,50 @@
+services:
+  isomer-python:
+    image: w3c-crosswalk/isomer-python:local
+    ports:
+      - "8788:8788"
+    environment:
+      ISOMER_RESOLVER_URL: ${ISOMER_RESOLVER_URL:-http://host.docker.internal:7678/1.0/identifiers}
+      ISOMER_WEBHOOK_URL: http://isomer-dashboard:8791/webhooks/presentations
+      ISOMER_VERIFIER_ID: isomer-python
+      ISOMER_VERIFIER_LABEL: Isomer Python
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - isomer-dashboard
+
+  isomer-node:
+    image: w3c-crosswalk/isomer-node:local
+    ports:
+      - "8789:8788"
+    environment:
+      ISOMER_RESOLVER_URL: ${ISOMER_RESOLVER_URL:-http://host.docker.internal:7678/1.0/identifiers}
+      ISOMER_WEBHOOK_URL: http://isomer-dashboard:8791/webhooks/presentations
+      ISOMER_VERIFIER_ID: isomer-node
+      ISOMER_VERIFIER_LABEL: Isomer Node
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - isomer-dashboard
+
+  isomer-go:
+    image: w3c-crosswalk/isomer-go:local
+    ports:
+      - "8790:8788"
+    environment:
+      ISOMER_RESOLVER_URL: ${ISOMER_RESOLVER_URL:-http://host.docker.internal:7678/1.0/identifiers}
+      ISOMER_WEBHOOK_URL: http://isomer-dashboard:8791/webhooks/presentations
+      ISOMER_VERIFIER_ID: isomer-go
+      ISOMER_VERIFIER_LABEL: Isomer Go
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - isomer-dashboard
+
+  isomer-dashboard:
+    image: w3c-crosswalk/isomer-dashboard:local
+    ports:
+      - "8791:8791"
+    environment:
+      ISOMER_DASHBOARD_HOST: 0.0.0.0
+      ISOMER_DASHBOARD_PORT: 8791

@@ -12,13 +12,14 @@ DID_JWT_VC_ROOT := ../did-jwt-vc
 WEBS_DID_RESOLVER_ROOT := packages/webs-did-resolver
 VC_GO_ROOT := ../vc-go
 GO_CACHE ?= /tmp/isomer-go-cache
+DOCKER_TAG ?= local
 
 PYPI_UPLOAD_URL := https://upload.pypi.org/legacy/
 PYPI_CHECK_URL := https://pypi.org/simple/$(PACKAGE)/
 TEST_PYPI_UPLOAD_URL := https://test.pypi.org/legacy/
 TEST_PYPI_CHECK_URL := https://test.pypi.org/simple/$(PACKAGE)/
 
-.PHONY: help sync clean test-cli test-fast test-integration test smoke external-node-sync external-node-check external-go-check test-external-w3c-node test-external-w3c-go test-external-w3c-all build dist-check check-clean prepublish publish-test publish
+.PHONY: help sync clean test-cli test-fast test-integration test smoke external-node-sync external-node-check external-go-check dashboard-sync dashboard-check test-external-w3c-node test-external-w3c-go test-external-w3c-all docker-verifiers-build docker-verifiers-smoke docker-verifiers-test build dist-check check-clean prepublish publish-test publish
 
 help:
 	@printf '%s\n' \
@@ -34,7 +35,12 @@ help:
 		'  make external-node-sync  Install/build the Node W3C verifier sidecar' \
 		'  make external-node-check Check the Node W3C verifier sidecar' \
 		'  make external-go-check   Check the Go W3C verifier sidecar' \
+		'  make dashboard-sync      Install the verifier dashboard app' \
+		'  make dashboard-check     Check the verifier dashboard app' \
 		'  make test-external-w3c-all Run live e2e through Node and Go sidecars' \
+		'  make docker-verifiers-build Build local Python/Node/Go verifier images' \
+		'  make docker-verifiers-smoke Smoke-test verifier container health checks' \
+		'  make docker-verifiers-test  Run KERIA Docker verifier acceptance' \
 		'  make build             Build sdist and wheel into dist/' \
 		'  make dist-check        Build and validate artifacts with twine check' \
 		'' \
@@ -107,6 +113,13 @@ external-go-check:
 	@test -f "$(VC_GO_ROOT)/go.mod" || { echo 'missing sibling vc-go clone at $(VC_GO_ROOT)'; exit 1; }
 	cd apps/isomer-go && env GOCACHE="$(GO_CACHE)" go test ./...
 
+dashboard-sync:
+	npm --prefix apps/isomer-dashboard install
+
+dashboard-check:
+	npm --prefix apps/isomer-dashboard run check
+	npm --prefix apps/isomer-dashboard test
+
 test-external-w3c-node: external-node-sync external-node-check
 	ISOMER_EXTERNAL_VERIFIERS=node $(PYTHON) -m pytest tests/integration/test_single_sig_vrd_isomer.py -q --tb=short
 
@@ -115,6 +128,15 @@ test-external-w3c-go: external-go-check
 
 test-external-w3c-all: external-node-sync external-node-check external-go-check
 	ISOMER_EXTERNAL_VERIFIERS=node,go $(PYTHON) -m pytest tests/integration/test_single_sig_vrd_isomer.py -q --tb=short
+
+docker-verifiers-build:
+	TAG="$(DOCKER_TAG)" docker buildx bake --file docker-bake.hcl
+
+docker-verifiers-smoke: docker-verifiers-build
+	python scripts/docker/smoke-verifier-containers.py --tag "$(DOCKER_TAG)"
+
+docker-verifiers-test: docker-verifiers-build
+	cd ../keria && KERIA_DOCKER_W3C_ACCEPTANCE=1 .venv/bin/pytest tests/integration/test_w3c_projection_docker_verifiers.py -q
 
 build: clean
 	$(UV) build

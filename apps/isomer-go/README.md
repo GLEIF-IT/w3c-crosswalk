@@ -39,6 +39,15 @@ API:
 - `POST /verify/vc` with `{ "token": "<vc-jwt>" }`
 - `POST /verify/vp` with `{ "token": "<vp-jwt>", "audience"?: "...", "nonce"?: "..." }`
 
+Optional successful VC/VP webhook settings:
+
+- `--webhook-url` / `ISOMER_WEBHOOK_URL`
+- `--verifier-id` / `ISOMER_VERIFIER_ID`, default `isomer-go`
+- `--verifier-label` / `ISOMER_VERIFIER_LABEL`
+
+The sidecar emits the webhook only for successful top-level `vc+jwt` or
+`vp+jwt` verification. Raw JWTs are not included in the event body.
+
 This sidecar deliberately omits Isomer pair verification. TEL state and
 ACDC/W3C equivalence remain Python Isomer verifier responsibilities.
 

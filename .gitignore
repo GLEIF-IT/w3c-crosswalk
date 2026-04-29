@@ -10,5 +10,6 @@ build/
 .tmp/
 
 apps/isomer-node/node_modules/
+apps/isomer-dashboard/node_modules/
 packages/webs-did-resolver/dist
 packages/webs-did-resolver/node_modules

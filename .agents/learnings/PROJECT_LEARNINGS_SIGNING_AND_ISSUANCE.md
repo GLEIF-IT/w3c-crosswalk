@@ -20,6 +20,39 @@ boundaries, and wallet/KLI signer integration notes.
 
 ## Decision Log
 
+### 2026-04-29 - Verifiers Emit Structured Debug Logs
+
+- Changed: Python, Node, and Go verifiers now emit JSON log events for valid
+  VC/VP receipt, terminal verification results, webhook request bodies,
+  webhook responses, webhook errors, and skipped webhook delivery. Receipt logs
+  intentionally include the full raw JWT plus length and a SHA-256 prefix for
+  local correlation.
+- Why: Browser Present, verifier processing, and dashboard webhook delivery
+  needed enough local observability to identify where successful presentations
+  disappear.
+- Verified: Focused Python verifier runtime tests, Node route/webhook tests
+  plus typecheck, and Go sidecar tests.
+- Touched/Risks: This is demo/debug observability and logs credential-bearing
+  JWTs by design. Before production hardening, raw-token logging must become
+  opt-in or be removed.
+
+### 2026-04-29 - Successful VC Verifications Emit Dashboard Webhooks
+
+- Changed: Python, Node, and Go verifier paths now emit the existing
+  `isomer.presentation.verified.v1` dashboard webhook for successful top-level
+  `vc+jwt` verification as well as successful top-level `vp+jwt` verification.
+  VC events use `presentation.kind = "vc+jwt"` and include a single decoded
+  credential entry without raw JWT material.
+- Why: Wallet W3C Present submits a VC-JWT directly to `/verify/vc`; the
+  verifier dashboard was silent because only VP verification emitted webhook
+  events.
+- Verified: Focused Python runtime/webhook tests, Node route/webhook tests and
+  typecheck, Go sidecar tests, and dashboard webhook acceptance tests.
+- Touched/Risks: `src/vc_isomer/webhook.py`, verifier runtimes, Node/Go
+  sidecar webhook dispatchers, and dashboard event consumers. The event type
+  remains presentation-named for compatibility; future dashboard copy can
+  rename the surface without changing verifier contracts.
+
 ### 2026-04-17 - `did:webs` Resolution Moved Into A Shared JS Package
 
 - Changed: Added `packages/webs-did-resolver` as a standalone TypeScript

@@ -156,8 +156,11 @@ From the repo root:
 export ROOT="$PWD"
 export STATUS_PORT=8787
 export VERIFIER_PORT=8788
+export DASHBOARD_PORT=8791
 export STATUS_BASE="http://127.0.0.1:${STATUS_PORT}"
 export VERIFIER_BASE="http://127.0.0.1:${VERIFIER_PORT}"
+export DASHBOARD_BASE="http://127.0.0.1:${DASHBOARD_PORT}"
+export WEBHOOK_URL="${DASHBOARD_BASE}/webhooks/presentations"
 export RESOLVER_BASE="http://127.0.0.1:7678/1.0/identifiers"
 export STATUS_STORE="$ROOT/.tmp/status-store.json"
 export OP_ROOT="$ROOT/.tmp/verifier-ops"
@@ -212,10 +215,29 @@ isomer verifier serve \
   --host 127.0.0.1 \
   --port "$VERIFIER_PORT" \
   --resolver "$RESOLVER_BASE" \
-  --operation-root "$OP_ROOT"
+  --operation-root "$OP_ROOT" \
+  --webhook-url "$WEBHOOK_URL" \
+  --verifier-id isomer-python \
+  --verifier-label "Isomer Python"
 # Alternative syntax:
 #   ./.venv/bin/python -m vc_isomer.cli verifier serve ...
 ```
+
+### Verifier Dashboard
+
+Source the same env vars from the "Set Environment Variables section" first.
+
+Start the dashboard in a third terminal:
+
+```bash
+npm --prefix apps/isomer-dashboard install
+ISOMER_DASHBOARD_HOST=127.0.0.1 \
+ISOMER_DASHBOARD_PORT="$DASHBOARD_PORT" \
+npm --prefix apps/isomer-dashboard run serve
+```
+
+Open `http://127.0.0.1:8791` to watch successful VP verifications arrive as a
+newest-first activity stream.
 
 ### Health checks
 
@@ -226,6 +248,7 @@ Health checks:
 ```bash
 curl -fsS "${STATUS_BASE}/healthz"
 curl -fsS "${VERIFIER_BASE}/healthz"
+curl -fsS "${DASHBOARD_BASE}/healthz"
 ```
 
 The default verifier command runs the API and worker together in one process.
@@ -504,6 +527,11 @@ verified vp+jwt:
 holder=did:webs:...
 embeddedCredentials=1
 ```
+
+The verifier service posts a best-effort webhook only after this successful
+top-level VP verification. The dashboard receives decoded presentation and
+nested credential payloads plus verifier metadata; raw JWT strings are not
+forwarded.
 
 ## 8. External W3C Verifier Acceptance
 
