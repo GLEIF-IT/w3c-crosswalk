@@ -169,14 +169,21 @@ func normalizeDIDDocument(document map[string]any) {
 		if method == nil {
 			continue
 		}
-		// Preserve the existing key material shape. The Go path normalizes method
-		// type and verification relationships for trustbloc DID parsing, but does
-		// not add synthesized publicKeyMultibase or publicKeyJwk fields here.
-		if isSupportedEdDSAType(asString(method["type"])) {
-			continue
-		}
+		// The Go verifier is intentionally JWK-first. Some did:webs documents
+		// expose both publicKeyJwk and publicKeyMultibase for the same method.
+		// TrustBloc's DID parser prefers the Multikey field when both are
+		// present, which leaves VerificationMethod.JSONWebKey() nil. When a
+		// usable Ed25519 JWK is already available, keep that single source of key
+		// material for this adapter and drop the parallel Multikey view.
 		if jwk := asMap(method["publicKeyJwk"]); jwk != nil && jwk["kty"] == "OKP" && jwk["crv"] == "Ed25519" {
 			method["type"] = "JsonWebKey2020"
+			delete(method, "publicKeyMultibase")
+			continue
+		}
+		// Preserve non-JWK key material shape. The Go path normalizes method type
+		// and verification relationships, but it does not synthesize key material.
+		if isSupportedEdDSAType(asString(method["type"])) {
+			continue
 		}
 	}
 	normalizeDIDRelationship(document, "assertionMethod", methods)

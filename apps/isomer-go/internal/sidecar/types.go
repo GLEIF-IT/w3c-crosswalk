@@ -4,10 +4,13 @@ import "context"
 
 // Config captures the runtime inputs needed to launch the HTTP sidecar.
 type Config struct {
-	Host         string
-	Port         int
-	ResolverURL  string
-	ResourceRoot string
+	Host          string
+	Port          int
+	ResolverURL   string
+	ResourceRoot  string
+	WebhookURL    string
+	VerifierID    string
+	VerifierLabel string
 }
 
 // Validate rejects incomplete runtime configuration before the server boots.

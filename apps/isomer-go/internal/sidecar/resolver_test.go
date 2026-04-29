@@ -22,7 +22,8 @@ func TestDIDDocumentBytesNormalizesKERIKeyMethods(t *testing.T) {
 					"kty": "OKP",
 					"crv": "Ed25519",
 					"x": "11qYAYKxCrfVS_3u3lIBX7hLTXruxN4B0qVd2zSYXK0"
-				}
+				},
+				"publicKeyMultibase": "z6Mkv9CtaGfyKqGjca3n8cVaeyy1T1412Kyy4Q2p5gz8yqyq"
 			}],
 			"assertionMethod": ["#key-1"]
 		}
@@ -42,6 +43,9 @@ func TestDIDDocumentBytesNormalizesKERIKeyMethods(t *testing.T) {
 	method := methods[0].(map[string]any)
 	if method["type"] != "JsonWebKey2020" {
 		t.Fatalf("expected JsonWebKey2020 method, got %#v", method["type"])
+	}
+	if _, ok := method["publicKeyMultibase"]; ok {
+		t.Fatal("expected publicKeyMultibase to be removed when publicKeyJwk is available")
 	}
 	if document["@context"] == nil {
 		t.Fatal("expected DID context to be added")
@@ -67,7 +71,8 @@ func TestPublicJWKFindsVerificationMethodByFragment(t *testing.T) {
 						"kty": "OKP",
 						"crv": "Ed25519",
 						"x": "11qYAYKxCrfVS_3u3lIBX7hLTXruxN4B0qVd2zSYXK0"
-					}
+					},
+					"publicKeyMultibase": "z6Mkv9CtaGfyKqGjca3n8cVaeyy1T1412Kyy4Q2p5gz8yqyq"
 				}]
 			}
 		}`))

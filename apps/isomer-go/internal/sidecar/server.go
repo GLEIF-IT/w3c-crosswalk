@@ -11,8 +11,10 @@ import (
 
 // Server owns the HTTP surface for the Go verifier sidecar.
 type Server struct {
-	config   Config
-	verifier Verifier
+	config     Config
+	verifier   Verifier
+	webhook    presentationWebhook
+	operations *operationMonitor
 }
 
 // NewServer constructs the production server with the default verifier
@@ -31,7 +33,17 @@ func NewServer(config Config) (*Server, error) {
 // newServerWithVerifier injects a verifier implementation for tests and other
 // callers that already own the runtime seams.
 func newServerWithVerifier(config Config, verifier Verifier) *Server {
-	return &Server{config: config, verifier: verifier}
+	return newServerWithVerifierAndWebhook(config, verifier, newWebhookDispatcher(config))
+}
+
+// newServerWithVerifierAndWebhook injects verifier and webhook seams for tests.
+func newServerWithVerifierAndWebhook(config Config, verifier Verifier, webhook presentationWebhook) *Server {
+	return &Server{
+		config:     config,
+		verifier:   verifier,
+		webhook:    webhook,
+		operations: newOperationMonitor(),
+	}
 }
 
 // Run starts the HTTP server and blocks until it shuts down or returns an
@@ -68,6 +80,8 @@ func (s *Server) handler() http.Handler {
 	mux.HandleFunc("GET /healthz", s.health)
 	mux.HandleFunc("POST /verify/vc", s.verifyVC)
 	mux.HandleFunc("POST /verify/vp", s.verifyVP)
+	mux.HandleFunc("GET /operations", s.listOperations)
+	mux.HandleFunc("GET /operations/{name}", s.getOperation)
 	return recoverHandler(mux)
 }
 
@@ -85,7 +99,24 @@ func (s *Server) verifyVC(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "error": "verification request requires token"})
 		return
 	}
-	writeJSON(w, http.StatusOK, s.verifier.VerifyVC(r.Context(), request.Token))
+	operation := s.operations.submit("verify-vc", func(ctx context.Context, operationName string) *verificationResult {
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				logVerificationError(s.config, "vc+jwt", operationName, recovered)
+				panic(recovered)
+			}
+		}()
+		result := s.verifier.VerifyVC(ctx, request.Token)
+		if result.OK {
+			if warning := s.webhook.SendCredential(ctx, result); warning != "" {
+				result.Warnings = append(result.Warnings, warning)
+			}
+		}
+		logVerificationResult(s.config, "vc+jwt", operationName, result)
+		return result
+	})
+	logVerificationReceived(s.config, "/verify/vc", "vc+jwt", operation.Name, request.Token)
+	writeJSON(w, http.StatusAccepted, operation)
 }
 
 // verifyVP validates one HTTP VP verification request and delegates the actual
@@ -96,7 +127,34 @@ func (s *Server) verifyVP(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "error": "verification request requires token"})
 		return
 	}
-	writeJSON(w, http.StatusOK, s.verifier.VerifyVP(r.Context(), request.Token, request.Audience, request.Nonce))
+	logVerificationReceived(s.config, "/verify/vp", "vp+jwt", "", request.Token)
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			logVerificationError(s.config, "vp+jwt", "", recovered)
+			panic(recovered)
+		}
+	}()
+	result := s.verifier.VerifyVP(r.Context(), request.Token, request.Audience, request.Nonce)
+	if result.OK {
+		if warning := s.webhook.SendPresentation(r.Context(), result); warning != "" {
+			result.Warnings = append(result.Warnings, warning)
+		}
+	}
+	logVerificationResult(s.config, "vp+jwt", "", result)
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) listOperations(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.operations.list(r.URL.Query().Get("type")))
+}
+
+func (s *Server) getOperation(w http.ResponseWriter, r *http.Request) {
+	operation, ok := s.operations.get(r.PathValue("name"))
+	if !ok {
+		writeJSON(w, http.StatusNotFound, map[string]any{"ok": false, "error": "operation not found"})
+		return
+	}
+	writeJSON(w, http.StatusOK, operation)
 }
 
 // writeJSON serializes one response body with the sidecar's JSON content type.

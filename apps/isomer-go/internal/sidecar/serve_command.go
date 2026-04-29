@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
 )
 
 var errMissingResolverURL = errors.New("--resolver-url is required")
@@ -35,6 +36,9 @@ func parseServeConfig(args []string) (Config, error) {
 	flags.IntVar(&config.Port, "port", 8788, "HTTP port")
 	flags.StringVar(&config.ResolverURL, "resolver-url", "", "did:webs resolver base URL")
 	flags.StringVar(&config.ResourceRoot, "resource-root", ".", "w3c-crosswalk repository root")
+	flags.StringVar(&config.WebhookURL, "webhook-url", os.Getenv("ISOMER_WEBHOOK_URL"), "successful VC/VP webhook URL")
+	flags.StringVar(&config.VerifierID, "verifier-id", envDefault("ISOMER_VERIFIER_ID", "isomer-go"), "verifier id for webhook metadata")
+	flags.StringVar(&config.VerifierLabel, "verifier-label", os.Getenv("ISOMER_VERIFIER_LABEL"), "verifier label for webhook metadata")
 
 	if err := flags.Parse(args); err != nil {
 		return Config{}, fmt.Errorf("parse flags: %w", err)
@@ -43,4 +47,12 @@ func parseServeConfig(args []string) (Config, error) {
 		return Config{}, err
 	}
 	return config, nil
+}
+
+// envDefault returns a configured environment value or a fallback.
+func envDefault(name, fallback string) string {
+	if value := os.Getenv(name); value != "" {
+		return value
+	}
+	return fallback
 }
