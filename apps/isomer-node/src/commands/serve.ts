@@ -5,7 +5,7 @@
  * by `server.ts`. It intentionally avoids broader command routing so the
  * sidecar stays easy to launch from tests, Make targets, and CI.
  */
-import { cwd } from "node:process";
+import { cwd, env } from "node:process";
 import type { Operation } from "effection";
 import { serveSidecar } from "../server.js";
 import type { SidecarConfig } from "../types.js";
@@ -42,7 +42,10 @@ export function parseArgs(argv: string[]): SidecarConfig {
     host: values.get("host") ?? "127.0.0.1",
     port: Number(values.get("port") ?? "8787"),
     resolverUrl,
-    resourceRoot: values.get("resource-root") ?? cwd()
+    resourceRoot: values.get("resource-root") ?? cwd(),
+    webhookUrl: values.get("webhook-url") ?? env.ISOMER_WEBHOOK_URL,
+    verifierId: values.get("verifier-id") ?? env.ISOMER_VERIFIER_ID ?? "isomer-node",
+    verifierLabel: values.get("verifier-label") ?? env.ISOMER_VERIFIER_LABEL
   };
 }
 

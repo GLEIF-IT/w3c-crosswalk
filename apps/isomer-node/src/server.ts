@@ -16,6 +16,14 @@ import type {
   VerifyRequest,
   VpVerificationResult
 } from "./types.js";
+import { InMemoryOperationMonitor } from "./operations.js";
+import {
+  logVerificationError,
+  logVerificationResult,
+  logVerifierEvent,
+  tokenObservability
+} from "./observability.js";
+import { createWebhookDispatcher, type WebhookDispatcher } from "./webhook.js";
 
 /**
  * Verification hooks bound to the HTTP request layer.
@@ -40,7 +48,9 @@ export interface RequestVerifier {
 export function createApp(
   config: SidecarConfig,
   runtime = createVerifierRuntime(config),
-  requestVerifier = createRequestVerifier(runtime)
+  requestVerifier = createRequestVerifier(runtime),
+  webhook = createWebhookDispatcher(config),
+  operations = new InMemoryOperationMonitor()
 ): Hono {
   const app = new Hono();
 
@@ -53,7 +63,43 @@ export function createApp(
     if (!hasToken(body)) {
       return context.json({ ok: false, error: "verification request requires token" }, 400);
     }
-    return context.json(await run(() => requestVerifier.verifyVc(body.token)));
+    const operation = operations.submit("verify-vc", async (operationName) => {
+      try {
+        const result = await run(() => requestVerifier.verifyVc(body.token));
+        if (result.ok) {
+          const warning = await webhook.sendCredential(result);
+          if (warning) {
+            result.warnings.push(warning);
+          }
+        }
+        logVerificationResult(config, "vc+jwt", result, operationName);
+        return result;
+      } catch (error) {
+        logVerificationError(config, "vc+jwt", error, operationName);
+        throw error;
+      }
+    });
+    logVerifierEvent("verification.received", {
+      verifier: config.verifierId,
+      route: "/verify/vc",
+      artifactKind: "vc+jwt",
+      operationName: operation.name,
+      ...tokenObservability(body.token)
+    });
+    return context.json(operation, 202);
+  });
+
+  app.get("/operations", (context) => {
+    const type = context.req.query("type");
+    return context.json(operations.list(type));
+  });
+
+  app.get("/operations/:name", (context) => {
+    const operation = operations.get(context.req.param("name"));
+    if (operation === undefined) {
+      return context.json({ ok: false, error: "operation not found" }, 404);
+    }
+    return context.json(operation);
   });
 
   app.post("/verify/vp", async (context) => {
@@ -63,7 +109,26 @@ export function createApp(
     }
     const audience = typeof body.audience === "string" ? body.audience : undefined;
     const nonce = typeof body.nonce === "string" ? body.nonce : undefined;
-    return context.json(await run(() => requestVerifier.verifyVp(body.token, { audience, nonce })));
+    logVerifierEvent("verification.received", {
+      verifier: config.verifierId,
+      route: "/verify/vp",
+      artifactKind: "vp+jwt",
+      ...tokenObservability(body.token)
+    });
+    try {
+      const result = await run(() => requestVerifier.verifyVp(body.token, { audience, nonce }));
+      if (result.ok) {
+        const warning = await webhook.sendPresentation(result);
+        if (warning) {
+          result.warnings.push(warning);
+        }
+      }
+      logVerificationResult(config, "vp+jwt", result);
+      return context.json(result);
+    } catch (error) {
+      logVerificationError(config, "vp+jwt", error);
+      throw error;
+    }
   });
 
   return app;

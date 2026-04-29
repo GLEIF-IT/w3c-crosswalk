@@ -9,6 +9,9 @@ export interface SidecarConfig {
   port: number;
   resolverUrl: string;
   resourceRoot: string;
+  webhookUrl?: string;
+  verifierId: string;
+  verifierLabel?: string;
 }
 
 /**
