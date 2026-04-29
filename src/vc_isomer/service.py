@@ -26,6 +26,7 @@ from .longrunning import OperationCollectionResource, OperationMonitor, Operatio
 from .runtime_http import setup_server_doers
 from .services import VerifierOperationService
 from .status import JsonFileStatusStore
+from .verifier_logging import log_verifier_event, token_observability
 from .verifier_runtime import VerificationManagerDoer
 
 
@@ -59,6 +60,12 @@ class VerifierServerConfig:
     operation_store_root: str
     # LMDB environment name for verifier operation records.
     operation_store_name: str = "verifier"
+    # Optional webhook target for successful top-level VC and VP verification events.
+    webhook_url: str | None = None
+    # Stable verifier id included in webhook metadata.
+    verifier_id: str = "isomer-python"
+    # Optional human-facing verifier label included in webhook metadata.
+    verifier_label: str | None = None
     # Cooperative HIO scheduler cadence for verifier API and worker doers.
     tock: float = 0.03125
 
@@ -91,12 +98,19 @@ class CredentialStatusResource:
         resp.media = record.as_status_resource(self.base_url)
 
 
+ARTIFACT_KIND_BY_ROUTE = {
+    VERIFY_VC_ROUTE: "vc+jwt",
+    VERIFY_VP_ROUTE: "vp+jwt",
+}
+
+
 class VerificationSubmissionResource:
     """Submit one verifier operation without executing it in the request handler."""
 
-    def __init__(self, *, route: str, submit: Callable[..., Any]):
+    def __init__(self, *, route: str, submit: Callable[..., Any], verifier_id: str):
         self.route = route
         self.submit = submit
+        self.verifier_id = verifier_id
 
     def on_post(self, req: falcon.Request, resp: falcon.Response) -> None:
         """Validate one submission body and create the corresponding operation."""
@@ -112,6 +126,18 @@ class VerificationSubmissionResource:
         except ValueError as exc:
             raise falcon.HTTPBadRequest(description=str(exc)) from exc
 
+        token = body.get("token")
+        artifact_kind = ARTIFACT_KIND_BY_ROUTE.get(self.route)
+        if artifact_kind is not None and isinstance(token, str):
+            log_verifier_event(
+                "verification.received",
+                verifier=self.verifier_id,
+                route=self.route,
+                artifactKind=artifact_kind,
+                operationName=operation.name,
+                **token_observability(token),
+            )
+
         resp.status = falcon.HTTP_202
         resp.media = {"name": operation.name, "done": operation.done}
 
@@ -124,7 +150,7 @@ def create_status_app(*, store: JsonFileStatusStore, base_url: str) -> falcon.Ap
     return app
 
 
-def create_verifier_app(*, operation_service: VerifierOperationService) -> falcon.App:
+def create_verifier_app(*, operation_service: VerifierOperationService, verifier_id: str = "isomer-python") -> falcon.App:
     """Create the Falcon app for long-running verifier submission and polling."""
     app = falcon.App()
     app.add_route(HEALTH_ROUTE, HealthResource("verifier"))
@@ -133,6 +159,7 @@ def create_verifier_app(*, operation_service: VerifierOperationService) -> falco
         VerificationSubmissionResource(
             route=VERIFY_VC_ROUTE,
             submit=operation_service.submit_verify_vc,
+            verifier_id=verifier_id,
         ),
     )
     app.add_route(
@@ -140,6 +167,7 @@ def create_verifier_app(*, operation_service: VerifierOperationService) -> falco
         VerificationSubmissionResource(
             route=VERIFY_VP_ROUTE,
             submit=operation_service.submit_verify_vp,
+            verifier_id=verifier_id,
         ),
     )
     app.add_route(
@@ -147,6 +175,7 @@ def create_verifier_app(*, operation_service: VerifierOperationService) -> falco
         VerificationSubmissionResource(
             route=VERIFY_PAIR_ROUTE,
             submit=operation_service.submit_verify_pair,
+            verifier_id=verifier_id,
         ),
     )
     app.add_route(OPERATIONS_ROUTE_PREFIX, OperationCollectionResource(monitor=operation_service.monitor))
@@ -172,7 +201,7 @@ def setup_verifier_api_doers(
         head_dir_path=config.operation_store_root,
     )
     operation_service = VerifierOperationService(monitor=owned_monitor)
-    app = create_verifier_app(operation_service=operation_service)
+    app = create_verifier_app(operation_service=operation_service, verifier_id=config.verifier_id)
     return setup_server_doers(host=config.host, port=config.port, app=app)
 
 
@@ -186,7 +215,14 @@ def setup_verifier_worker_doers(
         name=config.operation_store_name,
         head_dir_path=config.operation_store_root,
     )
-    manager = VerificationManagerDoer(monitor=owned_monitor, resolver_base_url=config.resolver_url, tock=config.tock)
+    manager = VerificationManagerDoer(
+        monitor=owned_monitor,
+        resolver_base_url=config.resolver_url,
+        webhook_url=config.webhook_url,
+        verifier_id=config.verifier_id,
+        verifier_label=config.verifier_label,
+        tock=config.tock,
+    )
     return [manager]
 
 

@@ -20,6 +20,14 @@ from .longrunning import OperationMonitor
 from .runtime_http import Clienter, JsonRequestDoer, JsonResponse
 from .status import HttpStatusResolver
 from .verifier import PreparedVcToken, PreparedVpToken, VerificationEngine, VerificationResult
+from .verifier_logging import log_verifier_event
+from .webhook import build_credential_verified_event, build_presentation_verified_event
+
+
+ARTIFACT_KIND_BY_OPERATION = {
+    VERIFY_VC_OPERATION: "vc+jwt",
+    VERIFY_VP_OPERATION: "vp+jwt",
+}
 
 
 @dataclass(frozen=True)
@@ -46,11 +54,17 @@ class VerificationJobDoer(doing.DoDoer):
         monitor: OperationMonitor,
         operation_name: str,
         resolver_base_url: str,
+        webhook_url: str | None = None,
+        verifier_id: str = "isomer-python",
+        verifier_label: str | None = None,
         tock: float = 0.03125,
     ):
         self.monitor = monitor
         self.operation_name = operation_name
         self.resolver_base_url = resolver_base_url.rstrip("/")
+        self.webhook_url = webhook_url
+        self.verifier_id = verifier_id
+        self.verifier_label = verifier_label
         self.clienter = Clienter()
         self.engine = VerificationEngine()
         super().__init__(doers=[self.clienter, doing.doify(self.run)], tock=tock)
@@ -62,11 +76,14 @@ class VerificationJobDoer(doing.DoDoer):
         _ = (yield self.tock)
 
         self.monitor.mark_running(self.operation_name)
+        op_type = None
         try:
             record = self.monitor.require_record(self.operation_name)
+            op_type = record.type
             request = record.metadata.get("request", {})
             result = yield from self._dispatch(record.type, request)
         except VerificationRuntimeError as exc:
+            self._log_failure_result(op_type, exc)
             self.monitor.fail(
                 self.operation_name,
                 code=exc.code,
@@ -75,6 +92,14 @@ class VerificationJobDoer(doing.DoDoer):
             )
             return True
         except Exception as exc:  # pragma: no cover - catastrophic runtime failures are integration-covered
+            self._log_failure_result(
+                op_type,
+                VerificationRuntimeError(
+                    code=500,
+                    message=str(exc),
+                    details={"exception": type(exc).__name__},
+                ),
+            )
             self.monitor.fail(
                 self.operation_name,
                 code=500,
@@ -83,6 +108,7 @@ class VerificationJobDoer(doing.DoDoer):
             )
             return True
 
+        self._log_success_result(op_type, result)
         self.monitor.complete(self.operation_name, result.to_dict())
         return True
 
@@ -99,7 +125,12 @@ class VerificationJobDoer(doing.DoDoer):
     def _verify_vc_request(self, request: dict[str, Any]):
         """Execute one VC verification request to completion."""
         token = self._require_string(request, "token")
-        return (yield from self._verify_vc_token(token))
+        result = yield from self._verify_vc_token(token)
+        if result.ok:
+            warning = yield from self._send_credential_webhook(result)
+            if warning:
+                result.warnings.append(warning)
+        return result
 
     def _verify_pair_request(self, request: dict[str, Any]):
         """Execute one isomer pair verification request to completion."""
@@ -128,6 +159,10 @@ class VerificationJobDoer(doing.DoDoer):
             nested_results.append((yield from self._verify_vc_token(vc_token)))
 
         result = self.engine.evaluate_prepared_vp(prepared, method=method, nested_results=nested_results)
+        if result.ok:
+            warning = yield from self._send_presentation_webhook(result)
+            if warning:
+                result.warnings.append(warning)
         return result
 
     def _verify_vc_token(self, token: str):
@@ -181,14 +216,14 @@ class VerificationJobDoer(doing.DoDoer):
             ) from exc
         return status_doc
 
-    def _request_json(self, *, method: str, url: str, body: Any | None = None):
+    def _request_json(self, *, method: str, url: str, body: Any | None = None, timeout: float = 10.0):
         """Run one outbound HTTP request as a child doer and yield until it completes."""
         request_doer = JsonRequestDoer(
             method=method,
             url=url,
             body=body,
             clienter=self.clienter,
-            timeout=10.0,
+            timeout=timeout,
             tock=self.tock,
         )
         self.extend([request_doer])
@@ -209,6 +244,127 @@ class VerificationJobDoer(doing.DoDoer):
         finally:
             if request_doer in self.doers:
                 self.remove([request_doer])
+
+    def _send_presentation_webhook(self, result: VerificationResult):
+        """Best-effort POST one successful presentation event to the webhook target."""
+        event = build_presentation_verified_event(
+            result,
+            verifier_id=self.verifier_id,
+            verifier_label=self.verifier_label,
+        )
+        return (yield from self._send_webhook_event(event))
+
+    def _send_credential_webhook(self, result: VerificationResult):
+        """Best-effort POST one successful credential event to the webhook target."""
+        event = build_credential_verified_event(
+            result,
+            verifier_id=self.verifier_id,
+            verifier_label=self.verifier_label,
+        )
+        return (yield from self._send_webhook_event(event))
+
+    def _send_webhook_event(self, event: dict[str, Any]):
+        """POST one dashboard webhook event and return a non-fatal warning."""
+        event_id = event.get("eventId")
+        artifact_kind = self._webhook_artifact_kind(event)
+        if not self.webhook_url:
+            log_verifier_event(
+                "webhook.skipped",
+                verifier=self.verifier_id,
+                eventId=event_id,
+                artifactKind=artifact_kind,
+                reason="no_webhook_url",
+            )
+            return None
+
+        log_verifier_event(
+            "webhook.request",
+            verifier=self.verifier_id,
+            webhookUrl=self.webhook_url,
+            eventId=event_id,
+            artifactKind=artifact_kind,
+            body=event,
+        )
+        try:
+            response = yield from self._request_json(
+                method="POST",
+                url=self.webhook_url,
+                body=event,
+                timeout=3.0,
+            )
+        except VerificationRuntimeError as exc:
+            log_verifier_event(
+                "webhook.error",
+                verifier=self.verifier_id,
+                webhookUrl=self.webhook_url,
+                eventId=event_id,
+                artifactKind=artifact_kind,
+                error=exc.message,
+            )
+            return f"dashboard webhook failed: {exc.message}"
+
+        log_verifier_event(
+            "webhook.response",
+            verifier=self.verifier_id,
+            webhookUrl=self.webhook_url,
+            eventId=event_id,
+            artifactKind=artifact_kind,
+            httpStatus=response.status,
+            ok=response.status < 400,
+        )
+        if response.status >= 400:
+            return f"dashboard webhook returned HTTP {response.status}"
+        return None
+
+    def _log_success_result(self, op_type: str | None, result: VerificationResult) -> None:
+        """Log one terminal verifier success or domain-level verification result."""
+        artifact_kind = ARTIFACT_KIND_BY_OPERATION.get(op_type or "")
+        if artifact_kind is None:
+            return
+        log_verifier_event(
+            "verification.result",
+            verifier=self.verifier_id,
+            artifactKind=artifact_kind,
+            operationName=self.operation_name,
+            ok=result.ok,
+            kind=result.kind,
+            checks=result.checks,
+            warnings=result.warnings,
+            errors=result.errors,
+        )
+
+    def _log_failure_result(self, op_type: str | None, exc: VerificationRuntimeError) -> None:
+        """Log one terminal verifier runtime failure."""
+        artifact_kind = ARTIFACT_KIND_BY_OPERATION.get(op_type or "")
+        if artifact_kind is None:
+            return
+        log_verifier_event(
+            "verification.result",
+            verifier=self.verifier_id,
+            artifactKind=artifact_kind,
+            operationName=self.operation_name,
+            ok=False,
+            kind=artifact_kind,
+            checks={},
+            warnings=[],
+            errors=[exc.message],
+            error={"code": exc.code, "message": exc.message, "details": exc.details},
+        )
+
+    @staticmethod
+    def _webhook_artifact_kind(event: dict[str, Any]) -> str | None:
+        """Read the artifact kind from a dashboard webhook event."""
+        presentation = event.get("presentation")
+        if isinstance(presentation, dict):
+            value = presentation.get("kind")
+            if isinstance(value, str):
+                return value
+        verification = event.get("verification")
+        if isinstance(verification, dict):
+            value = verification.get("kind")
+            if isinstance(value, str):
+                return value
+        return None
 
     @staticmethod
     def _require_string(body: dict[str, Any], field: str) -> str:
@@ -232,9 +388,21 @@ class VerificationJobDoer(doing.DoDoer):
 class VerificationManagerDoer(doing.DoDoer):
     """Watch the operation store and launch verification jobs for pending work."""
 
-    def __init__(self, *, monitor: OperationMonitor, resolver_base_url: str, tock: float = 0.03125):
+    def __init__(
+        self,
+        *,
+        monitor: OperationMonitor,
+        resolver_base_url: str,
+        webhook_url: str | None = None,
+        verifier_id: str = "isomer-python",
+        verifier_label: str | None = None,
+        tock: float = 0.03125,
+    ):
         self.monitor = monitor
         self.resolver_base_url = resolver_base_url
+        self.webhook_url = webhook_url
+        self.verifier_id = verifier_id
+        self.verifier_label = verifier_label
         self.active: dict[str, VerificationJobDoer] = {}
         super().__init__(doers=[doing.doify(self.manage)], always=True, tock=tock)
 
@@ -268,6 +436,9 @@ class VerificationManagerDoer(doing.DoDoer):
                 monitor=self.monitor,
                 operation_name=name,
                 resolver_base_url=self.resolver_base_url,
+                webhook_url=self.webhook_url,
+                verifier_id=self.verifier_id,
+                verifier_label=self.verifier_label,
                 tock=self.tock,
             )
             self.active[name] = job
