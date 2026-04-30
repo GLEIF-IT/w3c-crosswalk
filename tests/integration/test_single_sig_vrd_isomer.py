@@ -67,14 +67,14 @@ def _write_vrd_auth_data(stack: dict, state) -> Path:
     )
 
 
-def _write_vrd_data(stack: dict, state, issuer_did) -> Path:
+def _write_vrd_data(stack: dict, state, subject_did: str) -> Path:
     """Write subject data for the VRD credential under test."""
     return write_json(
         Path(stack["temp_root"]) / "vrd-data.json",
         {
             "i": state.le_prefix,
             "AID": state.le_prefix,
-            "DID": issuer_did,
+            "DID": subject_did,
             "HeadquartersAddress": "1 Market St, San Francisco, CA, US",
             "LegalName": "Example Legal Entity LLC",
         },
@@ -221,8 +221,9 @@ def _issue_vrd_credentials(live_stack: dict, state) -> str:
         passcode=state.qvi.passcode,
     )
     issuer_did = _did_for(live_stack, state.qvi_prefix)
+    subject_did = _did_for(live_stack, state.le_prefix)
 
-    vrd_data = _write_vrd_data(live_stack, state, issuer_did)
+    vrd_data = _write_vrd_data(live_stack, state, subject_did)
     vrd_rules = _rules_path(live_stack, "vrd-rules.json")
     vrd_edge = _edge_from_template(
         live_stack,

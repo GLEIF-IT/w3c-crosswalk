@@ -571,7 +571,7 @@ VRD_EDGE="$TMP_DIR/vrd-edge.json"
 write_json "$VRD_DATA" \
   i "$LE_AID" \
   AID "$LE_AID" \
-  DID "$QVI_DID" \
+  DID "$LE_DID" \
   HeadquartersAddress "$LEGAL_ADDRESS" \
   LegalName "$LEGAL_NAME"
 render_json_template "$ROOT/tests/integration/assets/vrd-edge-template.json" "$VRD_EDGE" "__LE_CREDENTIAL_SAID__" "$LE_CREDENTIAL_SAID"
