@@ -4,17 +4,16 @@ Routing index and durable cross-topic memory for `isomer`.
 
 ## Current Focus
 
-1. Land the first true end-to-end ACDC -> W3C VRD Isomer flow.
+1. Keep the live ACDC -> W3C VRD Isomer flow honest and test-backed.
 2. Keep `did-webs-resolver` mandatory for W3C key-state verification.
 3. Enforce live KERI habitat signers everywhere; no demo signers.
-4. Move integration workflow helpers from `kli` subprocess orchestration to
-   in-process KERIpy doers.
+4. Keep default local setup portable through packages, pinned refs, or images.
 
 ## Topic Learnings Index
 
 | Topic | File | Scope |
 | ----- | ---- | ----- |
-| Signing and Issuance | `.agents/learnings/PROJECT_LEARNINGS_SIGNING_AND_ISSUANCE.md` | Signer policy, issuance seams, runtime vs test boundaries |
+| Signing and Issuance | `.agents/learnings/PROJECT_LEARNINGS_SIGNING_AND_ISSUANCE.md` | Signing policy, issuance invariants, verifier boundaries |
 
 ## Context Pack Policy
 
@@ -22,60 +21,29 @@ At session start:
 
 1. Read `AGENTS.md`.
 2. Read this file.
-3. Read only the topic doc(s) relevant to the task.
-4. Read any plan docs those topic docs reference.
+3. Read only task-relevant topic docs.
+4. Read task-relevant source, tests, docs, and plans.
 
-## Cross-Topic Snapshot
+## Current Invariants
 
-1. Demo signers are banned; runtime and integration signing must use live
-   KERI-managed habitats.
-2. Test determinism is acceptable only through real temporary habitats created
+1. KERI KEL/TEL/ACDC state is the source of truth; W3C artifacts are
+   interoperability projections.
+2. Runtime and integration signing must use live KERI-managed habitats.
+3. Test determinism is acceptable only through real temporary habitats created
    from KERI-managed salt or passcode inputs.
-3. `did-webs-resolver` is a hard dependency for W3C verification; verifier key
-   lookup must not bypass it.
-4. `w3c-signer` is legacy reference material, not a production base.
-5. Long-lived services may be subprocesses, but KERI workflow logic should stay
-   in-process through KERIpy doers or library APIs.
-6. Maintainer-facing Python code in `src/` and `tests/` should use concise
-   Google-style docstrings.
-7. Product-specific schema defects belong in the schema layer, not in KERIpy
-   core validation.
-8. Any schema body change must be re-SAIDified, and all constants, fixtures,
-   and docs must move to the new SAID.
-9. Prefer stock KERIpy doers over local managed copies; if cleanup or lifecycle
-   behavior is wrong, fix KERIpy instead of growing a parallel doer layer.
-10. For live-stack debugging, start with short pytest traces, 20-40 line source
-    slices, and narrow log reads.
-11. Verifier operation metadata stays intentionally minimal for the PoC; do not
-    reintroduce heavy tracing unless the project commits to a real observability
-    design.
-12. In-process `did:webs` debugging should run artifact and resolver services as
-    background HIO doers, each with its own snapshot HOME/`.keri` tree to avoid
-    same-process LMDB collisions.
-13. Packaging uses a three-name split: distribution `vc-isomer`, import package
-    `vc_isomer`, CLI `isomer`; product-facing naming stays Isomer.
-14. Publishing is Makefile-driven with `uv build`, `twine check` via `uvx`, and
-    guarded `uv publish` targets that require a clean worktree unless
-    `ALLOW_DIRTY=1`.
-15. Isomer's W3C bridge target is VCDM 1.1 first: 2018 credentials context,
-    `issuanceDate`, VCDM 1.1 `vc`/`vp` JWT claims, and KERI-backed
-    `eddsa-rdfc-2022` Data Integrity proofs.
-16. First interop artifacts include packaged JSON-LD contexts, a packaged W3C
-    JSON Schema, and OpenID4VCI/OpenID4VP metadata examples.
-17. External acceptance runs through Node and Go sidecars to validate VC-JWT,
-    VP-JWT, embedded Data Integrity proof, and status interop without replacing
-    Isomer's TEL/ACDC-aware Python pair verifier.
-18. JSON-LD `id` values must be absolute IRIs; when a nested ACDC SAID becomes a
-    W3C `id`, represent it as `urn:said:<SAID>` and keep the raw SAID in the
-    signed Isomer provenance block.
-19. The portable Docker stack persists KERIA, witness, did:webs resolver, and
-    Python verifier operation state in named Compose volumes. `make local-down`
-    preserves those volumes; `make local-reset` is the destructive clean-state
-    command and also removes `.tmp/local-stack` seed/project artifacts.
+4. `did-webs-resolver` is the hard DID and key-state dependency for W3C
+   verification.
+5. `w3c-signer` is legacy reference material, not a production base.
+6. Python Isomer is authoritative for TEL-aware and ACDC/W3C pair verification.
+7. Node and Go are external W3C acceptance gates.
+8. JSON-LD contexts are pinned locally and unknown contexts fail closed.
+9. Nested ACDC SAIDs that become W3C `id` values use `urn:said:<SAID>`.
+10. Default scripts, Dockerfiles, and compose files must not require sibling
+    source checkouts.
 
 ## Handoff Template
 
-When updating a topic doc, capture:
+When updating topic memory, capture:
 
 1. What changed
 2. Why it changed

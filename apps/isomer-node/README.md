@@ -3,205 +3,73 @@
 Minimal TypeScript verifier sidecar for external W3C acceptance.
 
 This app verifies Isomer VCDM 1.1 VC-JWT and VP-JWT artifacts without importing
-the Python verifier. It exists to answer one maintainer question quickly:
+the Python verifier. It proves that an independent Node verifier stack can
+understand the same artifacts emitted and accepted by Isomer.
 
-Can an independent Node verifier stack understand the same live Isomer
-artifacts that the Python verifier emits and accepts?
+For shared verifier semantics, see `../../docs/verifier-contract.md`.
 
-The sidecar is intentionally narrow. It is not a production replacement for the
-Python Isomer verifier, and it does not attempt TEL-aware ACDC/W3C pair
-equivalence checks. Its job is external W3C-side acceptance.
+## Scope
 
-## Purpose And Non-Goals
+Owns:
 
-Purpose:
+- VC-JWT and VP-JWT envelope verification through `did-jwt-vc`
+- `did:webs` resolution through `packages/webs-did-resolver`
+- embedded `DataIntegrityProof` verification
+- projected `credentialStatus` fetch/check
+- optional dashboard webhook emission for successful top-level verification
 
-- verify VC-JWT and VP-JWT artifacts emitted by Isomer,
-- use the same `did:webs` and status HTTP seams that the live Isomer stack
-  exposes,
-- prove external W3C acceptance without importing Python verifier code.
+Does not own:
 
-Non-goals:
+- source ACDC equivalence checks
+- TEL-aware verification
+- issuer, holder, or wallet workflow
+- long-running operation storage
+- arbitrary remote JSON-LD context fetching
 
-- replace the Python verifier as the authoritative Isomer verifier,
-- perform source ACDC equivalence checks,
-- own issuer workflow, long-running operation storage, or broader wallet logic,
-- fetch arbitrary remote JSON-LD contexts at runtime.
+## Source Map
 
-## Architecture
+- `src/main.ts` - Effection entrypoint.
+- `src/commands/serve.ts` - CLI argument parsing.
+- `src/server.ts` - Hono HTTP app.
+- `src/verifier.ts` - main verification pipeline.
+- `src/did-jwt-vc.ts` - `did-jwt-vc` wrappers.
+- `src/data-integrity.ts` - embedded proof verification.
+- `src/status.ts` - W3C status fetch/check.
+- `src/local-contexts.ts` - pinned JSON-LD context loader.
+- `src/webhook.ts` - dashboard webhook events.
 
-The sidecar is intentionally small:
-
-- `src/main.ts`
-  Effection entrypoint for the CLI process.
-- `src/commands/serve.ts`
-  CLI argument parsing and handoff into the server runtime.
-- `src/server.ts`
-  Hono HTTP app with `/healthz`, `/verify/vc`, and `/verify/vp`.
-- `src/verifier.ts`
-  Main verification pipeline and result shaping.
-- `src/did-jwt-vc.ts`
-  Thin wrappers around `did-jwt-vc` for VC-JWT and VP-JWT envelope validation.
-- `src/data-integrity.ts`
-  Explicit embedded Data Integrity proof verification.
-- `src/status.ts`
-  W3C credential status fetch and revocation check.
-- `src/local-contexts.ts`
-  Local JSON-LD context pinning for deterministic canonicalization.
-- `src/types.ts`
-  HTTP request, config, and verifier result contracts.
-
-## Verification Model
-
-Verification proceeds in layers:
-
-1. `did-jwt-vc` verifies the VC-JWT or VP-JWT envelope and JWT signature.
-2. `webs-did-resolver` resolves issuer or presenter key state through the
-   Isomer `did:webs` HTTP resolver using the standard `did-resolver`
-   `getResolver(...)` integration shape.
-3. `src/data-integrity.ts` verifies the embedded
-   `DataIntegrityProof` / `eddsa-rdfc-2022` block explicitly, because a valid
-   VC-JWT envelope does not by itself prove the embedded proof block is intact.
-4. `src/status.ts` checks W3C credential status separately from cryptographic
-   verification, because revocation is lifecycle state, not a signature
-   property.
-5. VP verification recursively verifies each nested VC-JWT with the same VC
-   pipeline.
-
-This means the Node sidecar validates the W3C-facing story, while the Python
-verifier remains the place for Isomer-specific TEL-aware and pair-verification
-semantics.
-
-## Dependency Boundaries
-
-- `did-jwt-vc`
-  Owns VC-JWT and VP-JWT envelope validation and JWT signature verification.
-- `did-resolver`
-  Defines the resolver interface used by `did-jwt-vc`.
-- `webs-did-resolver`
-  Owns `did:webs` method resolution plus the narrow compatibility shaping used
-  by the sidecar's JS JWT verifier stack.
-- local `LocalContextLoader`
-  Pins the JSON-LD contexts used by Isomer artifacts so canonicalization stays
-  deterministic and offline.
-- local status fetch/check helpers
-  Treat revocation as a separate projection check layered on top of crypto
-  validation.
-
-## CLI
-
-Setup:
+## Setup
 
 ```bash
 make external-node-sync
 make external-node-check
 ```
 
-`make external-node-sync` installs the sidecar dependencies and builds the
-pinned `did-jwt-vc` GitHub archive in place. `packages/webs-did-resolver` is
-the only in-repo local package.
+`make external-node-sync` installs sidecar dependencies, builds the pinned
+`did-jwt-vc` Git dependency, and builds the in-repo `webs-did-resolver`
+package.
 
-Run manually:
+## Manual Run
 
 ```bash
 npm --prefix apps/isomer-node run serve -- \
   --host 127.0.0.1 \
-  --port 8787 \
+  --port 8789 \
   --resolver-url http://127.0.0.1:7678/1.0/identifiers \
   --resource-root "$PWD"
 ```
 
-Flags:
+Optional webhook settings:
 
-- `--resolver-url` required; base URL of the Isomer `did:webs` resolver
-- `--host` optional; defaults to `127.0.0.1`
-- `--port` optional; defaults to `8787`
-- `--resource-root` optional; defaults to the current working directory and is
-  used to locate Isomer JSON-LD context resources under
-  `src/vc_isomer/resources/contexts`
+- `--webhook-url` / `ISOMER_WEBHOOK_URL`
+- `--verifier-id` / `ISOMER_VERIFIER_ID`, default `isomer-node`
+- `--verifier-label` / `ISOMER_VERIFIER_LABEL`
 
-## HTTP API
-
-Routes:
+## API
 
 - `GET /healthz`
 - `POST /verify/vc` with `{ "token": "<vc-jwt>" }`
 - `POST /verify/vp` with
   `{ "token": "<vp-jwt>", "audience"?: "...", "nonce"?: "..." }`
 
-Optional successful VC/VP webhook settings:
-
-- `--webhook-url` / `ISOMER_WEBHOOK_URL`
-- `--verifier-id` / `ISOMER_VERIFIER_ID`, default `isomer-node`
-- `--verifier-label` / `ISOMER_VERIFIER_LABEL`
-
-The sidecar emits the webhook only for successful top-level `vc+jwt` or
-`vp+jwt` verification. Raw JWTs are not included in the event body.
-
-The response shape mirrors Isomer verifier results:
-
-- `ok`
-- `kind`
-- `errors`
-- `warnings`
-- `checks`
-- `payload`
-- optional `nested`
-
-`checks` are semantic progress markers, not just logging detail:
-
-- VC checks report envelope validity, signature validity, embedded Data
-  Integrity proof validity, and active status.
-- VP checks report envelope validity, signature validity, and how many embedded
-  credentials verified successfully.
-
-## Relationship To Python Isomer Verifier
-
-The Python verifier remains authoritative for:
-
-- TEL-aware verification semantics,
-- Isomer-specific ACDC/W3C pair equivalence,
-- broader runtime orchestration in the Python stack.
-
-The Node sidecar is intentionally narrower:
-
-- it verifies W3C artifacts through independent Node libraries,
-- it consumes `did:webs` and status HTTP seams exposed by the live Isomer
-  stack,
-- it proves external acceptance but does not replace Python-side source-truth
-  checks.
-
-## Maintainer Notes
-
-### `did:webs` resolution
-
-The sidecar now consumes a standalone `webs-did-resolver` package through the
-standard `new Resolver({ ...getResolver(...) })` pattern. That package keeps
-the `did:webs` method seam reusable and preserves query-bearing DID URLs such
-as `?versionId=...` during resolution. It also applies the narrow Ed25519
-method and relationship normalization still required for `did-jwt-vc` to
-consume live Isomer DID documents reliably.
-
-### Local JSON-LD contexts
-
-The sidecar intentionally loads only a pinned local set of JSON-LD contexts:
-
-- `https://www.w3.org/2018/credentials/v1`
-- `https://w3id.org/security/data-integrity/v2`
-- `https://www.gleif.org/contexts/isomer-v1.jsonld`
-
-This avoids remote context fetches during verification and keeps
-canonicalization reproducible for Isomer artifacts.
-
-### Embedded Data Integrity proof verification
-
-`did-jwt-vc` validates the JWT envelope. It does not validate the embedded
-proof block that Isomer carries inside the VC payload. The sidecar therefore
-verifies the `DataIntegrityProof` explicitly using local canonicalization and
-the verification method resolved from `did:webs`.
-
-### Status checks
-
-Status checks are deliberately separate from cryptographic checks. The status
-endpoint is an Isomer-owned projection of TEL truth, so revocation is handled
-as a lifecycle decision after JWT and embedded-proof verification succeed.
+Responses use the shared Isomer verifier result shape.

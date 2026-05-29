@@ -3,9 +3,13 @@
 This note evaluates candidate credential status patterns for `isomer`
 and maps them to ACDC, IPEX, and KERI-native registry concepts.
 
+This is a research note, not the current runtime contract. The current Isomer
+status projection contract is in `isomer-profile.md` and the live-stack wiring
+is in `integration-maintainer-guide.md`.
+
 For how the current local status projection is wired into the live integration
 stack today, see
-[`integration-maintainer-guide.md`](docs/integration-maintainer-guide.md).
+[`integration-maintainer-guide.md`](integration-maintainer-guide.md).
 
 ## Verdict
 

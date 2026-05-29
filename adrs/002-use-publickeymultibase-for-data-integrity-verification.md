@@ -86,9 +86,10 @@ The reasons are concrete:
   allows implementations to choose `JsonWebKey` or `Multikey` as the
   public-key output format and shows `Multikey`/`publicKeyMultibase` as a
   normal emitted verification-method shape.
-- The TypeScript `did-jwt` tooling used by Isomer's Node sidecar accepts
-  `publicKeyMultibase` and `Multikey` directly in
-  [`../apps/isomer-node/node_modules/did-jwt/src/util.ts`](../apps/isomer-node/node_modules/did-jwt/src/util.ts).
+- The TypeScript verifier boundary uses the in-repo `webs-did-resolver`
+  package to normalize JWK and Multikey verification material for common JS
+  verifier tooling in
+  [`../packages/webs-did-resolver/src/index.ts`](../packages/webs-did-resolver/src/index.ts).
 
 These standards and tooling behaviors mean a verifier that assumes JWK-only
 verification material would fail whenever the resolved DID method is
@@ -102,10 +103,11 @@ Isomer's current code already reflects this interoperability requirement:
   [`../src/vc_isomer/data_integrity.py`](../src/vc_isomer/data_integrity.py).
 - DID normalization synthesizes `publicKeyMultibase` from a JWK when needed in
   [`../src/vc_isomer/didwebs.py`](../src/vc_isomer/didwebs.py).
-- The Node sidecar normalizes JWK and Multikey verification methods in
-  [`../apps/isomer-node/src/did-resolver.ts`](../apps/isomer-node/src/did-resolver.ts).
-- The vendored `did-jwt` library consumes `publicKeyMultibase` in
-  [`../apps/isomer-node/node_modules/did-jwt/src/util.ts`](../apps/isomer-node/node_modules/did-jwt/src/util.ts).
+- The shared JS resolver package normalizes JWK and Multikey verification
+  methods in
+  [`../packages/webs-did-resolver/src/index.ts`](../packages/webs-did-resolver/src/index.ts).
+- The Node sidecar consumes resolved verification material through
+  [`../apps/isomer-node/src/verifier.ts`](../apps/isomer-node/src/verifier.ts).
 
 References:
 

@@ -3,57 +3,67 @@
 Minimal Go verifier sidecar for external W3C acceptance.
 
 This app verifies the same VC-JWT and VP-JWT artifacts as `apps/isomer-node`,
-but uses a pinned non-local `vc-go` module replacement as the independent Go
-W3C stack.
-The Go sidecar depends on:
+using a pinned non-local `vc-go` module replacement as the independent Go W3C
+stack.
 
-- `vc-go` for VC/VP parsing and Data Integrity verification
-- `did-go` for DID document parsing
-- the HTTP `did-webs-resolver` service for latest-key DID resolution
+For shared verifier semantics, see `../../docs/verifier-contract.md`.
 
-The module uses:
+## Scope
+
+Owns:
+
+- VC/VP parsing through `vc-go`
+- JOSE EdDSA signature verification against `did:webs` key state
+- embedded VC `DataIntegrityProof` verification
+- projected status fetch/check
+- optional dashboard webhook emission
+
+Does not own:
+
+- Isomer ACDC/W3C pair verification
+- TEL-aware verification
+- issuer, holder, or wallet workflow
+- Python verifier behavior
+
+## Dependency
+
+The module uses a pinned non-local replacement:
 
 ```go
 replace github.com/trustbloc/vc-go => github.com/kentbull/vc-go v0.0.0-20260129140819-c99b4c46239e
 ```
 
-Setup and check:
+Default commands must not require a sibling `vc-go` checkout.
+
+## Setup
 
 ```bash
 make external-go-check
 ```
 
-Run manually:
+## Manual Run
 
 ```bash
 cd apps/isomer-go
 go run ./cmd/isomer-go \
   --host 127.0.0.1 \
-  --port 8788 \
+  --port 8790 \
   --resolver-url http://127.0.0.1:7678/1.0/identifiers \
   --resource-root ../..
 ```
 
-API:
-
-- `GET /healthz`
-- `POST /verify/vc` with `{ "token": "<vc-jwt>" }`
-- `POST /verify/vp` with `{ "token": "<vp-jwt>", "audience"?: "...", "nonce"?: "..." }`
-
-Optional successful VC/VP webhook settings:
+Optional webhook settings:
 
 - `--webhook-url` / `ISOMER_WEBHOOK_URL`
 - `--verifier-id` / `ISOMER_VERIFIER_ID`, default `isomer-go`
 - `--verifier-label` / `ISOMER_VERIFIER_LABEL`
 
-The sidecar emits the webhook only for successful top-level `vc+jwt` or
-`vp+jwt` verification. Raw JWTs are not included in the event body.
+## API
 
-This sidecar deliberately omits Isomer pair verification. TEL state and
-ACDC/W3C equivalence remain Python Isomer verifier responsibilities.
+- `GET /healthz`
+- `POST /verify/vc` with `{ "token": "<vc-jwt>" }`
+- `POST /verify/vp` with
+  `{ "token": "<vp-jwt>", "audience"?: "...", "nonce"?: "..." }`
 
-VP-JWT verification is intentionally split: the sidecar validates the VP JOSE
-signature and JWT claims directly, parses the VP with `vc-go/verifiable`, and
-then verifies each nested VC-JWT through the same VC path. VP JSON-LD checks
-remain disabled in this pass because the current local `vc-go` stack is not yet
-the source of truth for Isomer's VP Data Integrity model.
+VP JSON-LD checks remain the active gap tracked in
+`../../plans/isomer-go-vp-vc-go-jsonld-fix.md`.
