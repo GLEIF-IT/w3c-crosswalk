@@ -176,11 +176,9 @@ services:
       VITE_KERIA_ADMIN_URL: ${KERIA_ADMIN_URL}
       VITE_KERIA_ROUTER_URL: ${KERIA_ROUTER_URL}
       VITE_KERIA_BOOT_URL: ${KERIA_BOOT_URL}
-      VITE_VERIFIER_DASHBOARD_URL: http://127.0.0.1:8791
       VITE_OPERATION_TIMEOUT_MS: ${VITE_OPERATION_TIMEOUT_MS:-60000}
     depends_on:
       - keria
-      - isomer-dashboard
 
   signifypy-seed:
     image: ${SIGNIFYPY_IMAGE}
