@@ -41,23 +41,38 @@ Does not own:
 ## Setup
 
 ```bash
-make external-node-sync
-make external-node-check
+cd apps/isomer-node
+make sync
+make check
+make test
 ```
 
-`make external-node-sync` installs sidecar dependencies, builds the pinned
-`did-jwt-vc` Git dependency, and builds the in-repo `webs-did-resolver`
-package.
+From the repo root, `make external-node-sync` and `make external-node-check`
+delegate to these app-local targets.
+
+`make sync` installs sidecar dependencies, builds the pinned `did-jwt-vc` Git
+dependency, and builds the in-repo `webs-did-resolver` package. The local
+`webs-did-resolver` dependency should eventually be replaced by an NPM package.
 
 ## Manual Run
 
 ```bash
-npm --prefix apps/isomer-node run serve -- \
-  --host 127.0.0.1 \
-  --port 8789 \
-  --resolver-url http://127.0.0.1:7678/1.0/identifiers \
-  --resource-root "$PWD"
+cd apps/isomer-node
+make serve
 ```
+
+Override defaults with `ISOMER_HOST`, `ISOMER_PORT`, `ISOMER_RESOLVER_URL`, or
+`ISOMER_RESOURCE_ROOT`.
+
+Build the local container image:
+
+```bash
+cd apps/isomer-node
+make image
+```
+
+The image target keeps the repo root as Docker context so the current local
+`packages/webs-did-resolver` dependency is available.
 
 Optional webhook settings:
 

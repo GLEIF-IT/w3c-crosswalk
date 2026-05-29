@@ -6,10 +6,21 @@ verification events.
 Run locally:
 
 ```bash
-npm --prefix apps/isomer-dashboard install
-ISOMER_DASHBOARD_HOST=127.0.0.1 \
-ISOMER_DASHBOARD_PORT=8791 \
-npm --prefix apps/isomer-dashboard run serve
+cd apps/isomer-dashboard
+make sync
+make check
+make test
+make serve
+```
+
+Override serve defaults with `ISOMER_DASHBOARD_HOST` or
+`ISOMER_DASHBOARD_PORT`.
+
+Build the local container image:
+
+```bash
+cd apps/isomer-dashboard
+make image
 ```
 
 Endpoints:

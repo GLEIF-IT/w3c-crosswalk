@@ -22,8 +22,7 @@ LOCAL_COMPOSE_CMD = $(COMPOSE) --env-file "$(ENV_FILE)" -p "$(LOCAL_PROJECT)" -f
 VERIFIER_BUILD_COMPOSE := docker/compose.build.yml
 VERIFIER_BUILD_SERVICES := isomer-python isomer-node isomer-go isomer-dashboard
 
-# external package configuration
-WEBS_DID_RESOLVER_ROOT := packages/webs-did-resolver
+# External app configuration
 GO_CACHE ?= /tmp/isomer-go-cache
 
 # Local stack deployment configuration
@@ -121,24 +120,19 @@ smoke:
 	fi
 
 external-node-sync:
-	npm --prefix "$(WEBS_DID_RESOLVER_ROOT)" install
-	npm --prefix "$(WEBS_DID_RESOLVER_ROOT)" run build
-	npm --prefix apps/isomer-node install
-	npm --prefix apps/isomer-node run build:pinned-deps
+	$(MAKE) -C apps/isomer-node sync
 
 external-node-check:
-	npm --prefix apps/isomer-node run check
-	npm --prefix apps/isomer-node test
+	$(MAKE) -C apps/isomer-node check test
 
 external-go-check:
-	cd apps/isomer-go && env GOCACHE="$(GO_CACHE)" go test ./...
+	$(MAKE) -C apps/isomer-go GO_CACHE="$(GO_CACHE)" check
 
 dashboard-sync:
-	npm --prefix apps/isomer-dashboard install
+	$(MAKE) -C apps/isomer-dashboard sync
 
 dashboard-check:
-	npm --prefix apps/isomer-dashboard run check
-	npm --prefix apps/isomer-dashboard test
+	$(MAKE) -C apps/isomer-dashboard check test
 
 test-external-w3c-node: external-node-sync external-node-check
 	ISOMER_EXTERNAL_VERIFIERS=node $(PYTHON) -m pytest tests/integration/test_single_sig_vrd_isomer.py -q --tb=short

@@ -38,19 +38,34 @@ Default commands must not require a sibling `vc-go` checkout.
 ## Setup
 
 ```bash
-make external-go-check
+cd apps/isomer-go
+make sync
+make check
 ```
+
+From the repo root, `make external-go-check` delegates to the app-local
+`check` target.
 
 ## Manual Run
 
 ```bash
 cd apps/isomer-go
-go run ./cmd/isomer-go \
-  --host 127.0.0.1 \
-  --port 8790 \
-  --resolver-url http://127.0.0.1:7678/1.0/identifiers \
-  --resource-root ../..
+make serve
 ```
+
+Override defaults with `ISOMER_HOST`, `ISOMER_PORT`, `ISOMER_RESOLVER_URL`, or
+`ISOMER_RESOURCE_ROOT`.
+
+Build the local container image:
+
+```bash
+cd apps/isomer-go
+make image
+```
+
+The image target keeps the repo root as Docker context so it can copy
+`src/vc_isomer/resources`. Those resources should eventually be factored into
+the Go app.
 
 Optional webhook settings:
 
