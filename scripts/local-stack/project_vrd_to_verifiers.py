@@ -11,7 +11,9 @@ Workflow includes:
 - and waits for each verifier operation to finish.
 
 Manually running this:
-0. Cleanup, if needed, is ``make local-down``
+0. Stop a prior stack with ``make local-down``. Use ``make local-reset`` only
+   when you intentionally want to wipe local KERIA/witness/resolver volumes and
+   generated seed manifests.
 1. Run ``make local-up`` from the ``w3c-crosswalk`` repository to start KERIA,
    the verifier services, and supporting services.
 2. Run ``make local-seed`` to execute SignifyPy's

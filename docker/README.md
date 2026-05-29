@@ -41,10 +41,31 @@ Default host ports:
 
 Use the `Makefile` at the root of this repo to either clean up or start up a new deployment.
 
-#### Cleanup
+#### Stop without wiping state
 
 ```sh
 make local-down
+```
+
+`make local-down` stops containers and removes transient compose resources, but
+preserves the named volumes that hold KERIA, witness, did:webs resolver, and
+Python verifier operation state. Use this when you want to keep seeded wallet
+passcodes, identifiers, registries, credentials, and verifier operations across
+container recreation.
+
+#### Reset to a clean state
+
+```sh
+make local-reset
+```
+
+`make local-reset` is destructive. It removes the local compose volumes and
+deletes `.tmp/local-stack`, including stale seed manifests and projection
+results. After a reset, run:
+
+```sh
+make local-up
+make local-seed
 ```
 
 #### Startup
@@ -69,8 +90,30 @@ make local-test
 - `make local-test` includes that projection check after the static portability
   guards, so run `make local-seed` first.
 
+### Persistent local state
+
+The default stack uses named Compose volumes for the services that own runtime
+state:
+
+- KERIA: agents, identifiers, registries, credentials, mailboxes,
+  notifications, and operations under `/usr/local/var/keri`.
+- Witness demo: witness KERI state under `/usr/local/var/keri`.
+- did:webs resolver: resolver KERI state under `/usr/local/var/keri`.
+- Python verifier: LMDB operation records under `/data/operations`.
+
+The vLEI server, seed/project helpers, wallet container, Node verifier, Go
+verifier, and dashboard remain ephemeral in this change. The wallet's durable
+state is browser plus KERIA state; the Node/Go verifier and dashboard services
+currently use in-memory stores.
+
+If you manually recreate only the wallet image, avoid restarting dependent
+services unnecessarily:
+
+```sh
+docker compose --env-file .env -p w3c-crosswalk -f docker/compose.local.yml up -d --no-deps --force-recreate signify-react-ts
+```
+
 ## Required Configuration
 
 - Configure image tags in `.env`; `.env.example` is the template.
 - Use `DID_WEBS_REGISTRY_NAME_PREFIX=didwebs-designated-aliases`.
-

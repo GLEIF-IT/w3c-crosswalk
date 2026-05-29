@@ -14,14 +14,17 @@ DOCKER_TAG ?= local
 CONTAINER_ENGINE ?= docker
 COMPOSE ?= $(CONTAINER_ENGINE) compose
 LOCAL_COMPOSE := docker/compose.local.yml
+LOCAL_PROJECT ?= w3c-crosswalk
+LOCAL_STACK_TMP := .tmp/local-stack
 ENV_FILE ?= .env
+LOCAL_COMPOSE_CMD = $(COMPOSE) --env-file "$(ENV_FILE)" -p "$(LOCAL_PROJECT)" -f "$(LOCAL_COMPOSE)"
 
 PYPI_UPLOAD_URL := https://upload.pypi.org/legacy/
 PYPI_CHECK_URL := https://pypi.org/simple/$(PACKAGE)/
 TEST_PYPI_UPLOAD_URL := https://test.pypi.org/legacy/
 TEST_PYPI_CHECK_URL := https://test.pypi.org/simple/$(PACKAGE)/
 
-.PHONY: help sync clean test-cli test-fast test-integration test smoke external-node-sync external-node-check external-go-check dashboard-sync dashboard-check test-external-w3c-node test-external-w3c-go test-external-w3c-all docker-verifiers-build docker-verifiers-smoke docker-verifiers-test local-up local-seed local-project local-test local-down portability-check build dist-check check-clean prepublish publish-test publish
+.PHONY: help sync clean test-cli test-fast test-integration test smoke external-node-sync external-node-check external-go-check dashboard-sync dashboard-check test-external-w3c-node test-external-w3c-go test-external-w3c-all docker-verifiers-build docker-verifiers-smoke docker-verifiers-test local-up local-seed local-project local-test local-down local-reset portability-check build dist-check check-clean prepublish publish-test publish
 
 help:
 	@printf '%s\n' \
@@ -47,7 +50,8 @@ help:
 		'  make local-seed        Run the SignifyPy VRD projection-chain seeder' \
 		'  make local-project     Project the seeded VRD credential through all verifiers' \
 		'  make local-test        Run portability and stack acceptance checks' \
-		'  make local-down        Stop the portable local stack' \
+		'  make local-down        Stop the portable local stack and preserve volumes' \
+		'  make local-reset       Destroy local stack volumes and generated seed artifacts' \
 		'  make portability-check Check for sibling-path dependency regressions' \
 		'  make build             Build sdist and wheel into dist/' \
 		'  make dist-check        Build and validate artifacts with twine check' \
@@ -145,26 +149,35 @@ docker-verifiers-test: docker-verifiers-build
 
 local-up:
 	@test -f "$(ENV_FILE)" || cp .env.example "$(ENV_FILE)"
-	$(COMPOSE) --env-file "$(ENV_FILE)" -f "$(LOCAL_COMPOSE)" up -d
+	$(LOCAL_COMPOSE_CMD) up -d
 
 local-seed:
 	@test -f "$(ENV_FILE)" || cp .env.example "$(ENV_FILE)"
-	$(COMPOSE) --env-file "$(ENV_FILE)" -f "$(LOCAL_COMPOSE)" run --rm signifypy-seed
+	@mkdir -p "$(LOCAL_STACK_TMP)"
+	$(LOCAL_COMPOSE_CMD) run --rm signifypy-seed
 
 local-project:
 	@test -f "$(ENV_FILE)" || cp .env.example "$(ENV_FILE)"
-	@test -f ".tmp/local-stack/w3c-vrd-chain-manifest.json" || { echo 'missing .tmp/local-stack/w3c-vrd-chain-manifest.json; run make local-seed first' >&2; exit 1; }
-	$(COMPOSE) --env-file "$(ENV_FILE)" -f "$(LOCAL_COMPOSE)" run --rm signifypy-project
+	@mkdir -p "$(LOCAL_STACK_TMP)"
+	@test -f "$(LOCAL_STACK_TMP)/w3c-vrd-chain-manifest.json" || { echo 'missing $(LOCAL_STACK_TMP)/w3c-vrd-chain-manifest.json; run make local-seed first' >&2; exit 1; }
+	$(LOCAL_COMPOSE_CMD) run --rm signifypy-project
 
 local-test:
 	$(PYTHON) -m pytest tests/test_portability.py -q
 	@test -f "$(ENV_FILE)" || cp .env.example "$(ENV_FILE)"
-	$(COMPOSE) --env-file "$(ENV_FILE)" -f "$(LOCAL_COMPOSE)" --profile seed config >/dev/null
+	@mkdir -p "$(LOCAL_STACK_TMP)"
+	$(LOCAL_COMPOSE_CMD) --profile seed config >/dev/null
 	$(MAKE) local-project
 
 local-down:
 	@test -f "$(ENV_FILE)" || cp .env.example "$(ENV_FILE)"
-	$(COMPOSE) --env-file "$(ENV_FILE)" -f "$(LOCAL_COMPOSE)" down --remove-orphans
+	$(LOCAL_COMPOSE_CMD) down --remove-orphans
+
+local-reset:
+	@test -f "$(ENV_FILE)" || cp .env.example "$(ENV_FILE)"
+	$(LOCAL_COMPOSE_CMD) down --remove-orphans --volumes
+	rm -rf "$(LOCAL_STACK_TMP)"
+	mkdir -p "$(LOCAL_STACK_TMP)"
 
 build: clean
 	$(UV) build

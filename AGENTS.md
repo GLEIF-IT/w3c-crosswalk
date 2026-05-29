@@ -21,8 +21,8 @@ Then produce a concise current-state summary and implementation plan.
 
 1. The default local stack must consume packages, pinned Git SHAs, or OCI
    images. It must not depend on local sibling source directories.
-2. Use `make local-up`, `make local-seed`, `make local-test`, and
-   `make local-down` for the portable stack.
+2. Use `make local-up`, `make local-seed`, `make local-test`,
+   `make local-down`, and `make local-reset` for the portable stack.
 3. Optional cross-repo artifact building belongs outside this repo
    and should produce image tags consumed through `.env`.
 4. Editable installs are allowed only as explicit developer overrides and must

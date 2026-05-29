@@ -15,12 +15,19 @@
 # - GEDA -> LE seeder: signifypy-seed (for `make local-seed` target)
 # - signifypy-project: W3C Credential projector with Signifypy (for `make local-project` target)
 
+volumes:
+  keria-data:
+  witness-data:
+  did-webs-resolver-data:
+  isomer-python-operations:
 
 services:
   witness-demo:
     image: ${WITNESS_IMAGE}
     entrypoint: ["kli"]
     command: ["witness", "demo", "--loglevel", "${WITNESS_LOGLEVEL:-INFO}"]
+    volumes:
+      - witness-data:/usr/local/var/keri
     ports:
       - "5642:5642"
       - "5643:5643"
@@ -50,6 +57,7 @@ services:
     image: ${KERIA_IMAGE}
     volumes:
       - ./keria/local-witness-oobis.json:/keria/config/local-witness-oobis.json:ro
+      - keria-data:/usr/local/var/keri
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
@@ -77,6 +85,8 @@ services:
   did-webs-resolver:
     image: ${DID_WEBS_RESOLVER_IMAGE}
     entrypoint: []
+    volumes:
+      - did-webs-resolver-data:/usr/local/var/keri
     command:
       [
         "dws",
@@ -105,6 +115,8 @@ services:
 
   isomer-python:
     image: ${ISOMER_PYTHON_IMAGE}
+    volumes:
+      - isomer-python-operations:/data/operations
     ports:
       - "8788:8788"
     environment:

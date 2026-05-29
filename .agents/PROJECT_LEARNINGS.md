@@ -68,6 +68,10 @@ At session start:
 18. JSON-LD `id` values must be absolute IRIs; when a nested ACDC SAID becomes a
     W3C `id`, represent it as `urn:said:<SAID>` and keep the raw SAID in the
     signed Isomer provenance block.
+19. The portable Docker stack persists KERIA, witness, did:webs resolver, and
+    Python verifier operation state in named Compose volumes. `make local-down`
+    preserves those volumes; `make local-reset` is the destructive clean-state
+    command and also removes `.tmp/local-stack` seed/project artifacts.
 
 ## Handoff Template
 
