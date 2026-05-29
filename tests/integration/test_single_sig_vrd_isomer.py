@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from vc_isomer.interop.external_verifiers import (
+from .external_verifiers import (
     ExternalVerifierConfig,
     ExternalVerifierProcess,
     assert_external_result_ok,

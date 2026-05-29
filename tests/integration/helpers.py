@@ -93,6 +93,13 @@ def terminate_process(proc: subprocess.Popen[bytes]) -> None:
         proc.wait(timeout=5)
 
 
+def reserve_tcp_port(host: str) -> int:
+    """Reserve and release one local TCP port for a subprocess service."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind((host, 0))
+        return int(sock.getsockname()[1])
+
+
 def wait_for_port(
     host: str,
     port: int,
@@ -128,6 +135,34 @@ def wait_for_json_health(url: str, *, timeout: float = 45.0) -> dict:
             return json.loads(response.read().decode("utf-8"))
 
     return poll_until(_fetch, ready=lambda body: bool(body.get("ok")), timeout=timeout, interval=POLL_INTERVAL, describe=url)
+
+
+def wait_for_process_json_health(
+    url: str,
+    proc: subprocess.Popen[bytes],
+    name: str,
+    *,
+    log_path: Path,
+    timeout: float = 45.0,
+) -> dict:
+    """Poll a process health endpoint and fail with log context."""
+    def _fetch() -> dict:
+        if proc.poll() is not None:
+            raise RuntimeError(f"{name} exited early with code {proc.returncode}:\n{read_log_tail(log_path)}")
+        with urlopen(url, timeout=2.0) as response:
+            return json.loads(response.read().decode("utf-8"))
+
+    try:
+        return poll_until(
+            _fetch,
+            ready=lambda body: isinstance(body, dict) and bool(body.get("ok")),
+            timeout=timeout,
+            interval=POLL_INTERVAL,
+            describe=url,
+            retry_exceptions=(OSError, json.JSONDecodeError),
+        )
+    except TimeoutError as err:
+        raise TimeoutError(f"{err}\n{read_log_tail(log_path)}") from err
 
 
 def wait_for_tcp_port(host: str, port: int, *, timeout: float = 45.0) -> None:

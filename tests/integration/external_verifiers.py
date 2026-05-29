@@ -12,12 +12,18 @@ from dataclasses import dataclass
 import json
 import os
 from pathlib import Path
-import socket
 import subprocess
-import time
 from typing import Any
-from urllib.error import URLError
 from urllib.request import Request, urlopen
+
+from .helpers import (
+    POLL_INTERVAL,
+    poll_until,
+    read_log_tail,
+    reserve_tcp_port,
+    terminate_process,
+    wait_for_process_json_health,
+)
 
 
 @dataclass(frozen=True)
@@ -72,19 +78,15 @@ class ExternalVerifierProcess:
 
     def close(self) -> None:
         """Terminate the sidecar if it is still running."""
-        if self._proc is not None and self._proc.poll() is None:
-            self._proc.terminate()
-            try:
-                self._proc.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                self._proc.kill()
-                self._proc.wait(timeout=5)
+        if self._proc is not None:
+            terminate_process(self._proc)
         if self._log_handle is not None:
             self._log_handle.close()
 
     def verify_vc(self, token: str) -> dict[str, Any]:
         """Submit one VC-JWT to the sidecar."""
-        return self._post_json("/verify/vc", {"token": token})
+        operation = self._post_json("/verify/vc", {"token": token})
+        return self._await_operation_response(operation)
 
     def verify_vp(self, token: str, *, audience: str | None = None, nonce: str | None = None) -> dict[str, Any]:
         """Submit one VP-JWT to the sidecar."""
@@ -107,6 +109,43 @@ class ExternalVerifierProcess:
         if not isinstance(payload, dict):
             raise RuntimeError(f"{self.config.kind} verifier returned non-object JSON: {payload!r}")
         return payload
+
+    def _get_json(self, path: str) -> dict[str, Any]:
+        request = Request(
+            f"{self.base_url}{path}",
+            headers={"Accept": "application/json"},
+            method="GET",
+        )
+        with urlopen(request, timeout=10.0) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        if not isinstance(payload, dict):
+            raise RuntimeError(f"{self.config.kind} verifier returned non-object JSON: {payload!r}")
+        return payload
+
+    def _await_operation_response(self, operation: dict[str, Any], *, timeout: float = 45.0) -> dict[str, Any]:
+        """Poll a sidecar operation until it yields the verifier response."""
+        name = operation.get("name")
+        if not isinstance(name, str):
+            return operation
+
+        try:
+            completed = poll_until(
+                lambda: self._get_json(f"/operations/{name}"),
+                ready=lambda body: body.get("done") is True,
+                timeout=timeout,
+                interval=POLL_INTERVAL,
+                describe=f"{self.config.kind} verifier operation {name}",
+                retry_exceptions=(OSError, json.JSONDecodeError),
+            )
+        except TimeoutError as err:
+            raise TimeoutError(f"{err}\n{read_log_tail(self.log_path)}") from err
+
+        response = completed.get("response")
+        if isinstance(response, dict):
+            return response
+
+        rendered = json.dumps(completed, indent=2, sort_keys=True)
+        raise RuntimeError(f"{self.config.kind} verifier operation {name} did not return a response\n{rendered}")
 
     def _cwd(self) -> Path:
         if self.config.kind == "node":
@@ -182,34 +221,6 @@ def assert_external_result_ok(kind: str, label: str, result: dict[str, Any], log
     raise AssertionError(f"{kind} {label} verification failed\n{rendered}\n{read_log_tail(log_path)}")
 
 
-def reserve_tcp_port(host: str) -> int:
-    """Reserve and release one local TCP port for a sidecar process."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.bind((host, 0))
-        return int(sock.getsockname()[1])
-
-
 def wait_for_health(url: str, proc: subprocess.Popen[bytes], log_path: Path, *, timeout: float = 45.0) -> None:
     """Poll a sidecar health endpoint until it reports ready."""
-    deadline = time.monotonic() + timeout
-    last_error: str | None = None
-    while time.monotonic() < deadline:
-        if proc.poll() is not None:
-            raise RuntimeError(f"external verifier exited early with code {proc.returncode}\n{read_log_tail(log_path)}")
-        try:
-            with urlopen(url, timeout=2.0) as response:
-                body = json.loads(response.read().decode("utf-8"))
-            if isinstance(body, dict) and body.get("ok") is True:
-                return
-        except (OSError, URLError, json.JSONDecodeError) as exc:
-            last_error = str(exc)
-        time.sleep(0.1)
-    raise TimeoutError(f"timed out waiting for {url}; last_error={last_error!r}\n{read_log_tail(log_path)}")
-
-
-def read_log_tail(path: Path, *, max_chars: int = 8000) -> str:
-    """Return a small sidecar log tail for diagnostics."""
-    if not path.exists():
-        return "(log file not found)"
-    text = path.read_text(encoding="utf-8", errors="replace")
-    return text[-max_chars:] if text else "(log file was empty)"
+    wait_for_process_json_health(url, proc, "external verifier", log_path=log_path, timeout=timeout)
