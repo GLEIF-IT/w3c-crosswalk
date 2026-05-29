@@ -53,6 +53,6 @@ require (
 	google.golang.org/protobuf v1.36.10 // indirect
 )
 
-replace github.com/trustbloc/vc-go => ../../../vc-go
+replace github.com/trustbloc/vc-go => github.com/kentbull/vc-go v0.0.0-20260129140819-c99b4c46239e
 
 replace github.com/piprate/json-gold v0.5.1-0.20230111113000-6ddbe6e6f19f => github.com/trustbloc/json-gold v0.5.2-0.20241206130328-d2135d9f36a8

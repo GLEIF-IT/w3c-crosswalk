@@ -7,11 +7,12 @@
   "scripts": {
     "serve": "tsx src/main.ts",
     "check": "tsc --noEmit",
+    "build:pinned-deps": "npm --prefix node_modules/did-jwt-vc install --include=dev && npm --prefix node_modules/did-jwt-vc run build",
     "test": "node --import tsx --test \"src/**/*.test.ts\""
   },
   "dependencies": {
     "@hono/node-server": "^1.19.6",
-    "did-jwt-vc": "file:../../../did-jwt-vc",
+    "did-jwt-vc": "https://github.com/kentbull/did-jwt-vc/archive/b36257e983aae502a28f2a4cb5bd2bcbf00a7cd2.tar.gz",
     "did-resolver": "^4.1.0",
     "effection": "^3.6.0",
     "hono": "^4.10.7",

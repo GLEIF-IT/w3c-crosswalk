@@ -97,9 +97,9 @@ make external-node-sync
 make external-node-check
 ```
 
-`make external-node-sync` builds both local JS dependencies the sidecar needs:
-the sibling `../did-jwt-vc` clone and the in-repo
-`packages/webs-did-resolver` package.
+`make external-node-sync` installs the sidecar dependencies and builds the
+pinned `did-jwt-vc` GitHub archive in place. `packages/webs-did-resolver` is
+the only in-repo local package.
 
 Run manually:
 

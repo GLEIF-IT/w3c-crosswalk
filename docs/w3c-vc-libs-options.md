@@ -156,12 +156,12 @@ claims, while the inner VC remains JSON-LD with a Data Integrity proof.
 1. Use `interop/openid4vci-credential-configuration.json` and
    `interop/openid4vp-presentation-definition.json` as the OpenID-facing shape
    examples for the current VCDM 1.1 `jwt_vc_json-ld` profile.
-2. Keep `apps/isomer-node` as the first external verifier gate. It uses the
-   local sibling `../did-jwt-vc` clone for VC-JWT/VP-JWT envelope verification
+2. Keep `apps/isomer-node` as the first external verifier gate. It uses a
+   pinned `did-jwt-vc` package source for VC-JWT/VP-JWT envelope verification
    and strict local JSON-LD context loading for the embedded
    `eddsa-rdfc-2022` Data Integrity proof.
-3. Keep `apps/isomer-go` as the second external verifier gate. It uses the
-   local sibling `../vc-go` clone through a Go module `replace`, parses
+3. Keep `apps/isomer-go` as the second external verifier gate. It uses a
+   pinned non-local `vc-go` module replacement, parses
    artifacts with `vc-go/verifiable`, and verifies the same live VC/VP
    transmission contract as the Node sidecar.
    The current Go VP path verifies the VP JOSE signature and claims directly,

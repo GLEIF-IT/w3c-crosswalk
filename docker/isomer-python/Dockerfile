@@ -17,12 +17,11 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY --from=keripy . /app/keripy
 COPY . /app/w3c-crosswalk
 
 WORKDIR /app/w3c-crosswalk
 RUN python -m pip install --no-cache-dir --upgrade pip \
-    && python -m pip install --no-cache-dir -e /app/keripy -e /app/w3c-crosswalk \
+    && python -m pip install --no-cache-dir -e /app/w3c-crosswalk \
     && mkdir -p /data/operations
 
 EXPOSE 8788

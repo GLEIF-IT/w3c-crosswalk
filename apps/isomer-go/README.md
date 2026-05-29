@@ -3,7 +3,8 @@
 Minimal Go verifier sidecar for external W3C acceptance.
 
 This app verifies the same VC-JWT and VP-JWT artifacts as `apps/isomer-node`,
-but uses the local sibling `../vc-go` clone as the independent Go W3C stack.
+but uses a pinned non-local `vc-go` module replacement as the independent Go
+W3C stack.
 The Go sidecar depends on:
 
 - `vc-go` for VC/VP parsing and Data Integrity verification
@@ -13,7 +14,7 @@ The Go sidecar depends on:
 The module uses:
 
 ```go
-replace github.com/trustbloc/vc-go => ../../../vc-go
+replace github.com/trustbloc/vc-go => github.com/kentbull/vc-go v0.0.0-20260129140819-c99b4c46239e
 ```
 
 Setup and check:

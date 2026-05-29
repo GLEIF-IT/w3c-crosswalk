@@ -539,15 +539,15 @@ The Python verifier remains authoritative for TEL state and Isomer ACDC/W3C
 pair equivalence. The external sidecars prove the same VC-JWT and VP-JWT are
 understandable by non-Python W3C verifier stacks.
 
-Prepare the Node sidecar, which consumes the local sibling `../did-jwt-vc`
-clone plus the in-repo `packages/webs-did-resolver` package:
+Prepare the Node sidecar, which consumes the pinned `did-jwt-vc` Git dependency
+plus the in-repo `packages/webs-did-resolver` package:
 
 ```bash
 make external-node-sync
 make external-node-check
 ```
 
-Prepare the Go sidecar, which consumes the local sibling `../vc-go` clone:
+Prepare the Go sidecar, which consumes the pinned `vc-go` module replacement:
 
 ```bash
 make external-go-check

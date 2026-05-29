@@ -7,15 +7,13 @@ ENV ISOMER_HOST=0.0.0.0 \
     ISOMER_RESOURCE_ROOT=/app/w3c-crosswalk
 
 WORKDIR /app
-COPY --from=did_jwt_vc . /app/did-jwt-vc
 COPY . /app/w3c-crosswalk
 
 RUN corepack enable \
-    && yarn --cwd /app/did-jwt-vc install --frozen-lockfile \
-    && yarn --cwd /app/did-jwt-vc build \
     && npm --prefix /app/w3c-crosswalk/packages/webs-did-resolver ci \
     && npm --prefix /app/w3c-crosswalk/packages/webs-did-resolver run build \
-    && npm --prefix /app/w3c-crosswalk/apps/isomer-node ci
+    && npm --prefix /app/w3c-crosswalk/apps/isomer-node ci \
+    && npm --prefix /app/w3c-crosswalk/apps/isomer-node run build:pinned-deps
 
 ENV NODE_ENV=production
 

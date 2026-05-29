@@ -15,11 +15,11 @@ functional TypeScript/Node sidecar, then a Go sidecar after Node is green.
 These sidecars prove that Isomer's VCDM 1.1 VC-JWT and VP-JWT artifacts can be
 verified outside the Python Isomer verifier.
 
-Confirmed local sources:
+Current portability constraint:
 
-- `../did-jwt-vc` exists at `/Users/kbull/code/keri/kentbull/did-jwt-vc`.
-- `../vc-go` exists at `/Users/kbull/code/keri/kentbull/vc-go`.
-- Sidecars depend on those sibling clones during local and CI interop work.
+- Sidecars must consume published packages, Git SHA pins, or image artifacts.
+- Local sibling clones are developer conveniences only and must not be required
+  by default local-stack, Docker, package-manager, or CI paths.
 
 The sidecars are acceptance harnesses and developer tools. They do not replace
 Python Isomer's TEL/ACDC-aware verifier because external W3C libraries cannot
@@ -38,8 +38,7 @@ verify KERI TEL state or Isomer ACDC/W3C pair equivalence.
 - Use TypeScript with Effection structured concurrency, following local
   `keri-ts` runtime style.
 - Use Hono plus a Node HTTP adapter.
-- Depend on the sibling `did-jwt-vc` clone through the app-local file
-  dependency `file:../../../did-jwt-vc`.
+- Depend on `did-jwt-vc` through a published package or immutable Git SHA.
 - Use the `did-jwt-vc` verifier for VC-JWT and VP-JWT envelopes.
 - Verify embedded `DataIntegrityProof` / `eddsa-rdfc-2022` with strict local
   JSON-LD contexts and Ed25519 verification against resolved did:webs key
@@ -79,10 +78,11 @@ Responses use Isomer-shaped verifier results:
 ## Phase 3: Go Sidecar After Node Is Green
 
 - Build `apps/isomer-go` after Node is functional.
-- Use the sibling `vc-go` clone through:
+- Use a non-local module replacement for `vc-go`, pinned to an immutable
+  upstream module version or pseudo-version:
 
 ```go
-replace github.com/trustbloc/vc-go => ../../../vc-go
+replace github.com/trustbloc/vc-go => github.com/kentbull/vc-go v0.0.0-20260129140819-c99b4c46239e
 ```
 
 - Implement the same HTTP contract as Node.

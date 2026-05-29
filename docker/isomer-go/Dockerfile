@@ -3,7 +3,6 @@
 FROM golang:1.26.2-bookworm AS build
 
 WORKDIR /app
-COPY --from=vc_go . /app/vc-go
 COPY apps/isomer-go/go.mod apps/isomer-go/go.sum /app/w3c-crosswalk/apps/isomer-go/
 COPY apps/isomer-go /app/w3c-crosswalk/apps/isomer-go
 

@@ -8,18 +8,20 @@ DIST_DIR := dist
 PYTHON := ./.venv/bin/python
 UV := uv
 TWINE := uvx --from twine twine
-DID_JWT_VC_ROOT := ../did-jwt-vc
 WEBS_DID_RESOLVER_ROOT := packages/webs-did-resolver
-VC_GO_ROOT := ../vc-go
 GO_CACHE ?= /tmp/isomer-go-cache
 DOCKER_TAG ?= local
+CONTAINER_ENGINE ?= docker
+COMPOSE ?= $(CONTAINER_ENGINE) compose
+LOCAL_COMPOSE := docker/compose.local.yml
+ENV_FILE ?= .env
 
 PYPI_UPLOAD_URL := https://upload.pypi.org/legacy/
 PYPI_CHECK_URL := https://pypi.org/simple/$(PACKAGE)/
 TEST_PYPI_UPLOAD_URL := https://test.pypi.org/legacy/
 TEST_PYPI_CHECK_URL := https://test.pypi.org/simple/$(PACKAGE)/
 
-.PHONY: help sync clean test-cli test-fast test-integration test smoke external-node-sync external-node-check external-go-check dashboard-sync dashboard-check test-external-w3c-node test-external-w3c-go test-external-w3c-all docker-verifiers-build docker-verifiers-smoke docker-verifiers-test build dist-check check-clean prepublish publish-test publish
+.PHONY: help sync clean test-cli test-fast test-integration test smoke external-node-sync external-node-check external-go-check dashboard-sync dashboard-check test-external-w3c-node test-external-w3c-go test-external-w3c-all docker-verifiers-build docker-verifiers-smoke docker-verifiers-test local-up local-seed local-project local-test local-down portability-check build dist-check check-clean prepublish publish-test publish
 
 help:
 	@printf '%s\n' \
@@ -41,6 +43,12 @@ help:
 		'  make docker-verifiers-build Build local Python/Node/Go verifier images' \
 		'  make docker-verifiers-smoke Smoke-test verifier container health checks' \
 		'  make docker-verifiers-test  Run KERIA Docker verifier acceptance' \
+		'  make local-up          Start the portable wallet + verifier compose stack' \
+		'  make local-seed        Run the SignifyPy VRD projection-chain seeder' \
+		'  make local-project     Project the seeded VRD credential through all verifiers' \
+		'  make local-test        Run portability and stack acceptance checks' \
+		'  make local-down        Stop the portable local stack' \
+		'  make portability-check Check for sibling-path dependency regressions' \
 		'  make build             Build sdist and wheel into dist/' \
 		'  make dist-check        Build and validate artifacts with twine check' \
 		'' \
@@ -98,19 +106,16 @@ smoke:
 	fi
 
 external-node-sync:
-	@test -f "$(DID_JWT_VC_ROOT)/package.json" || { echo 'missing sibling did-jwt-vc clone at $(DID_JWT_VC_ROOT)'; exit 1; }
-	yarn --cwd "$(DID_JWT_VC_ROOT)" install --frozen-lockfile
-	yarn --cwd "$(DID_JWT_VC_ROOT)" build
 	npm --prefix "$(WEBS_DID_RESOLVER_ROOT)" install
 	npm --prefix "$(WEBS_DID_RESOLVER_ROOT)" run build
 	npm --prefix apps/isomer-node install
+	npm --prefix apps/isomer-node run build:pinned-deps
 
 external-node-check:
 	npm --prefix apps/isomer-node run check
 	npm --prefix apps/isomer-node test
 
 external-go-check:
-	@test -f "$(VC_GO_ROOT)/go.mod" || { echo 'missing sibling vc-go clone at $(VC_GO_ROOT)'; exit 1; }
 	cd apps/isomer-go && env GOCACHE="$(GO_CACHE)" go test ./...
 
 dashboard-sync:
@@ -130,13 +135,36 @@ test-external-w3c-all: external-node-sync external-node-check external-go-check
 	ISOMER_EXTERNAL_VERIFIERS=node,go $(PYTHON) -m pytest tests/integration/test_single_sig_vrd_isomer.py -q --tb=short
 
 docker-verifiers-build:
-	TAG="$(DOCKER_TAG)" docker buildx bake --file docker-bake.hcl
+	TAG="$(DOCKER_TAG)" $(CONTAINER_ENGINE) buildx bake --file docker-bake.hcl
 
 docker-verifiers-smoke: docker-verifiers-build
-	python scripts/docker/smoke-verifier-containers.py --tag "$(DOCKER_TAG)"
+	python scripts/docker/smoke-verifier-containers.py --engine "$(CONTAINER_ENGINE)" --tag "$(DOCKER_TAG)"
 
 docker-verifiers-test: docker-verifiers-build
-	cd ../keria && KERIA_DOCKER_W3C_ACCEPTANCE=1 .venv/bin/pytest tests/integration/test_w3c_projection_docker_verifiers.py -q
+	$(PYTHON) -m pytest tests/test_portability.py -q
+
+local-up:
+	@test -f "$(ENV_FILE)" || cp .env.example "$(ENV_FILE)"
+	$(COMPOSE) --env-file "$(ENV_FILE)" -f "$(LOCAL_COMPOSE)" up -d
+
+local-seed:
+	@test -f "$(ENV_FILE)" || cp .env.example "$(ENV_FILE)"
+	$(COMPOSE) --env-file "$(ENV_FILE)" -f "$(LOCAL_COMPOSE)" run --rm signifypy-seed
+
+local-project:
+	@test -f "$(ENV_FILE)" || cp .env.example "$(ENV_FILE)"
+	@test -f ".tmp/local-stack/w3c-vrd-chain-manifest.json" || { echo 'missing .tmp/local-stack/w3c-vrd-chain-manifest.json; run make local-seed first' >&2; exit 1; }
+	$(COMPOSE) --env-file "$(ENV_FILE)" -f "$(LOCAL_COMPOSE)" run --rm signifypy-project
+
+local-test:
+	$(PYTHON) -m pytest tests/test_portability.py -q
+	@test -f "$(ENV_FILE)" || cp .env.example "$(ENV_FILE)"
+	$(COMPOSE) --env-file "$(ENV_FILE)" -f "$(LOCAL_COMPOSE)" --profile seed config >/dev/null
+	$(MAKE) local-project
+
+local-down:
+	@test -f "$(ENV_FILE)" || cp .env.example "$(ENV_FILE)"
+	$(COMPOSE) --env-file "$(ENV_FILE)" -f "$(LOCAL_COMPOSE)" down --remove-orphans
 
 build: clean
 	$(UV) build

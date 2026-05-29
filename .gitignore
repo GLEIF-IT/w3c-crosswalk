@@ -8,6 +8,7 @@ build/
 *.egg-info/
 .idea/
 .tmp/
+.env
 
 apps/isomer-node/node_modules/
 apps/isomer-dashboard/node_modules/

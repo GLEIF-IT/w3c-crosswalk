@@ -1,6 +1,6 @@
 services:
   isomer-python:
-    image: w3c-crosswalk/isomer-python:local
+    image: ${ISOMER_PYTHON_IMAGE:-w3c-crosswalk/isomer-python:local}
     ports:
       - "8788:8788"
     environment:
@@ -14,7 +14,7 @@ services:
       - isomer-dashboard
 
   isomer-node:
-    image: w3c-crosswalk/isomer-node:local
+    image: ${ISOMER_NODE_IMAGE:-w3c-crosswalk/isomer-node:local}
     ports:
       - "8789:8788"
     environment:
@@ -28,7 +28,7 @@ services:
       - isomer-dashboard
 
   isomer-go:
-    image: w3c-crosswalk/isomer-go:local
+    image: ${ISOMER_GO_IMAGE:-w3c-crosswalk/isomer-go:local}
     ports:
       - "8790:8788"
     environment:
@@ -42,7 +42,7 @@ services:
       - isomer-dashboard
 
   isomer-dashboard:
-    image: w3c-crosswalk/isomer-dashboard:local
+    image: ${ISOMER_DASHBOARD_IMAGE:-w3c-crosswalk/isomer-dashboard:local}
     ports:
       - "8791:8791"
     environment:

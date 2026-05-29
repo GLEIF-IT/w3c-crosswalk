@@ -1,0 +1,15 @@
+{
+  "dt": "2026-05-19T00:00:00.000000+00:00",
+  "keria": {
+    "dt": "2026-05-19T00:00:00.000000+00:00",
+    "curls": [
+      "http://host.docker.internal:3902/",
+      "http://127.0.0.1:3902/"
+    ]
+  },
+  "iurls": [
+    "http://witness-demo:5642/oobi/BBilc4-L3tFUnfM_wJr4S4OJanAv_VmF_dJNN6vkf2Ha/controller?name=Wan&tag=witness",
+    "http://witness-demo:5643/oobi/BLskRTInXnMxWaGqcpSyMgo0nYbalW99cGZESrz3zapM/controller?name=Wil&tag=witness",
+    "http://witness-demo:5644/oobi/BIKKuvBwpmDVA4Ds-EpL5bt9OqPzWPja2LigFYZN2YfX/controller?name=Wes&tag=witness"
+  ]
+}

@@ -11,26 +11,22 @@ Read, in order:
 2. `.agents/PROJECT_LEARNINGS.md`
 3. The task-relevant topic docs listed there
 4. Any plan docs those topic docs reference
-5. Sibling repos only when needed:
-   - `../wallet` for holder/issuer seams
-   - `../did-webs-resolver` for DID/key-state resolution
-   - `../sally` for ACDC verifier behavior
-   - `../w3c-signer` as legacy reference only
-   - `../keripy` as the Python behavior reference
+5. External repos only when needed, through their workspace registry entry,
+   remote URL, package, or pinned Git SHA. Do not assume a sibling checkout
+   layout.
 
 Then produce a concise current-state summary and implementation plan.
 
 ## Local Setup Rule
 
-1. Install sibling Python deps into the local `.venv` as editable installs; do
-   not rely on `PYTHONPATH` tricks.
-2. Expected editable installs for integration work: `../keripy` and
-   `../did-webs-resolver`.
-3. Launch the vLEI schema service from the local `../vLEI` repo's
-   `vLEI-server` binary and use `VLEI_ROOT` for schemas, credentials, and
-   OOBIs.
-4. Repo instructions and tests should assume those local installs or service
-   binaries when integration behavior depends on them.
+1. The default local stack must consume packages, pinned Git SHAs, or OCI
+   images. It must not depend on local sibling source directories.
+2. Use `make local-up`, `make local-seed`, `make local-test`, and
+   `make local-down` for the portable stack.
+3. Optional cross-repo artifact building belongs outside this repo
+   and should produce image tags consumed through `.env`.
+4. Editable installs are allowed only as explicit developer overrides and must
+   not be required by default scripts, Dockerfiles, or compose files.
 
 ## Handoff Rule
 
@@ -84,8 +80,8 @@ For significant changes, update:
 ### Tooling
 
 1. Prefer the simplest command that solves the problem.
-2. For local Python deps, try a direct editable install before adding wrappers
-   or environment hacks.
+2. For portable dependencies, prefer package, image, or immutable Git SHA
+   inputs over local path overrides.
 3. Do not add symlink tricks or copied packaging internals when a simple
    command is enough.
 

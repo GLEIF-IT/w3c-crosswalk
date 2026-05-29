@@ -27,28 +27,29 @@ class StartedContainer:
 def main() -> int:
     """Run the smoke check and return a process exit code."""
     parser = argparse.ArgumentParser()
+    parser.add_argument("--engine", default="docker")
     parser.add_argument("--tag", default="local")
     args = parser.parse_args()
 
     containers: list[StartedContainer] = []
     try:
         for kind in ("python", "node", "go", "dashboard"):
-            containers.append(start_container(kind, args.tag))
+            containers.append(start_container(kind, args.tag, args.engine))
         for container in containers:
-            wait_for_health(container)
+            wait_for_health(container, engine=args.engine)
             print(f"{container.kind}: {container.base_url}/healthz ok")
         return 0
     finally:
         for container in containers:
-            subprocess.run(["docker", "rm", "-f", container.cid], check=False, stdout=subprocess.DEVNULL)
+            subprocess.run([args.engine, "rm", "-f", container.cid], check=False, stdout=subprocess.DEVNULL)
 
 
-def start_container(kind: str, tag: str) -> StartedContainer:
+def start_container(kind: str, tag: str, engine: str = "docker") -> StartedContainer:
     """Start one verifier container on a random loopback host port."""
     image = f"w3c-crosswalk/isomer-{kind}:{tag}"
     container_port = "8791" if kind == "dashboard" else "8788"
     command = [
-        "docker",
+        engine,
         "run",
         "--rm",
         "--detach",
@@ -60,19 +61,19 @@ def start_container(kind: str, tag: str) -> StartedContainer:
         command.extend(["-e", "ISOMER_RESOLVER_URL=http://host.docker.internal:9/1.0/identifiers"])
     command.append(image)
     cid = subprocess.check_output(command, text=True).strip()
-    port = published_port(cid, container_port)
+    port = published_port(cid, container_port, engine)
     return StartedContainer(kind=kind, cid=cid, base_url=f"http://127.0.0.1:{port}")
 
 
-def published_port(cid: str, container_port: str) -> str:
+def published_port(cid: str, container_port: str, engine: str = "docker") -> str:
     """Return the random host port mapped to container port 8788."""
-    output = subprocess.check_output(["docker", "port", cid, f"{container_port}/tcp"], text=True).strip()
+    output = subprocess.check_output([engine, "port", cid, f"{container_port}/tcp"], text=True).strip()
     if not output:
         raise RuntimeError(f"container {cid} did not publish {container_port}/tcp")
     return output.splitlines()[0].rsplit(":", 1)[1]
 
 
-def wait_for_health(container: StartedContainer, timeout: float = 45.0) -> None:
+def wait_for_health(container: StartedContainer, timeout: float = 45.0, engine: str = "docker") -> None:
     """Poll one container health endpoint until it reports ready."""
     deadline = time.monotonic() + timeout
     last_error: Exception | None = None
@@ -86,7 +87,7 @@ def wait_for_health(container: StartedContainer, timeout: float = 45.0) -> None:
         except Exception as ex:  # pragma: no cover - diagnostics only
             last_error = ex
         time.sleep(0.2)
-    logs = subprocess.run(["docker", "logs", container.cid], text=True, capture_output=True, check=False)
+    logs = subprocess.run([engine, "logs", container.cid], text=True, capture_output=True, check=False)
     raise TimeoutError(f"{container.kind} did not become healthy: {last_error}\n{logs.stdout[-4000:]}")
 
 

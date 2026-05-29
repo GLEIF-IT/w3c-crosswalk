@@ -358,7 +358,7 @@ wheels = [
 [[package]]
 name = "keri"
 version = "1.2.13"
-source = { git = "https://github.com/WebOfTrust/keripy.git?rev=cbbf700fa8091587b96b5475c5f50d1d8bf3ca40#cbbf700fa8091587b96b5475c5f50d1d8bf3ca40" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "apispec" },
     { name = "blake3" },
@@ -381,6 +381,7 @@ dependencies = [
     { name = "qrcode" },
     { name = "semver" },
 ]
+sdist = { url = "https://files.pythonhosted.org/packages/29/0f/6a7fd0cbd681c31fad385e2a5f27ac9ea9e6f7aae6f30b5814f960acdf17/keri-1.2.13.tar.gz", hash = "sha256:aef033ec3b17d4b04d8801b5365b225b6cba5630a67aaad2f306aaecbd256fcd", size = 479577, upload-time = "2026-05-06T18:24:47.865Z" }
 
 [[package]]
 name = "lmdb"
@@ -832,7 +833,7 @@ test = [
 requires-dist = [
     { name = "falcon", specifier = ">=4.0.2" },
     { name = "hio", specifier = "==0.6.14" },
-    { name = "keri", git = "https://github.com/WebOfTrust/keripy.git?rev=cbbf700fa8091587b96b5475c5f50d1d8bf3ca40" },
+    { name = "keri", specifier = ">=1.2.13,<2" },
     { name = "pyld", specifier = ">=2.0.4,<3" },
 ]
 

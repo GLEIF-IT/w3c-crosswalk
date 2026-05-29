@@ -5,37 +5,8 @@
 and ACDC VRD state into VCDM 1.1 JSON-LD credentials, enveloping them as
 VC-JWT/VP-JWT artifacts, and verifying them through `did:webs`.
 
-Current repo state:
 
-- canonical isomer profile for VRD Auth and VRD
-- live KERI-habitat-backed VC-JWT and VP-JWT issuance
-- embedded KERI-backed Data Integrity proofs on projected VCs
-- `did:webs`-backed VC-JWT and VP-JWT verification
-- VCDM 1.1 JSON-LD context and JSON Schema resources
-- isomer-specific ACDC/W3C pair verification
-- projected credential status service for revocation checks
-- fixture contract for JSON ACDCs and export-equivalent CESR streams
-- one live end-to-end integration test from single-sig ACDC issuance through
-  VC-JWT verification
-
-This repo is real, but it is still an integration project rather than a
-finished interoperability product. The verifier is legitimate for the
-isomer profile, not yet a full ecosystem-grade verifier.
-
-## What Is Here
-
-- [`src/vc_isomer`](src/vc_isomer): current Python implementation
-- [`tests`](tests): contract tests plus the live-stack integration test
-- [`fixtures`](fixtures): stable contract fixtures
-- [`docs/isomer-profile.md`](docs/isomer-profile.md): current profile note
-- [`docs/w3c-vc-libs-options.md`](docs/w3c-vc-libs-options.md): external verifier library options
-- [`interop`](interop): OpenID4VCI/OpenID4VP shape examples for the current
-  `jwt_vc_json-ld` profile
-- [`plans`](plans): execution and architecture plans
-
-The `packages/`, `apps/`, and `scripts/demo/` directories are still repo-shape
-placeholders for the longer-term monorepo layout. The active implementation is
-in `src/` and `tests/`.
+This repo is an integration project rather than a finished interoperability product.
 
 Read
 [`docs/integration-maintainer-guide.md`](docs/integration-maintainer-guide.md)
@@ -43,54 +14,6 @@ for the live stack, workflow, and projection mental model.
 
 Read [`docs/cli-e2e-walkthrough.md`](docs/cli-e2e-walkthrough.md) for a
 copy-pasteable CLI walkthrough of the isomer-specific end-to-end flow.
-
-## Local Setup
-
-This repo uses `uv` and expects a local `.venv`. The installable distribution
-name is `vc-isomer`, the Python import package is `vc_isomer`, and the CLI
-entrypoint remains `isomer`.
-
-Bootstrap the environment:
-
-```bash
-UV_CACHE_DIR=$PWD/.uv-cache uv sync
-```
-
-Once published, install the package with:
-
-```bash
-pip install vc-isomer
-```
-
-The default `uv` groups include the live integration dependencies, so a normal
-sync installs:
-
-- `keri`
-- `did-webs-resolver`
-- `vlei`
-
-The live integration harness is intended to run entirely from this repo's
-`.venv`. It should not require sibling repository virtualenvs or runtime file
-lookups outside `isomer`.
-
-Dependency sources are pinned in `pyproject.toml` through `tool.uv.sources`,
-which keeps `uv sync` reproducible even when the latest PyPI releases lag the
-live integration work.
-
-### Optional Editable Overrides
-
-If you are intentionally developing one of the dependency repos locally, you can
-override the pinned source with an editable install in this environment. For
-example:
-
-```bash
-uv add --editable ../keripy
-uv add --editable ../did-webs-resolver
-uv add --editable ../vLEI
-```
-
-When using editable overrides, direct interpreter invocations such as
-`./.venv/bin/python -m pytest ...` remain the least ambiguous path.
 
 ## CLI
 
@@ -128,6 +51,32 @@ For an end-to-end CLI walkthrough, including status projection, VC issuance,
 and verifier checks, see
 [`docs/cli-e2e-walkthrough.md`](docs/cli-e2e-walkthrough.md).
 
+## Local Setup
+
+Bootstrap the environment:
+
+```bash
+uv sync
+```
+
+Once published, install the package with:
+
+```bash
+pip install vc-isomer
+```
+
+The default `uv` groups include the live integration dependencies, so a normal
+sync installs:
+
+- `keri`
+- `did-webs-resolver`
+- `vlei`
+
+### Integration Tests
+
+The live integration harness is intended to run entirely from this repo's
+`.venv`.
+
 ## Publishing
 
 Publishing uses `uv build` and `uv publish` through the repo `Makefile`.
@@ -136,12 +85,6 @@ Run the full pre-publish gate:
 
 ```bash
 make prepublish
-```
-
-Publish to TestPyPI first:
-
-```bash
-TEST_PYPI_TOKEN=... make publish-test
 ```
 
 Publish to PyPI:
