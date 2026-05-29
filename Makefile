@@ -148,7 +148,7 @@ docker-verifiers-build:
 	ISOMER_NODE_IMAGE="w3c-crosswalk/isomer-node:$(DOCKER_TAG)" \
 	ISOMER_GO_IMAGE="w3c-crosswalk/isomer-go:$(DOCKER_TAG)" \
 	ISOMER_DASHBOARD_IMAGE="w3c-crosswalk/isomer-dashboard:$(DOCKER_TAG)" \
-	$(COMPOSE) -f docker/compose.verifiers.yml -f "$(VERIFIER_BUILD_COMPOSE)" build $(VERIFIER_BUILD_SERVICES)
+	$(COMPOSE) -f "$(VERIFIER_BUILD_COMPOSE)" build $(VERIFIER_BUILD_SERVICES)
 
 docker-verifiers-smoke: docker-verifiers-build
 	python scripts/docker/smoke-verifier-containers.py --engine "$(CONTAINER_ENGINE)" --tag "$(DOCKER_TAG)"

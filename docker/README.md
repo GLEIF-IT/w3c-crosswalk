@@ -8,9 +8,8 @@ For verifier semantics, see `../docs/verifier-contract.md`.
 
 ## Build Verifier Images
 
-Verifier images are built with the Compose override in
-`docker/compose.build.yml`. The normal local stack remains image-only and
-consumes the resulting tags through `.env`.
+Verifier images are built with `docker/compose.build.yml`. The normal local
+stack remains image-only and consumes the resulting tags through `.env`.
 
 The Node, Go, and dashboard Dockerfiles live with their app source under
 `apps/`. The Python verifier Dockerfile remains under `docker/isomer-python/`

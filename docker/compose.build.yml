@@ -1,20 +1,24 @@
 services:
   isomer-python:
+    image: ${ISOMER_PYTHON_IMAGE:-w3c-crosswalk/isomer-python:local}
     build:
       context: ..
       dockerfile: docker/isomer-python/Dockerfile
 
   isomer-node:
+    image: ${ISOMER_NODE_IMAGE:-w3c-crosswalk/isomer-node:local}
     build:
       context: ..
       dockerfile: apps/isomer-node/Dockerfile
 
   isomer-go:
+    image: ${ISOMER_GO_IMAGE:-w3c-crosswalk/isomer-go:local}
     build:
       context: ..
       dockerfile: apps/isomer-go/Dockerfile
 
   isomer-dashboard:
+    image: ${ISOMER_DASHBOARD_IMAGE:-w3c-crosswalk/isomer-dashboard:local}
     build:
       context: ..
       dockerfile: apps/isomer-dashboard/Dockerfile
