@@ -1,0 +1,20 @@
+services:
+  isomer-python:
+    build:
+      context: ..
+      dockerfile: docker/isomer-python/Dockerfile
+
+  isomer-node:
+    build:
+      context: ..
+      dockerfile: docker/isomer-node/Dockerfile
+
+  isomer-go:
+    build:
+      context: ..
+      dockerfile: docker/isomer-go/Dockerfile
+
+  isomer-dashboard:
+    build:
+      context: ..
+      dockerfile: docker/isomer-dashboard/Dockerfile

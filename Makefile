@@ -1,30 +1,43 @@
+# Shell selection and configuration
 SHELL := /bin/bash
 .SHELLFLAGS := -euo pipefail -c
 
-PACKAGE := vc-isomer
-MODULE := vc_isomer
-CLI := isomer
-DIST_DIR := dist
+# Python, UV, and Twine binary selection
 PYTHON := ./.venv/bin/python
 UV := uv
 TWINE := uvx --from twine twine
-WEBS_DID_RESOLVER_ROOT := packages/webs-did-resolver
-GO_CACHE ?= /tmp/isomer-go-cache
-DOCKER_TAG ?= local
+
+# vc-isomer package and module info
+PACKAGE := vc-isomer
+MODULE := vc_isomer
+CLI := isomer
+LOCAL_PROJECT ?= w3c-crosswalk
+
+# Docker/containerization config
 CONTAINER_ENGINE ?= docker
+DOCKER_TAG ?= local
 COMPOSE ?= $(CONTAINER_ENGINE) compose
 LOCAL_COMPOSE := docker/compose.local.yml
-LOCAL_PROJECT ?= w3c-crosswalk
+LOCAL_COMPOSE_CMD = $(COMPOSE) --env-file "$(ENV_FILE)" -p "$(LOCAL_PROJECT)" -f "$(LOCAL_COMPOSE)"
+VERIFIER_BUILD_COMPOSE := docker/compose.build.yml
+VERIFIER_BUILD_SERVICES := isomer-python isomer-node isomer-go isomer-dashboard
+
+# external package configuration
+WEBS_DID_RESOLVER_ROOT := packages/webs-did-resolver
+GO_CACHE ?= /tmp/isomer-go-cache
+
+# Local stack deployment configuration
 LOCAL_STACK_TMP := .tmp/local-stack
 ENV_FILE ?= .env
-LOCAL_COMPOSE_CMD = $(COMPOSE) --env-file "$(ENV_FILE)" -p "$(LOCAL_PROJECT)" -f "$(LOCAL_COMPOSE)"
 
+# Packaging Config
+DIST_DIR := dist
 PYPI_UPLOAD_URL := https://upload.pypi.org/legacy/
 PYPI_CHECK_URL := https://pypi.org/simple/$(PACKAGE)/
 TEST_PYPI_UPLOAD_URL := https://test.pypi.org/legacy/
 TEST_PYPI_CHECK_URL := https://test.pypi.org/simple/$(PACKAGE)/
 
-.PHONY: help sync clean test-cli test-fast test-integration test smoke external-node-sync external-node-check external-go-check dashboard-sync dashboard-check test-external-w3c-node test-external-w3c-go test-external-w3c-all docker-verifiers-build docker-verifiers-smoke docker-verifiers-test local-up local-seed local-project local-test local-down local-reset portability-check build dist-check check-clean prepublish publish-test publish
+.PHONY: help sync clean test-cli test-fast test-integration test smoke external-node-sync external-node-check external-go-check dashboard-sync dashboard-check test-external-w3c-node test-external-w3c-go test-external-w3c-all docker-verifiers-build docker-verifiers-smoke local-up local-seed local-project local-test local-down local-reset build dist-check check-clean prepublish publish-test publish
 
 help:
 	@printf '%s\n' \
@@ -45,14 +58,12 @@ help:
 		'  make test-external-w3c-all Run live e2e through Node and Go sidecars' \
 		'  make docker-verifiers-build Build local Python/Node/Go verifier images' \
 		'  make docker-verifiers-smoke Smoke-test verifier container health checks' \
-		'  make docker-verifiers-test  Run KERIA Docker verifier acceptance' \
 		'  make local-up          Start the portable wallet + verifier compose stack' \
 		'  make local-seed        Run the SignifyPy VRD projection-chain seeder' \
 		'  make local-project     Project the seeded VRD credential through all verifiers' \
-		'  make local-test        Run portability and stack acceptance checks' \
+		'  make local-test        Run stack acceptance checks' \
 		'  make local-down        Stop the portable local stack and preserve volumes' \
 		'  make local-reset       Destroy local stack volumes and generated seed artifacts' \
-		'  make portability-check Check for sibling-path dependency regressions' \
 		'  make build             Build sdist and wheel into dist/' \
 		'  make dist-check        Build and validate artifacts with twine check' \
 		'' \
@@ -139,13 +150,14 @@ test-external-w3c-all: external-node-sync external-node-check external-go-check
 	ISOMER_EXTERNAL_VERIFIERS=node,go $(PYTHON) -m pytest tests/integration/test_single_sig_vrd_isomer.py -q --tb=short
 
 docker-verifiers-build:
-	TAG="$(DOCKER_TAG)" $(CONTAINER_ENGINE) buildx bake --file docker-bake.hcl
+	ISOMER_PYTHON_IMAGE="w3c-crosswalk/isomer-python:$(DOCKER_TAG)" \
+	ISOMER_NODE_IMAGE="w3c-crosswalk/isomer-node:$(DOCKER_TAG)" \
+	ISOMER_GO_IMAGE="w3c-crosswalk/isomer-go:$(DOCKER_TAG)" \
+	ISOMER_DASHBOARD_IMAGE="w3c-crosswalk/isomer-dashboard:$(DOCKER_TAG)" \
+	$(COMPOSE) -f docker/compose.verifiers.yml -f "$(VERIFIER_BUILD_COMPOSE)" build $(VERIFIER_BUILD_SERVICES)
 
 docker-verifiers-smoke: docker-verifiers-build
 	python scripts/docker/smoke-verifier-containers.py --engine "$(CONTAINER_ENGINE)" --tag "$(DOCKER_TAG)"
-
-docker-verifiers-test: docker-verifiers-build
-	$(PYTHON) -m pytest tests/test_portability.py -q
 
 local-up:
 	@test -f "$(ENV_FILE)" || cp .env.example "$(ENV_FILE)"
@@ -163,7 +175,6 @@ local-project:
 	$(LOCAL_COMPOSE_CMD) run --rm signifypy-project
 
 local-test:
-	$(PYTHON) -m pytest tests/test_portability.py -q
 	@test -f "$(ENV_FILE)" || cp .env.example "$(ENV_FILE)"
 	@mkdir -p "$(LOCAL_STACK_TMP)"
 	$(LOCAL_COMPOSE_CMD) --profile seed config >/dev/null

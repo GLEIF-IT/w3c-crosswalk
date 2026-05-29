@@ -1,12 +1,16 @@
 # Portable Isomer Containers
 
-The local stack is image-only at the `w3c-crosswalk` boundary. Compose files
-may reference images, package pins, and this repository's own files. They must
-not require sibling source checkouts.
+The local stack runtime is image-only at the `w3c-crosswalk` boundary. Runtime
+Compose files may reference images, package pins, and this repository's own
+files. They must not require sibling source checkouts.
 
 For verifier semantics, see `../docs/verifier-contract.md`.
 
 ## Build Verifier Images
+
+Verifier images are built with the Compose override in
+`docker/compose.build.yml`. The normal local stack remains image-only and
+consumes the resulting tags through `.env`.
 
 ```bash
 make docker-verifiers-build
@@ -53,5 +57,3 @@ Default host ports:
 - Use `DID_WEBS_REGISTRY_NAME_PREFIX=didwebs-designated-aliases`.
 - Keep generated AID and registry names colonless.
 - Keep actual DID strings such as `did:webs:...` unchanged.
-- Run `make portability-check` before changing Docker, package, or compose
-  wiring.

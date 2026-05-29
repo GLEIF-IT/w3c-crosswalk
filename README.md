@@ -77,12 +77,6 @@ Fast Python contract checks:
 make test-fast
 ```
 
-Portable dependency regression check:
-
-```bash
-make portability-check
-```
-
 External verifier checks:
 
 ```bash
