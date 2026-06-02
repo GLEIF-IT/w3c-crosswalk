@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from keri.core import coring
+
 
 class KeriaW3CApi:
     """Small KERIA W3C route wrapper over a SignifyPy-style client."""
@@ -18,6 +20,10 @@ class KeriaW3CApi:
             f"/identifiers/{name}/w3c/credentials",
             json={"sourceCredentialSaid": source_credential_said},
         ).json()
+
+    def credential(self, name: str, credential_id: str) -> dict[str, Any]:
+        """Return one issuer issuance or holder credential view."""
+        return self.client.get(f"/identifiers/{name}/w3c/credentials/{credential_id}").json()
 
     def signing_requests(self, name: str, include_complete: bool = False) -> list[dict[str, Any]]:
         """Return durable W3C signing requests for one identifier."""
@@ -48,6 +54,10 @@ class KeriaW3CApi:
             f"/identifiers/{name}/w3c/credentials/import",
             json={"importRequestId": import_request_id},
         ).json()
+
+    def create_import_request(self, grant: dict[str, Any]) -> dict[str, Any]:
+        """Deliver one W3C grant to KERIA's live holder import endpoint."""
+        return self.client.post("/w3c/vc/grant", json=grant).json()
 
     def credentials(self, name: str) -> list[dict[str, Any]]:
         """Return holder W3C credential inventory."""
@@ -107,6 +117,18 @@ class HeadlessW3CWallet:
         self.issuances.append(issuance)
         return issuance
 
+    def refresh_issuance(self, issuance: dict[str, Any]) -> dict[str, Any]:
+        """Reload one issuer issuance from KERIA and record the current view."""
+        issuance_id = _record_id(issuance, "issuanceId")
+        refreshed = self.w3c.credential(self.name, issuance_id)
+        self.issuances.append(refreshed)
+        return refreshed
+
+    def deliver_issuance_to_holder(self, holder_wallet: "HeadlessW3CWallet", issuance: dict[str, Any]) -> dict[str, Any]:
+        """Deliver a finalized issuer W3C issuance through KERIA's grant route."""
+        grant = _grant_from_issuance(holder_wallet.name, issuance)
+        return holder_wallet.w3c.create_import_request(grant)
+
     def handle_signal(self, envelope: dict[str, Any]) -> dict[str, Any]:
         """Verify and handle one signed W3C signal through the configured automator."""
         if self.automator is None:
@@ -153,6 +175,15 @@ class HeadlessW3CWallet:
         self.present_txs.append(tx)
         return tx
 
+    def refresh_presentation(self, presentation_tx: dict[str, Any]) -> dict[str, Any]:
+        """Reload one holder presentation transaction from KERIA."""
+        present_tx_id = presentation_tx.get("presentTxId") or presentation_tx.get("d")
+        if not isinstance(present_tx_id, str) or not present_tx_id:
+            raise RuntimeError(f"presentation transaction has no id: {presentation_tx!r}")
+        tx = self.w3c.present_tx(self.name, present_tx_id)
+        self.present_txs.append(tx)
+        return tx
+
     def submit_presentation_signature(
         self,
         present_tx_id: str,
@@ -179,3 +210,46 @@ class HeadlessW3CWallet:
             "heldCredentials": self.held_credentials,
             "presentTxs": self.present_txs,
         }
+
+
+def _record_id(record: dict[str, Any], preferred: str) -> str:
+    """Return a KERIA record id from a response object."""
+    record_id = record.get(preferred) or record.get("d")
+    if not isinstance(record_id, str) or not record_id:
+        raise RuntimeError(f"W3C record has no {preferred}: {record!r}")
+    return record_id
+
+
+def _grant_from_issuance(holder_name: str, issuance: dict[str, Any]) -> dict[str, Any]:
+    """Build the live grant body consumed by KERIA's W3C holder import route."""
+    required = (
+        "holderAid",
+        "holderDid",
+        "issuerAid",
+        "issuerDid",
+        "sourceCredentialSaid",
+        "schemaSaid",
+        "vcJwt",
+        "statusUrl",
+    )
+    missing = [key for key in required if not issuance.get(key)]
+    if missing:
+        raise RuntimeError(f"W3C issuance is not deliverable; missing {', '.join(missing)}")
+
+    body = {
+        "holderName": holder_name,
+        "holderAid": issuance["holderAid"],
+        "holderDid": issuance["holderDid"],
+        "issuerAid": issuance["issuerAid"],
+        "issuerDid": issuance["issuerDid"],
+        "sourceCredentialSaid": issuance["sourceCredentialSaid"],
+        "schemaSaid": issuance["schemaSaid"],
+        "issuanceId": _record_id(issuance, "issuanceId"),
+        "vcJwt": issuance["vcJwt"],
+        "statusUrl": issuance["statusUrl"],
+        "profile": issuance.get("profile"),
+    }
+    said_input = {"d": "", **body}
+    _saider, saided = coring.Saider.saidify(said_input)
+    body["grantSaid"] = saided["d"]
+    return body

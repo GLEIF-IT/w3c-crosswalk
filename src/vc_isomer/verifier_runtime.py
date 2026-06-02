@@ -222,7 +222,7 @@ class VerificationJobDoer(doing.DoDoer):
             ) from exc
         return status_doc
 
-    def _request_json(self, *, method: str, url: str, body: Any | None = None, timeout: float = 10.0):
+    def _request_json(self, *, method: str, url: str, body: Any | None = None, timeout: float = 30.0):
         """Run one outbound HTTP request as a child doer and yield until it completes."""
         request_doer = JsonRequestDoer(
             method=method,

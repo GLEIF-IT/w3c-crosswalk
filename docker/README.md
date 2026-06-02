@@ -51,10 +51,14 @@ make local-test
 make local-down
 ```
 
+`make local-test` consumes `.tmp/local-stack/w3c-vrd-chain-manifest.json` from
+`make local-seed`, drives KERIA holder presentation transactions with edge
+wallet signing, and collects live verifier evidence from the Python, Node, and
+Go services.
+
 Default host ports:
 
 - KERIA admin/router/boot: `3901`, `3902`, `3903`
-- Signify React wallet: `http://127.0.0.1:5177`
 - `did:webs` resolver: `http://127.0.0.1:7678/1.0/identifiers`
 - Python verifier: `http://127.0.0.1:8788`
 - Node verifier: `http://127.0.0.1:8789`
@@ -67,3 +71,6 @@ Default host ports:
 - Use `DID_WEBS_REGISTRY_NAME_PREFIX=didwebs-designated-aliases`.
 - Keep generated AID and registry names colonless.
 - Keep actual DID strings such as `did:webs:...` unchanged.
+- Run the React wallet browser smoke from the checked-out
+  `signify-react-ts` source so it uses the local `signify-ts` dependency and
+  current holder-presentation code.

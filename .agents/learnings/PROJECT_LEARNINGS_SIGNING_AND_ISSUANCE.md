@@ -32,13 +32,23 @@ interop behavior.
   credentials. The final VRD W3C VC issuer is QVI did:webs and the subject is
   LE did:webs.
 - `headless-w3c-e2e` is the Python-first acceptance harness boundary under
-  `packages/headless-w3c-e2e`; it may use fake verifier command adapters in
-  package tests, but signing artifacts and live acceptance must still come from
-  real KERI-backed signers.
+  `packages/headless-w3c-e2e`; it is an integration-style E2E utility. Fake
+  in-process verifier callables, CLI-only verifier commands, and fixture-only
+  verifier responses are not acceptance evidence. Signing artifacts and live
+  acceptance must come from real KERI-backed signers and live verifier services.
+- `headless-w3c-e2e` now exposes live HTTP verifier service clients instead of
+  `CommandVerifier`/callable verifier suites. Acceptance evidence is collected
+  from KERIA-created verifier operations after KERIA submits the holder VP-JWT.
+  Direct harness POSTs are diagnostic only and are not the holder presentation
+  path under test.
 
 ### Signing
 
 - Use live KERIpy habitats (`Hab`, `Habery`) for signing.
+- For KERIA W3C holder presentation, signing happens at the Signify edge only.
+  KERIA may stage exact signing inputs over signed SSE or polling fallback and
+  verify returned signatures, but KERIA must not hold private edge keys or sign
+  W3C token material server-side.
 - Stable salts, passcodes, and aliases are acceptable for deterministic tests.
 - Do not reintroduce deterministic demo signers.
 

@@ -109,26 +109,30 @@ export function createApp(
     }
     const audience = typeof body.audience === "string" ? body.audience : undefined;
     const nonce = typeof body.nonce === "string" ? body.nonce : undefined;
+    const operation = operations.submit("verify-vp", async (operationName) => {
+      try {
+        const result = await run(() => requestVerifier.verifyVp(body.token, { audience, nonce }));
+        if (result.ok) {
+          const warning = await webhook.sendPresentation(result);
+          if (warning) {
+            result.warnings.push(warning);
+          }
+        }
+        logVerificationResult(config, "vp+jwt", result, operationName);
+        return result;
+      } catch (error) {
+        logVerificationError(config, "vp+jwt", error, operationName);
+        throw error;
+      }
+    });
     logVerifierEvent("verification.received", {
       verifier: config.verifierId,
       route: "/verify/vp",
       artifactKind: "vp+jwt",
+      operationName: operation.name,
       ...tokenObservability(body.token)
     });
-    try {
-      const result = await run(() => requestVerifier.verifyVp(body.token, { audience, nonce }));
-      if (result.ok) {
-        const warning = await webhook.sendPresentation(result);
-        if (warning) {
-          result.warnings.push(warning);
-        }
-      }
-      logVerificationResult(config, "vp+jwt", result);
-      return context.json(result);
-    } catch (error) {
-      logVerificationError(config, "vp+jwt", error);
-      throw error;
-    }
+    return context.json(operation, 202);
   });
 
   return app;

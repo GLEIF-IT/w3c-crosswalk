@@ -787,6 +787,37 @@ wheels = [
 ]
 
 [[package]]
+name = "signifypy"
+version = "0.4.2"
+source = { git = "https://github.com/kentbull/signifypy.git?rev=5fc1ddd9952b39dec7e606c0a81894052cb089cd#5fc1ddd9952b39dec7e606c0a81894052cb089cd" }
+dependencies = [
+    { name = "http-sfv" },
+    { name = "keri" },
+    { name = "multicommand" },
+    { name = "requests" },
+    { name = "sseclient" },
+]
+
+[[package]]
+name = "six"
+version = "1.17.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/94/e7/b2c673351809dca68a0e064b6af791aa332cf192da575fd474ed7d6f16a2/six-1.17.0.tar.gz", hash = "sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81", size = 34031, upload-time = "2024-12-04T17:35:28.174Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274", size = 11050, upload-time = "2024-12-04T17:35:26.475Z" },
+]
+
+[[package]]
+name = "sseclient"
+version = "0.0.27"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "requests" },
+    { name = "six" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/cf/6c/fa601216344952be8f9a51a3f49b4274bbbc58bd395f87f67f6131726358/sseclient-0.0.27.tar.gz", hash = "sha256:b2fe534dcb33b1d3faad13d60c5a7c718e28f85987f2a034ecf5ec279918c11c", size = 7465, upload-time = "2020-09-25T02:46:41.997Z" }
+
+[[package]]
 name = "typing-extensions"
 version = "4.15.0"
 source = { registry = "https://pypi.org/simple" }
@@ -821,6 +852,7 @@ dev = [
 ]
 live = [
     { name = "did-webs-resolver" },
+    { name = "signifypy" },
     { name = "vlei" },
 ]
 test = [
@@ -841,6 +873,7 @@ requires-dist = [
 dev = [{ name = "pytest", specifier = ">=8.4,<9" }]
 live = [
     { name = "did-webs-resolver", git = "https://github.com/GLEIF-IT/did-webs-resolver.git?rev=be1679f5629ca4a145db456cc79219d837ae3d2c" },
+    { name = "signifypy", git = "https://github.com/kentbull/signifypy.git?rev=5fc1ddd9952b39dec7e606c0a81894052cb089cd" },
     { name = "vlei", git = "https://github.com/WebOfTrust/vLEI.git?rev=f514b9431c5f965b5f7f64a8693e19df2f181564" },
 ]
 test = [

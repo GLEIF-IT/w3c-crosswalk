@@ -99,8 +99,14 @@ def test_verifier_service_preserves_vp_request_binding_constraints(tmp_path):
         )
 
         assert submitted.status_code == 202
+        assert submitted.json["name"].startswith("verify-vp.")
+        assert submitted.json == {"name": submitted.json["name"], "done": False}
         assert client.simulate_get(f"/operations/{submitted.json['name']}").status_code == 200
+        listed = client.simulate_get("/operations", params={"type": "verify-vp"})
+        assert listed.status_code == 200
+        assert [operation["name"] for operation in listed.json] == [submitted.json["name"]]
         record = monitor.require_record(submitted.json["name"])
+        assert record.type == "verify-vp"
         assert record.metadata["request"] == {
             "token": "abc",
             "audience": "https://verifier.example/isomer",

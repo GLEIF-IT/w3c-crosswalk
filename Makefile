@@ -28,6 +28,8 @@ GO_CACHE ?= /tmp/isomer-go-cache
 # Local stack deployment configuration
 LOCAL_STACK_TMP := .tmp/local-stack
 ENV_FILE ?= .env
+LOCAL_SEED_MANIFEST ?= $(LOCAL_STACK_TMP)/w3c-vrd-chain-manifest.json
+LOCAL_HEADLESS_MANIFEST ?= $(LOCAL_STACK_TMP)/headless-w3c-live-manifest.json
 
 # Packaging Config
 DIST_DIR := dist
@@ -36,7 +38,7 @@ PYPI_CHECK_URL := https://pypi.org/simple/$(PACKAGE)/
 TEST_PYPI_UPLOAD_URL := https://test.pypi.org/legacy/
 TEST_PYPI_CHECK_URL := https://test.pypi.org/simple/$(PACKAGE)/
 
-.PHONY: help sync clean test-cli test-fast test-integration test smoke external-node-sync external-node-check external-go-check dashboard-sync dashboard-check test-external-w3c-node test-external-w3c-go test-external-w3c-all docker-verifiers-build docker-verifiers-smoke local-up local-seed local-project local-test local-down local-reset build dist-check check-clean prepublish publish-test publish
+.PHONY: help sync clean test-cli test-fast test-integration test smoke external-node-sync external-node-check external-go-check dashboard-sync dashboard-check test-external-w3c-node test-external-w3c-go test-external-w3c-all docker-verifiers-build docker-verifiers-smoke local-up local-seed local-test local-down local-reset build dist-check check-clean prepublish publish-test publish
 
 help:
 	@printf '%s\n' \
@@ -57,10 +59,9 @@ help:
 		'  make test-external-w3c-all Run live e2e through Node and Go sidecars' \
 		'  make docker-verifiers-build Build local Python/Node/Go verifier images' \
 		'  make docker-verifiers-smoke Smoke-test verifier container health checks' \
-		'  make local-up          Start the portable wallet + verifier compose stack' \
-		'  make local-seed        Run the SignifyPy VRD projection-chain seeder' \
-		'  make local-project     Project the seeded VRD credential through all verifiers' \
-		'  make local-test        Run stack acceptance checks' \
+		'  make local-up          Start the portable KERIA + verifier compose stack' \
+		'  make local-seed        Run the SignifyPy VRD holder-presentation seeder' \
+		'  make local-test        Run live holder-presentation headless E2E' \
 		'  make local-down        Stop the portable local stack and preserve volumes' \
 		'  make local-reset       Destroy local stack volumes and generated seed artifacts' \
 		'  make build             Build sdist and wheel into dist/' \
@@ -162,17 +163,21 @@ local-seed:
 	@mkdir -p "$(LOCAL_STACK_TMP)"
 	$(LOCAL_COMPOSE_CMD) run --rm signifypy-seed
 
-local-project:
-	@test -f "$(ENV_FILE)" || cp .env.example "$(ENV_FILE)"
-	@mkdir -p "$(LOCAL_STACK_TMP)"
-	@test -f "$(LOCAL_STACK_TMP)/w3c-vrd-chain-manifest.json" || { echo 'missing $(LOCAL_STACK_TMP)/w3c-vrd-chain-manifest.json; run make local-seed first' >&2; exit 1; }
-	$(LOCAL_COMPOSE_CMD) run --rm signifypy-project
-
 local-test:
 	@test -f "$(ENV_FILE)" || cp .env.example "$(ENV_FILE)"
 	@mkdir -p "$(LOCAL_STACK_TMP)"
 	$(LOCAL_COMPOSE_CMD) --profile seed config >/dev/null
-	$(MAKE) local-project
+	@test -f "$(LOCAL_SEED_MANIFEST)" || { echo 'missing $(LOCAL_SEED_MANIFEST); run make local-seed first' >&2; exit 1; }
+	$(PYTHON) -m pytest tests/headless_w3c_e2e/test_live_service_headless_e2e.py \
+		--w3c-stack=attach \
+		--manifest "$(LOCAL_SEED_MANIFEST)" \
+		--manifest-out "$(LOCAL_HEADLESS_MANIFEST)" \
+		--python-verifier-url http://127.0.0.1:8788 \
+		--node-verifier-url http://127.0.0.1:8789 \
+		--go-verifier-url http://127.0.0.1:8790 \
+		--python-verifier-submission-url http://isomer-python:8788 \
+		--node-verifier-submission-url http://isomer-node:8788 \
+		--go-verifier-submission-url http://isomer-go:8788
 
 local-down:
 	@test -f "$(ENV_FILE)" || cp .env.example "$(ENV_FILE)"

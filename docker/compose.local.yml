@@ -9,11 +9,10 @@
 # - Verifier 2: isomer-node
 # - Verifier 3: isomer-go
 # - Verifier dashboard: isomer-dashboard
-# - Signify wallet: signify-react-ts
 #
 # Utility Containers
-# - GEDA -> LE seeder: signifypy-seed (for `make local-seed` target)
-# - signifypy-project: W3C Credential projector with Signifypy (for `make local-project` target)
+# - GEDA -> LE holder-presentation seeder: signifypy-seed
+#   (for `make local-seed` target)
 
 volumes:
   keria-data:
@@ -74,9 +73,9 @@ services:
       KERIA_DID_WEBS_PUBLIC_BASE_URL: ${DID_WEBS_PUBLIC_BASE_URL}
       KERIA_DID_WEBS_PATH: dws
       KERIA_DID_WEBS_REGISTRY_NAME_PREFIX: ${DID_WEBS_REGISTRY_NAME_PREFIX}
-      KERIA_W3C_PROJECTION_ENABLED: "true"
-      KERIA_W3C_PROJECTION_STATUS_BASE_URL: ${KERIA_STATUS_BASE_URL}
-      KERIA_W3C_PROJECTION_VERIFIERS: ${KERIA_W3C_PROJECTION_VERIFIERS:-[{"id":"isomer-python-local","label":"Isomer Python","kind":"isomer-python-vc-jwt","verifyUrl":"http://isomer-python:8788/verify/vc"},{"id":"isomer-node-local","label":"Isomer Node","kind":"isomer-node-vc-jwt","verifyUrl":"http://isomer-node:8788/verify/vc"},{"id":"isomer-go-local","label":"Isomer Go","kind":"isomer-go-vc-jwt","verifyUrl":"http://isomer-go:8788/verify/vc"}]}
+      KERIA_W3C_ENABLED: "true"
+      KERIA_W3C_STATUS_BASE_URL: ${KERIA_STATUS_BASE_URL}
+      KERIA_W3C_SIGNAL_INTERVAL_SECONDS: ${KERIA_W3C_SIGNAL_INTERVAL_SECONDS:-5}
     depends_on:
       - witness-demo
     extra_hosts:
@@ -168,18 +167,6 @@ services:
       ISOMER_DASHBOARD_HOST: 0.0.0.0
       ISOMER_DASHBOARD_PORT: 8791
 
-  signify-react-ts:
-    image: ${SIGNIFY_REACT_TS_IMAGE}
-    ports:
-      - "5177:5177"
-    environment:
-      VITE_KERIA_ADMIN_URL: ${KERIA_ADMIN_URL}
-      VITE_KERIA_ROUTER_URL: ${KERIA_ROUTER_URL}
-      VITE_KERIA_BOOT_URL: ${KERIA_BOOT_URL}
-      VITE_OPERATION_TIMEOUT_MS: ${VITE_OPERATION_TIMEOUT_MS:-60000}
-    depends_on:
-      - keria
-
   signifypy-seed:
     image: ${SIGNIFYPY_IMAGE}
     profiles: ["seed"]
@@ -188,7 +175,7 @@ services:
     command:
       [
         "python",
-        "scripts/setup_vrd_projection_chain.py",
+        "scripts/setup_vrd_holder_presentation_chain.py",
         "--admin-url",
         "http://keria:3901",
         "--boot-url",
@@ -206,30 +193,3 @@ services:
     depends_on:
       - keria
       - vlei
-
-  signifypy-project:
-    image: ${SIGNIFYPY_IMAGE}
-    profiles: ["seed"]
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    command:
-      [
-        "python",
-        "/workspace/scripts/local-stack/project_vrd_to_verifiers.py",
-        "--manifest",
-        "/workspace/.tmp/local-stack/w3c-vrd-chain-manifest.json",
-        "--admin-url",
-        "http://keria:3901",
-        "--boot-url",
-        "http://keria:3903",
-        "--output",
-        "/workspace/.tmp/local-stack/w3c-projection-results.json",
-      ]
-    volumes:
-      - ../.tmp/local-stack:/workspace/.tmp/local-stack
-      - ../scripts/local-stack:/workspace/scripts/local-stack:ro
-    depends_on:
-      - keria
-      - isomer-python
-      - isomer-node
-      - isomer-go

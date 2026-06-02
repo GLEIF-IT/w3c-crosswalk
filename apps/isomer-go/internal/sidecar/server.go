@@ -127,21 +127,24 @@ func (s *Server) verifyVP(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "error": "verification request requires token"})
 		return
 	}
-	logVerificationReceived(s.config, "/verify/vp", "vp+jwt", "", request.Token)
-	defer func() {
-		if recovered := recover(); recovered != nil {
-			logVerificationError(s.config, "vp+jwt", "", recovered)
-			panic(recovered)
+	operation := s.operations.submit("verify-vp", func(ctx context.Context, operationName string) *verificationResult {
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				logVerificationError(s.config, "vp+jwt", operationName, recovered)
+				panic(recovered)
+			}
+		}()
+		result := s.verifier.VerifyVP(ctx, request.Token, request.Audience, request.Nonce)
+		if result.OK {
+			if warning := s.webhook.SendPresentation(ctx, result); warning != "" {
+				result.Warnings = append(result.Warnings, warning)
+			}
 		}
-	}()
-	result := s.verifier.VerifyVP(r.Context(), request.Token, request.Audience, request.Nonce)
-	if result.OK {
-		if warning := s.webhook.SendPresentation(r.Context(), result); warning != "" {
-			result.Warnings = append(result.Warnings, warning)
-		}
-	}
-	logVerificationResult(s.config, "vp+jwt", "", result)
-	writeJSON(w, http.StatusOK, result)
+		logVerificationResult(s.config, "vp+jwt", operationName, result)
+		return result
+	})
+	logVerificationReceived(s.config, "/verify/vp", "vp+jwt", operation.Name, request.Token)
+	writeJSON(w, http.StatusAccepted, operation)
 }
 
 func (s *Server) listOperations(w http.ResponseWriter, r *http.Request) {
