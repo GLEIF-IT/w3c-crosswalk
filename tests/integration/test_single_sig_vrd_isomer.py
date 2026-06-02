@@ -378,6 +378,8 @@ def _issue_and_verify_w3c_twin(live_stack: dict, state, *, issuer_did: str, vrd:
     vp_doer = verify_vp_doer(
         base_url=live_stack["verifier_base_url"],
         token=vp_token,
+        audience=vp_audience,
+        nonce=vp_nonce,
         timeout=45.0,
         poll_interval=0.1,
     )

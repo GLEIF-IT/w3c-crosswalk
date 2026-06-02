@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from vc_isomer.common import canonicalize_did_url, canonicalize_did_webs, load_json_file
 from vc_isomer.data_integrity import JsonLdCanonicalizationError
 from vc_isomer.didwebs import DidWebsClient
@@ -21,6 +23,19 @@ FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 def _method_for(did_document: dict, kid: str):
     """Resolve one verification method from an in-memory DID document."""
     return DidWebsClient.find_verification_method(did_document, kid)
+
+
+def _did_document(did: str, signer: HabSigner) -> dict:
+    """Build one in-memory did:webs document for a live test signer."""
+    return {
+        "id": did,
+        "verificationMethod": [{
+            "id": f"#{signer.kid}",
+            "type": "JsonWebKey",
+            "controller": did,
+            "publicKeyJwk": signer.public_jwk,
+        }],
+    }
 
 
 def _issue_projected_fixture(acdc: dict, *, issuer_did: str, status_base_url: str, signer: HabSigner):
@@ -179,26 +194,12 @@ def test_engine_accepts_signed_vp_with_embedded_vc():
             holder_signer = HabSigner(holder_hab)
             issuer_did = "did:webs:example.com:dws:ELEGALAID000000000000000000000000000000000000000001"
             holder_did = "did:webs:example.com:dws:EHOLDERAID000000000000000000000000000000000000000001"
+            audience = "https://verifier.example/isomer"
+            nonce = "holder-proof-nonce"
 
             did_documents = {
-                issuer_did: {
-                    "id": issuer_did,
-                    "verificationMethod": [{
-                        "id": f"#{issuer_signer.kid}",
-                        "type": "JsonWebKey",
-                        "controller": issuer_did,
-                        "publicKeyJwk": issuer_signer.public_jwk,
-                    }],
-                },
-                holder_did: {
-                    "id": holder_did,
-                    "verificationMethod": [{
-                        "id": f"#{holder_signer.kid}",
-                        "type": "JsonWebKey",
-                        "controller": holder_did,
-                        "publicKeyJwk": holder_signer.public_jwk,
-                    }],
-                },
+                issuer_did: _did_document(issuer_did, issuer_signer),
+                holder_did: _did_document(holder_did, holder_signer),
             }
             base_url = "http://status.example"
             vc_token, _vc = _issue_projected_fixture(
@@ -207,7 +208,13 @@ def test_engine_accepts_signed_vp_with_embedded_vc():
                 status_base_url=base_url,
                 signer=issuer_signer,
             )
-            vp_token, _vp = issue_vp_jwt([vc_token], holder_did=holder_did, signer=holder_signer)
+            vp_token, _vp = issue_vp_jwt(
+                [vc_token],
+                holder_did=holder_did,
+                signer=holder_signer,
+                audience=audience,
+                nonce=nonce,
+            )
 
             prepared_vc = engine.prepare_vc_token(vc_token)
             vc_result = engine.evaluate_prepared_vc(
@@ -219,6 +226,8 @@ def test_engine_accepts_signed_vp_with_embedded_vc():
                     "revoked": False,
                     "status": "iss",
                 },
+                expected_issuer=issuer_did,
+                expected_subject=acdc["a"]["DID"],
             )
 
             prepared_vp = engine.prepare_vp_token(vp_token)
@@ -226,9 +235,116 @@ def test_engine_accepts_signed_vp_with_embedded_vc():
                 prepared_vp,
                 method=_method_for(did_documents[holder_did], prepared_vp.header["kid"]),
                 nested_results=[vc_result],
+                expected_holder=holder_did,
+                expected_audience=audience,
+                expected_nonce=nonce,
             )
 
             assert result.ok is True
             assert result.checks["signatureValid"] is True
+            assert result.checks["expectedHolderMatches"] is True
+            assert result.checks["audienceMatches"] is True
+            assert result.checks["nonceMatches"] is True
             assert len(result.nested) == 1
             assert result.nested[0]["ok"] is True
+
+
+def test_engine_rejects_qvi_signed_vp_even_when_signature_is_valid():
+    """Reject the old issuer-presents model when the VP is signed by QVI instead of LE."""
+    acdc = load_json_file(FIXTURES / "vrd-acdc.json")
+    engine = VerificationEngine()
+
+    with open_test_hab("qvi-vp-hab", b"QVIQVIQVIQVIQVIQ") as (_hby_qvi, qvi_hab):
+        with open_test_hab("le-vp-hab", b"LELELELELELELELE") as (_hby_le, _le_hab):
+            qvi_signer = HabSigner(qvi_hab)
+            qvi_did = "did:webs:example.com:dws:EQVIAID0000000000000000000000000000000000000000001"
+            le_did = "did:webs:example.com:dws:ELEAID00000000000000000000000000000000000000000001"
+            vp_token, _vp = issue_vp_jwt(
+                ["eyJhbGciOiJFZERTQSJ9.eyJ2YyI6e319.signature"],
+                holder_did=qvi_did,
+                signer=qvi_signer,
+                audience="https://verifier.example/isomer",
+                nonce="nonce-1",
+            )
+
+            prepared = engine.prepare_vp_token(vp_token)
+            result = engine.evaluate_prepared_vp(
+                prepared,
+                method=_method_for(_did_document(qvi_did, qvi_signer), prepared.header["kid"]),
+                nested_results=[],
+                expected_holder=le_did,
+                expected_audience="https://verifier.example/isomer",
+                expected_nonce="nonce-1",
+            )
+
+            assert result.ok is False
+            assert result.checks["signatureValid"] is True
+            assert result.checks["expectedHolderMatches"] is False
+            assert "VP holder DID does not match expected DID" in result.errors
+
+
+def test_engine_rejects_le_as_issuer_vc_even_when_signature_is_valid():
+    """Reject a VC-JWT signed by LE when verifier policy expects the QVI issuer DID."""
+    acdc = load_json_file(FIXTURES / "vrd-acdc.json")
+    engine = VerificationEngine()
+
+    with open_test_hab("le-vc-issuer-hab", b"LEVCLEVCLEVCLEVC") as (_hby_le, le_hab):
+        le_signer = HabSigner(le_hab)
+        qvi_did = "did:webs:example.com:dws:EQVIAID0000000000000000000000000000000000000000001"
+        le_did = "did:webs:example.com:dws:ELEAID00000000000000000000000000000000000000000001"
+        token, _vc = _issue_projected_fixture(
+            acdc,
+            issuer_did=le_did,
+            status_base_url="http://status.example",
+            signer=le_signer,
+        )
+        prepared = engine.prepare_vc_token(token)
+        result = engine.evaluate_prepared_vc(
+            prepared,
+            method=_method_for(_did_document(le_did, le_signer), prepared.header["kid"]),
+            status_doc={"credSaid": acdc["d"], "revoked": False, "status": "iss"},
+            expected_issuer=qvi_did,
+            expected_subject=acdc["a"]["DID"],
+        )
+
+        assert result.ok is False
+        assert result.checks["signatureValid"] is True
+        assert result.checks["expectedIssuerMatches"] is False
+        assert result.checks["expectedSubjectMatches"] is True
+        assert "VC issuer DID does not match expected DID" in result.errors
+
+
+@pytest.mark.parametrize(
+    ("expected_audience", "expected_nonce", "error"),
+    [
+        ("https://other.example/isomer", "nonce-1", "JWT aud does not match expected value"),
+        ("https://verifier.example/isomer", "wrong-nonce", "JWT nonce does not match expected value"),
+    ],
+)
+def test_engine_rejects_vp_request_binding_mismatch(expected_audience, expected_nonce, error):
+    """Reject VP-JWTs whose verifier request binding does not match policy input."""
+    engine = VerificationEngine()
+
+    with open_test_hab("holder-vp-binding", b"VPBINDING1234567") as (_hby, hab):
+        signer = HabSigner(hab)
+        holder_did = "did:webs:example.com:dws:EHOLDERAID000000000000000000000000000000000000000001"
+        vp_token, _vp = issue_vp_jwt(
+            ["eyJhbGciOiJFZERTQSJ9.eyJ2YyI6e319.signature"],
+            holder_did=holder_did,
+            signer=signer,
+            audience="https://verifier.example/isomer",
+            nonce="nonce-1",
+        )
+        prepared = engine.prepare_vp_token(vp_token)
+        result = engine.evaluate_prepared_vp(
+            prepared,
+            method=_method_for(_did_document(holder_did, signer), prepared.header["kid"]),
+            nested_results=[],
+            expected_holder=holder_did,
+            expected_audience=expected_audience,
+            expected_nonce=expected_nonce,
+        )
+
+        assert result.ok is False
+        assert result.checks["signatureValid"] is True
+        assert error in result.errors

@@ -52,7 +52,14 @@ class VerifierOperationService:
     def submit_verify_vp(self, body: dict[str, Any]) -> BaseOperation:
         """Submit one VP-JWT verification request."""
         token = self._require_string(body, "token")
-        return self.monitor.submit(typ=VERIFY_VP_OPERATION, request={"token": token})
+        request: dict[str, Any] = {"token": token}
+        for field in ("audience", "nonce"):
+            value = body.get(field)
+            if value is not None:
+                if not isinstance(value, str) or not value.strip():
+                    raise ValueError(f"verification request `{field}` must be a non-empty string when present")
+                request[field] = value
+        return self.monitor.submit(typ=VERIFY_VP_OPERATION, request=request)
 
     def submit_verify_pair(self, body: dict[str, Any]) -> BaseOperation:
         """Submit one VC/ACDC isomer pair verification request."""

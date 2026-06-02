@@ -1,0 +1,20 @@
+[project]
+name = "headless-w3c-e2e"
+version = "0.1.0"
+description = "Python-first headless W3C holder presentation E2E harness"
+readme = "README.md"
+requires-python = ">=3.12.6,<3.14"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "Kent Bull", email = "kent@kentbull.com" }
+]
+dependencies = [
+    "vc-isomer>=0.1.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/headless_w3c_e2e"]

@@ -21,6 +21,21 @@ interop behavior.
 
 ## Durable Decisions
 
+### Holder Presentation Boundary
+
+- W3C holder presentation verification must bind three separate facts:
+  QVI-issued VC issuer DID, LE-signed VP holder DID, and verifier request
+  binding through `aud` and `nonce`.
+- A verifier accepting a QVI-signed VP is a boundary bug. The QVI issues the
+  VC; the LE holder presents it.
+- A verifier accepting an LE-as-issuer VC is also a boundary bug for VRD W3C
+  credentials. The final VRD W3C VC issuer is QVI did:webs and the subject is
+  LE did:webs.
+- `headless-w3c-e2e` is the Python-first acceptance harness boundary under
+  `packages/headless-w3c-e2e`; it may use fake verifier command adapters in
+  package tests, but signing artifacts and live acceptance must still come from
+  real KERI-backed signers.
+
 ### Signing
 
 - Use live KERIpy habitats (`Hab`, `Habery`) for signing.

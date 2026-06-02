@@ -346,16 +346,23 @@ def verify_vp_doer(
     *,
     base_url: str,
     token: str,
+    audience: str | None = None,
+    nonce: str | None = None,
     timeout: float,
     poll_interval: float,
     clienter: Clienter | None = None,
     tock: float = 0.03125,
 ) -> VerifyOperationDoDoer:
     """Create one cooperative VP verification doer."""
+    body: dict[str, Any] = {"token": token}
+    if audience is not None:
+        body["audience"] = audience
+    if nonce is not None:
+        body["nonce"] = nonce
     return VerifyOperationDoDoer(
         base_url=base_url,
         route=VERIFY_VP_ROUTE,
-        body={"token": token},
+        body=body,
         timeout=timeout,
         poll_interval=poll_interval,
         clienter=clienter,

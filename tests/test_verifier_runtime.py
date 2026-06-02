@@ -341,7 +341,15 @@ def test_verifier_runtime_posts_webhook_for_successful_vp_operation(tmp_path, ca
         }
         status_base_url = f"http://127.0.0.1:{status_port}"
         vc_token, _vc = _issue_projected_fixture(acdc, issuer_did=issuer_did, status_base_url=status_base_url, signer=signer)
-        vp_token, _vp = issue_vp_jwt([vc_token], holder_did=issuer_did, signer=signer)
+        vp_audience = "https://verifier.example/runtime"
+        vp_nonce = "runtime-vp-nonce"
+        vp_token, _vp = issue_vp_jwt(
+            [vc_token],
+            holder_did=issuer_did,
+            signer=signer,
+            audience=vp_audience,
+            nonce=vp_nonce,
+        )
 
         resolver_app = falcon.App()
         resolver_app.add_route("/1.0/identifiers/{did}", ResolverResource({issuer_did: did_document}))
@@ -379,6 +387,8 @@ def test_verifier_runtime_posts_webhook_for_successful_vp_operation(tmp_path, ca
         verify_doer = verify_vp_doer(
             base_url=f"http://127.0.0.1:{verifier_port}",
             token=vp_token,
+            audience=vp_audience,
+            nonce=vp_nonce,
             timeout=2.0,
             poll_interval=0.05,
         )
@@ -393,6 +403,8 @@ def test_verifier_runtime_posts_webhook_for_successful_vp_operation(tmp_path, ca
 
         assert verify_doer.error is None
         assert verify_doer.operation["response"]["ok"] is True
+        assert verify_doer.operation["response"]["checks"]["audienceMatches"] is True
+        assert verify_doer.operation["response"]["checks"]["nonceMatches"] is True
         assert len(webhook.events) == 1
         event = webhook.events[0]
         assert event["type"] == "isomer.presentation.verified.v1"

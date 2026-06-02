@@ -48,7 +48,7 @@ vlei = { git = "https://github.com/WebOfTrust/vLEI.git", rev = "f514b9431c5f965b
 packages = ["src/vc_isomer"]
 
 [tool.pytest.ini_options]
-pythonpath = ["."]
+pythonpath = [".", "packages/headless-w3c-e2e/src"]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 addopts = "-q"

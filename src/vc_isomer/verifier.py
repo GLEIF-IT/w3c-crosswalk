@@ -191,9 +191,25 @@ class VerificationEngine:
         *,
         method: dict[str, Any] | None,
         status_doc: dict[str, Any] | None,
+        expected_issuer: str | None = None,
+        expected_subject: str | None = None,
     ) -> VerificationResult:
         """Evaluate one prepared VC-JWT using resolved DID and status material."""
         errors = list(prepared.errors)
+        issuer_ok = self._check_expected_did(
+            actual=prepared.issuer,
+            expected=expected_issuer,
+            label="VC issuer DID",
+            errors=errors,
+        )
+        subject = prepared.payload.get("credentialSubject", {})
+        subject_did = subject.get("id") if isinstance(subject, dict) else None
+        subject_ok = self._check_expected_did(
+            actual=subject_did,
+            expected=expected_subject,
+            label="VC subject DID",
+            errors=errors,
+        )
         signature_ok = self._verify_signature(
             token=prepared.token,
             method=method,
@@ -213,6 +229,8 @@ class VerificationEngine:
                 "signatureValid": signature_ok,
                 "dataIntegrityProofValid": proof_ok,
                 "statusActive": status_ok,
+                "expectedIssuerMatches": issuer_ok,
+                "expectedSubjectMatches": subject_ok,
                 "credentialTypes": prepared.payload.get("type", []),
             },
         )
@@ -223,9 +241,30 @@ class VerificationEngine:
         *,
         method: dict[str, Any] | None,
         nested_results: list[VerificationResult],
+        expected_holder: str | None = None,
+        expected_audience: str | None = None,
+        expected_nonce: str | None = None,
     ) -> VerificationResult:
         """Evaluate one prepared VP-JWT using resolved holder state and nested VC results."""
         errors = list(prepared.errors)
+        holder_ok = self._check_expected_did(
+            actual=prepared.holder,
+            expected=expected_holder,
+            label="VP holder DID",
+            errors=errors,
+        )
+        audience_ok = self._check_expected_claim(
+            actual=prepared.jwt_payload.get("aud"),
+            expected=expected_audience,
+            label="JWT aud",
+            errors=errors,
+        )
+        nonce_ok = self._check_expected_claim(
+            actual=prepared.jwt_payload.get("nonce"),
+            expected=expected_nonce,
+            label="JWT nonce",
+            errors=errors,
+        )
         signature_ok = self._verify_signature(
             token=prepared.token,
             method=method,
@@ -247,6 +286,9 @@ class VerificationEngine:
             checks={
                 "holderResolved": bool(prepared.holder and method is not None),
                 "signatureValid": signature_ok,
+                "expectedHolderMatches": holder_ok,
+                "audienceMatches": audience_ok,
+                "nonceMatches": nonce_ok,
                 "embeddedCredentialCount": len(prepared.vc_tokens),
             },
             nested=nested,
@@ -383,3 +425,38 @@ class VerificationEngine:
             credential = status_doc.get("credSaid", status_doc.get("credentialSaid"))
             errors.append(f"credential {credential} is revoked")
         return status_ok
+
+    @staticmethod
+    def _check_expected_did(
+        *,
+        actual: Any,
+        expected: str | None,
+        label: str,
+        errors: list[str],
+    ) -> bool:
+        """Check an optional expected DID against an artifact DID."""
+        if expected is None:
+            return True
+        if not isinstance(actual, str):
+            errors.append(f"{label} is missing")
+            return False
+        if canonicalize_did_webs(actual) != canonicalize_did_webs(expected):
+            errors.append(f"{label} does not match expected DID")
+            return False
+        return True
+
+    @staticmethod
+    def _check_expected_claim(
+        *,
+        actual: Any,
+        expected: str | None,
+        label: str,
+        errors: list[str],
+    ) -> bool:
+        """Check an optional expected JWT request-binding claim."""
+        if expected is None:
+            return True
+        if actual != expected:
+            errors.append(f"{label} does not match expected value")
+            return False
+        return True
