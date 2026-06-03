@@ -4,28 +4,31 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/trustbloc/vc-go/dataintegrity/models"
 )
 
 // vcChecks records which VC verification stages completed successfully.
 type vcChecks struct {
-	JWTEnvelopeValid        bool
-	SignatureValid          bool
-	DataIntegrityProofValid bool
-	StatusActive            bool
-	VCGoParsed              bool
+	JWTEnvelopeValid          bool
+	SignatureValid            bool
+	DataIntegrityProofValid   bool
+	StatusActive              bool
+	VCGoParsed                bool
+	IsomerSourceIssuerMatches bool
 }
 
 // mapValue converts the typed check set into the stable JSON shape exposed by
 // the sidecar HTTP API.
 func (c vcChecks) mapValue() map[string]any {
 	return map[string]any{
-		"jwtEnvelopeValid":        c.JWTEnvelopeValid,
-		"signatureValid":          c.SignatureValid,
-		"dataIntegrityProofValid": c.DataIntegrityProofValid,
-		"statusActive":            c.StatusActive,
-		"vcGoParsed":              c.VCGoParsed,
+		"jwtEnvelopeValid":          c.JWTEnvelopeValid,
+		"signatureValid":            c.SignatureValid,
+		"dataIntegrityProofValid":   c.DataIntegrityProofValid,
+		"statusActive":              c.StatusActive,
+		"vcGoParsed":                c.VCGoParsed,
+		"isomerSourceIssuerMatches": c.IsomerSourceIssuerMatches,
 	}
 }
 
@@ -82,6 +85,12 @@ func (v *verifier) VerifyVC(ctx context.Context, token string) *verificationResu
 		return result.fail(err)
 	}
 	checks.StatusActive = true
+	result.Checks = checks.mapValue()
+
+	if err = verifyIsomerSourceIssuer(vc); err != nil {
+		return result.fail(err)
+	}
+	checks.IsomerSourceIssuerMatches = true
 	result.Checks = checks.mapValue()
 
 	result.OK = true
@@ -141,4 +150,36 @@ func (v *verifier) verifyCredentialStatus(ctx context.Context, vc map[string]any
 		return nil
 	}
 	return fmt.Errorf("credential %v is revoked", status["credSaid"])
+}
+
+// verifyIsomerSourceIssuer requires Isomer source issuer AID metadata to match
+// the W3C issuer DID.
+func verifyIsomerSourceIssuer(vc map[string]any) error {
+	isomer := asMap(vc["isomer"])
+	if isomer == nil {
+		return nil
+	}
+	expectedAid := asString(isomer["sourceIssuerAid"])
+	if expectedAid == "" {
+		return nil
+	}
+	if didWebsAid(asString(vc["issuer"])) != expectedAid {
+		return fmt.Errorf("VC issuer DID does not match isomer source issuer AID")
+	}
+	return nil
+}
+
+func didWebsAid(value string) string {
+	if value == "" {
+		return ""
+	}
+	body, _, _ := strings.Cut(canonicalizeDIDWebs(value), "?")
+	body, _, _ = strings.Cut(body, "#")
+	segments := strings.Split(body, ":")
+	for index := len(segments) - 1; index >= 0; index-- {
+		if segments[index] != "" {
+			return segments[index]
+		}
+	}
+	return ""
 }

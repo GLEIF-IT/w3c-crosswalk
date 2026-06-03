@@ -42,6 +42,9 @@ func validateVCClaims(jwtPayload, vc map[string]any) error {
 // validateVPClaims enforces the local VP-JWT claim relationships the sidecar
 // expects before nested verification begins.
 func validateVPClaims(jwtPayload, vp map[string]any, audience, nonce string) error {
+	if asString(vp["holder"]) == "" {
+		return errors.New("missing vp.holder")
+	}
 	if err := requireOptionalClaimMatch(
 		asString(jwtPayload["iss"]),
 		asString(vp["holder"]),

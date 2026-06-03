@@ -9,6 +9,7 @@ authors = [
     { name = "Kent Bull", email = "kent@kentbull.com" }
 ]
 dependencies = [
+    "requests>=2,<3",
     "signifypy @ git+https://github.com/kentbull/signifypy.git@5fc1ddd9952b39dec7e606c0a81894052cb089cd",
     "vc-isomer>=0.1.0",
 ]

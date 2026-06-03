@@ -9,7 +9,10 @@ import (
 	"time"
 )
 
-// Server owns the HTTP surface for the Go verifier sidecar.
+// Server owns the HTTP surface for the Go verifier sidecar. The live holder
+// E2E harness validates this process through HTTP submissions and pollable
+// operations; test-only injected verifier seams must not replace this service
+// in acceptance runs.
 type Server struct {
 	config     Config
 	verifier   Verifier
@@ -148,6 +151,9 @@ func (s *Server) verifyVP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) listOperations(w http.ResponseWriter, r *http.Request) {
+	// Operations are the shared live-service evidence contract across Python,
+	// Node, and Go. KERIA posts the VP to /verify/vp; the harness polls here to
+	// prove the Go verifier completed that exact request.
 	writeJSON(w, http.StatusOK, s.operations.list(r.URL.Query().Get("type")))
 }
 

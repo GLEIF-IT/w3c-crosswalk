@@ -218,6 +218,7 @@ class VerificationEngine:
         )
         proof_ok = self._verify_proof(prepared.payload, method, errors)
         status_ok = self._check_status_doc(status_doc, errors)
+        isomer_source_issuer_ok = self._check_isomer_source_issuer_matches_issuer(prepared, errors)
 
         return VerificationResult(
             ok=not errors,
@@ -231,6 +232,7 @@ class VerificationEngine:
                 "statusActive": status_ok,
                 "expectedIssuerMatches": issuer_ok,
                 "expectedSubjectMatches": subject_ok,
+                "isomerSourceIssuerMatches": isomer_source_issuer_ok,
                 "credentialTypes": prepared.payload.get("type", []),
             },
         )
@@ -273,6 +275,11 @@ class VerificationEngine:
         )
 
         nested = []
+        embedded_subjects_match_holder = self._check_embedded_subjects_match_holder(
+            holder=prepared.holder,
+            nested_results=nested_results,
+            errors=errors,
+        )
         for result in nested_results:
             nested.append(result.to_dict())
             if not result.ok:
@@ -289,6 +296,7 @@ class VerificationEngine:
                 "expectedHolderMatches": holder_ok,
                 "audienceMatches": audience_ok,
                 "nonceMatches": nonce_ok,
+                "embeddedCredentialSubjectsMatchHolder": embedded_subjects_match_holder,
                 "embeddedCredentialCount": len(prepared.vc_tokens),
             },
             nested=nested,
@@ -427,6 +435,46 @@ class VerificationEngine:
         return status_ok
 
     @staticmethod
+    def _check_embedded_subjects_match_holder(
+        *,
+        holder: str | None,
+        nested_results: list[VerificationResult],
+        errors: list[str],
+    ) -> bool:
+        """Require each successful embedded VC subject DID to match the VP holder."""
+        if not holder:
+            errors.append("VP holder DID is missing")
+            return False
+
+        ok = True
+        normalized_holder = canonicalize_did_webs(holder)
+        for result in nested_results:
+            if not result.ok:
+                continue
+
+            payload = result.payload or {}
+            subject = payload.get("credentialSubject", {})
+            subject_did = subject.get("id") if isinstance(subject, dict) else None
+            if not isinstance(subject_did, str) or canonicalize_did_webs(subject_did) != normalized_holder:
+                errors.append("embedded credential subject DID does not match VP holder")
+                ok = False
+        return ok
+
+    @staticmethod
+    def _check_isomer_source_issuer_matches_issuer(prepared: PreparedVcToken, errors: list[str]) -> bool:
+        """Require Isomer source issuer AID metadata to match the W3C issuer DID."""
+        isomer = prepared.payload.get("isomer", {})
+        expected_aid = isomer.get("sourceIssuerAid") if isinstance(isomer, dict) else None
+        if not expected_aid:
+            return True
+
+        issuer_aid = _did_webs_aid(prepared.issuer)
+        if issuer_aid != expected_aid:
+            errors.append("VC issuer DID does not match isomer source issuer AID")
+            return False
+        return True
+
+    @staticmethod
     def _check_expected_did(
         *,
         actual: Any,
@@ -460,3 +508,12 @@ class VerificationEngine:
             errors.append(f"{label} does not match expected value")
             return False
         return True
+
+
+def _did_webs_aid(did: str | None) -> str | None:
+    """Extract the terminal AID path segment from a did:webs DID."""
+    if not did:
+        return None
+    body = canonicalize_did_webs(did).split("?", 1)[0].split("#", 1)[0]
+    segments = [segment for segment in body.split(":") if segment]
+    return segments[-1] if segments else None

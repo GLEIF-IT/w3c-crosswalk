@@ -4,6 +4,11 @@ The runtime rule is strict:
 - Falcon handlers parse requests and submit or retrieve state only
 - long-running verification happens in background HIO doers
 - outbound DID/status HTTP never runs inside request handlers
+
+The Python verifier is part of the same live-service acceptance contract as the
+Node and Go sidecars: callers submit VC-JWT/VP-JWT work over HTTP and poll
+operation resources for evidence. CLI wrappers may call this service, but they
+are not a substitute for the service in holder-presentation E2E validation.
 """
 
 from __future__ import annotations
@@ -105,7 +110,12 @@ ARTIFACT_KIND_BY_ROUTE = {
 
 
 class VerificationSubmissionResource:
-    """Submit one verifier operation without executing it in the request handler."""
+    """Submit one verifier operation without executing it in the request handler.
+
+    The handler returns a KERIA-style operation stub immediately. The background
+    worker owns verification, webhook dispatch, and terminal operation state so
+    KERIA and the headless harness can observe the same live service result.
+    """
 
     def __init__(self, *, route: str, submit: Callable[..., Any], verifier_id: str):
         self.route = route
@@ -151,7 +161,12 @@ def create_status_app(*, store: JsonFileStatusStore, base_url: str) -> falcon.Ap
 
 
 def create_verifier_app(*, operation_service: VerifierOperationService, verifier_id: str = "isomer-python") -> falcon.App:
-    """Create the Falcon app for long-running verifier submission and polling."""
+    """Create the Falcon app for long-running verifier submission and polling.
+
+    The route surface is the shared verifier contract:
+    ``/healthz``, ``/verify/vc``, ``/verify/vp``, ``/operations``, and
+    ``/operations/{name}``.
+    """
     app = falcon.App()
     app.add_route(HEALTH_ROUTE, HealthResource("verifier"))
     app.add_route(

@@ -1,4 +1,10 @@
-"""Scenario orchestration for the headless W3C holder E2E harness."""
+"""Scenario orchestration for the headless W3C holder E2E harness.
+
+The scenario intentionally follows the browser flow without a browser: QVI
+starts W3C issuance, the holder imports/admites the delivered credential, KERIA
+stages a holder presentation transaction, the edge signs the VP-JWT, and live
+verifier services provide operation evidence.
+"""
 
 from __future__ import annotations
 
@@ -106,7 +112,11 @@ class HeadlessW3CE2E:
         *,
         nonces: dict[str, str] | None = None,
     ) -> ScenarioManifest:
-        """Run one KERIA-submitted holder presentation against each live service."""
+        """Run one KERIA-submitted holder presentation against each live service.
+
+        This is the acceptance path. The verifier set must expose real HTTP
+        services and pollable operations for Python, Node, and Go.
+        """
         self.verifier_services.healthcheck_all()
         issuance, holder_import_request, holder_import_outcomes, holder_credentials = self._issue_deliver_import(
             source_credential_said
@@ -175,9 +185,11 @@ class HeadlessW3CE2E:
             self.presentation_approver(presentation_tx, verifier_descriptor)
 
     def _issue_deliver_import(self, source_credential_said: str):
+        """Run QVI issuance and holder import/admit through live KERIA state."""
         issuance = self.qvi_wallet.start_issuance(source_credential_said)
         issuance = self._wait_for_issuance(issuance)
-        holder_import_request = self.qvi_wallet.deliver_issuance_to_holder(self.holder_wallet, issuance)
+        issuance = self.qvi_wallet.deliver_issuance_to_holder(self.holder_wallet, issuance)
+        holder_import_request = self._wait_for_holder_import_request(source_credential_said)
         holder_import_outcomes, holder_credentials = self._wait_for_holder_credential(source_credential_said)
         return issuance, holder_import_request, holder_import_outcomes, holder_credentials
 
@@ -187,12 +199,36 @@ class HeadlessW3CE2E:
         while True:
             self.qvi_wallet.drain_automation(max_rounds=3)
             current = self.qvi_wallet.refresh_issuance(current)
-            if current.get("state") == "issued" and current.get("vcJwt"):
+            if current.get("state") in {"issued", "delivery_pending"} and current.get("vcJwt"):
                 return current
             if current.get("state") == "failed":
                 raise RuntimeError(f"W3C issuance failed: {current!r}")
             if time.monotonic() >= deadline:
                 raise TimeoutError(f"timed out waiting for W3C issuance to finalize; last_seen={current!r}")
+            time.sleep(self.poll_interval)
+
+    def _wait_for_holder_import_request(self, source_credential_said: str) -> dict[str, Any]:
+        deadline = time.monotonic() + self.wait_timeout
+        last_requests: list[dict[str, Any]] = []
+        while True:
+            last_requests = self.holder_wallet.w3c.import_requests(
+                self.holder_wallet.name,
+                include_complete=True,
+            )
+            matching = [
+                request
+                for request in last_requests
+                if request.get("sourceCredentialSaid") == source_credential_said
+            ]
+            if len(matching) == 1:
+                return matching[0]
+            if len(matching) > 1:
+                raise RuntimeError(f"holder has multiple W3C import requests for {source_credential_said}: {matching!r}")
+            if time.monotonic() >= deadline:
+                raise TimeoutError(
+                    "timed out waiting for holder W3C import request delivery; "
+                    f"last_requests={last_requests!r}"
+                )
             time.sleep(self.poll_interval)
 
     def _wait_for_holder_credential(self, source_credential_said: str):

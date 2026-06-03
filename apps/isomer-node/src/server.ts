@@ -3,8 +3,10 @@
  *
  * This module owns the small external API used by integration tests and manual
  * verifier-side acceptance checks. It wraps verifier operations behind a Hono
- * app and keeps request validation deliberately narrow: health, VC verify, and
- * VP verify only.
+ * app and keeps request validation deliberately narrow. The live headless
+ * holder E2E harness depends on this HTTP surface, including pollable
+ * operations; replacing it with a CLI command or in-process callable would not
+ * validate KERIA verifier submission compatibility.
  */
 import { serve } from "@hono/node-server";
 import { action, type Operation, run } from "effection";
@@ -89,6 +91,9 @@ export function createApp(
     return context.json(operation, 202);
   });
 
+  // Operations are the shared live-service evidence contract across Python,
+  // Node, and Go. KERIA receives the submission response, while the harness
+  // polls this monitor to prove the verifier finished the same request.
   app.get("/operations", (context) => {
     const type = context.req.query("type");
     return context.json(operations.list(type));

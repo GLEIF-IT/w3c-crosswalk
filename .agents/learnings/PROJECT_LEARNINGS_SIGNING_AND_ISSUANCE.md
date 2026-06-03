@@ -41,6 +41,11 @@ interop behavior.
   from KERIA-created verifier operations after KERIA submits the holder VP-JWT.
   Direct harness POSTs are diagnostic only and are not the holder presentation
   path under test.
+- Python, Node, and Go verifier services enforce holder-role semantics in the
+  W3C service path: successful embedded VC `credentialSubject.id` values must
+  match `vp.holder`, and Isomer `sourceIssuerAid` must match the terminal AID
+  segment of `vc.issuer`. This makes QVI-signed VPs and LE-as-issuer VCs live
+  service rejections, not only Python pair-verifier policy failures.
 
 ### Signing
 

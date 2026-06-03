@@ -72,7 +72,8 @@ test("vc route returns 202 and stores a pending operation", async () => {
       jwtEnvelopeValid: true,
       signatureValid: true,
       dataIntegrityProofValid: true,
-      statusActive: true
+      statusActive: true,
+      isomerSourceIssuerMatches: true
     }
   };
   let receivedToken: string | undefined;
@@ -171,6 +172,7 @@ test("vp route forwards audience and nonce", async () => {
     checks: {
       jwtEnvelopeValid: true,
       signatureValid: true,
+      embeddedCredentialSubjectsMatchHolder: true,
       embeddedCredentialsVerified: 1
     },
     nested: [{
@@ -183,7 +185,8 @@ test("vp route forwards audience and nonce", async () => {
         jwtEnvelopeValid: true,
         signatureValid: true,
         dataIntegrityProofValid: true,
-        statusActive: true
+        statusActive: true,
+        isomerSourceIssuerMatches: true
       }
     }]
   };
@@ -243,6 +246,7 @@ test("vp route sends webhook only after successful presentation verification", a
     checks: {
       jwtEnvelopeValid: true,
       signatureValid: true,
+      embeddedCredentialSubjectsMatchHolder: true,
       embeddedCredentialsVerified: 0
     },
     nested: []
@@ -332,7 +336,8 @@ function createStubVerifier(overrides: {
             jwtEnvelopeValid: true,
             signatureValid: true,
             dataIntegrityProofValid: true,
-            statusActive: true
+            statusActive: true,
+            isomerSourceIssuerMatches: true
           }
         };
       }),
@@ -347,6 +352,7 @@ function createStubVerifier(overrides: {
           checks: {
             jwtEnvelopeValid: true,
             signatureValid: true,
+            embeddedCredentialSubjectsMatchHolder: true,
             embeddedCredentialsVerified: 0
           },
           nested: []

@@ -89,4 +89,27 @@ func TestVerifyVPCountsVerifiedNestedCredentials(t *testing.T) {
 	if len(result.Nested) != 1 || !result.Nested[0].OK {
 		t.Fatalf("expected one successful nested result, got %#v", result.Nested)
 	}
+	if result.Checks["embeddedCredentialSubjectsMatchHolder"] != true {
+		t.Fatalf("expected embedded subject holder binding, got %#v", result.Checks)
+	}
+}
+
+func TestVerifyVPRejectsHolderSubjectMismatch(t *testing.T) {
+	publicKey, privateKey := testKeyPair()
+	verifier, _ := newVerifierUnderTest(publicKey)
+	nested := makeSignedJWT(t, map[string]any{"alg": "EdDSA", "kid": "did:webs:issuer.example:dws:Eissuer#key-1"}, validVCPayload(""), privateKey)
+	payload := validVPPayload(nested)
+	payload["iss"] = "did:webs:qvi.example:dws:Eqvi"
+	payload["vp"].(map[string]any)["holder"] = "did:webs:qvi.example:dws:Eqvi"
+	token := makeSignedJWT(t, map[string]any{"alg": "EdDSA", "kid": "did:webs:qvi.example:dws:Eqvi#key-1"}, payload, privateKey)
+
+	result := verifier.VerifyVP(context.Background(), token, "aud-123", "nonce-123")
+
+	mustError(t, result, "embedded credential subject DID does not match VP holder")
+	if result.Checks["embeddedCredentialsVerified"] != 1 {
+		t.Fatalf("expected one verified nested credential, got %#v", result.Checks)
+	}
+	if result.Checks["embeddedCredentialSubjectsMatchHolder"] != false {
+		t.Fatalf("expected failed embedded subject holder binding, got %#v", result.Checks)
+	}
 }

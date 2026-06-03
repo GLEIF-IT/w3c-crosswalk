@@ -17,15 +17,19 @@ All verifier implementations expose:
 
 - `GET /healthz`
 - `POST /verify/vc` with `{ "token": "<vc-jwt>" }`
-
-Node and Go also expose:
-
 - `POST /verify/vp` with
   `{ "token": "<vp-jwt>", "audience"?: "...", "nonce"?: "..." }`
+- `GET /operations`
+- `GET /operations/{name}`
 
-Python may use long-running operations internally. Node and Go may return
-terminal results directly. CLI/client code must tolerate both result styles
-instead of forcing one runtime model across all implementations.
+`POST /verify/vc` and `POST /verify/vp` return `202` with an operation stub.
+Callers poll `GET /operations/{name}` until `done` is true. `GET /operations`
+may accept a `type` query for service-local filtering.
+
+The headless holder-presentation E2E harness requires this shared operation
+surface for Python, Node, and Go. CLI/client wrappers may call the service, but
+CLI-only verification commands and verifier test doubles are not live-service
+acceptance evidence.
 
 ## Shared Result Shape
 

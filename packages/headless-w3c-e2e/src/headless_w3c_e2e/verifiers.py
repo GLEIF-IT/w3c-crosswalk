@@ -1,4 +1,9 @@
-"""Live verifier-service adapters for headless W3C E2E evidence."""
+"""Live verifier-service adapters for headless W3C E2E evidence.
+
+These adapters intentionally speak the public HTTP operation contract exposed
+by each Isomer verifier service. They do not run CLI commands, import verifier
+functions directly, or accept verifier test doubles for E2E acceptance.
+"""
 
 from __future__ import annotations
 
@@ -36,7 +41,14 @@ class VerifierEvidence:
 
 
 class VerifierServiceClient:
-    """Blocking HTTP client for one live Isomer-compatible verifier service."""
+    """Blocking HTTP client for one live Isomer-compatible verifier service.
+
+    The accepted contract is ``GET /healthz``, ``POST /verify/vc``,
+    ``POST /verify/vp``, ``GET /operations``, and
+    ``GET /operations/{name}``. Submissions return operation stubs; evidence is
+    collected only after polling the service's operation document to terminal
+    state.
+    """
 
     def __init__(
         self,
@@ -100,7 +112,11 @@ class VerifierServiceClient:
         timeout: float | None = None,
         poll_interval: float | None = None,
     ) -> dict[str, Any]:
-        """Poll one operation until the live service reports terminal state."""
+        """Poll one operation until the live service reports terminal state.
+
+        A verifier that accepts submissions but cannot expose a pollable
+        operation is not compatible with the live-service E2E harness.
+        """
         deadline = time.monotonic() + (self.operation_timeout if timeout is None else timeout)
         interval = self.poll_interval if poll_interval is None else poll_interval
         last: dict[str, Any] | None = None
@@ -195,7 +211,12 @@ class LiveVerifierService:
         return self.client.health()
 
     def descriptor(self, *, nonce: str | None = None, audience: str | None = None) -> dict[str, Any]:
-        """Build a verifier request descriptor accepted by KERIA `present-txs`."""
+        """Build a verifier request descriptor accepted by KERIA ``present-txs``.
+
+        ``aud`` is bound into the VP-JWT. ``response_uri`` is where KERIA posts
+        the signed VP. In Docker mode that URI may be container-internal while
+        ``base_url`` remains the host URL used by this harness to poll evidence.
+        """
         request_nonce = nonce or f"headless-{uuid4().hex}"
         request_audience = audience or self.audience or self.audience_uri
         return {

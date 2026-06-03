@@ -57,7 +57,7 @@ def test_engine_accepts_active_status_when_signature_inputs_are_present():
 
     with open_test_hab("issuer-hab-1", b"0123456789abcdef") as (_hby, hab):
         signer = HabSigner(hab)
-        issuer_did = "did:webs:example.com:dws:ELEGALAID000000000000000000000000000000000000000001"
+        issuer_did = f"did:webs:example.com:dws:{acdc['i']}"
         did_document = {
             "id": issuer_did,
             "verificationMethod": [{
@@ -94,7 +94,7 @@ def test_engine_reports_canonicalization_failure_as_verification_error(monkeypat
 
     with open_test_hab("issuer-hab-canon-fail", b"1029384756abcdef") as (_hby, hab):
         signer = HabSigner(hab)
-        issuer_did = "did:webs:example.com:dws:ELEGALAID000000000000000000000000000000000000000001"
+        issuer_did = f"did:webs:example.com:dws:{acdc['i']}"
         did_document = {
             "id": issuer_did,
             "verificationMethod": [{
@@ -129,7 +129,7 @@ def test_engine_rejects_revoked_status_and_isomer_pair_mismatch():
 
     with open_test_hab("issuer-hab-2", b"fedcba9876543210") as (_hby, hab):
         signer = HabSigner(hab)
-        issuer_did = "did:webs:example.com:dws:ELEGALAID000000000000000000000000000000000000000001"
+        issuer_did = f"did:webs:example.com:dws:{acdc['i']}"
         did_document = {
             "id": issuer_did,
             "verificationMethod": [{
@@ -171,7 +171,7 @@ def test_engine_rejects_vc_jwt_claim_mismatch_even_when_resigned():
 
     with open_test_hab("issuer-hab-claim-mismatch", b"AAAABBBBCCCCDDDD") as (_hby, hab):
         signer = HabSigner(hab)
-        issuer_did = "did:webs:example.com:dws:ELEGALAID000000000000000000000000000000000000000001"
+        issuer_did = f"did:webs:example.com:dws:{acdc['i']}"
         token, _vc = _issue_projected_fixture(acdc, issuer_did=issuer_did, status_base_url="http://status.example", signer=signer)
         decoded = decode_jwt(token)
         tampered_payload = dict(decoded.payload)
@@ -192,8 +192,8 @@ def test_engine_accepts_signed_vp_with_embedded_vc():
         with open_test_hab("holder-hab-1", b"DDDDEEEEFFFFGGGG") as (_hby_holder, holder_hab):
             issuer_signer = HabSigner(issuer_hab)
             holder_signer = HabSigner(holder_hab)
-            issuer_did = "did:webs:example.com:dws:ELEGALAID000000000000000000000000000000000000000001"
-            holder_did = "did:webs:example.com:dws:EHOLDERAID000000000000000000000000000000000000000001"
+            issuer_did = f"did:webs:example.com:dws:{acdc['i']}"
+            holder_did = acdc["a"]["DID"]
             audience = "https://verifier.example/isomer"
             nonce = "holder-proof-nonce"
 
@@ -245,6 +245,7 @@ def test_engine_accepts_signed_vp_with_embedded_vc():
             assert result.checks["expectedHolderMatches"] is True
             assert result.checks["audienceMatches"] is True
             assert result.checks["nonceMatches"] is True
+            assert result.checks["embeddedCredentialSubjectsMatchHolder"] is True
             assert len(result.nested) == 1
             assert result.nested[0]["ok"] is True
 
@@ -257,7 +258,7 @@ def test_engine_rejects_qvi_signed_vp_even_when_signature_is_valid():
     with open_test_hab("qvi-vp-hab", b"QVIQVIQVIQVIQVIQ") as (_hby_qvi, qvi_hab):
         with open_test_hab("le-vp-hab", b"LELELELELELELELE") as (_hby_le, _le_hab):
             qvi_signer = HabSigner(qvi_hab)
-            qvi_did = "did:webs:example.com:dws:EQVIAID0000000000000000000000000000000000000000001"
+            qvi_did = f"did:webs:example.com:dws:{acdc['i']}"
             le_did = "did:webs:example.com:dws:ELEAID00000000000000000000000000000000000000000001"
             vp_token, _vp = issue_vp_jwt(
                 ["eyJhbGciOiJFZERTQSJ9.eyJ2YyI6e319.signature"],
@@ -283,6 +284,55 @@ def test_engine_rejects_qvi_signed_vp_even_when_signature_is_valid():
             assert "VP holder DID does not match expected DID" in result.errors
 
 
+def test_engine_rejects_qvi_signed_vp_with_holder_bound_embedded_vc():
+    """Reject QVI-as-holder without relying on an expected-holder request field."""
+    acdc = load_json_file(FIXTURES / "vrd-acdc.json")
+    engine = VerificationEngine()
+
+    with open_test_hab("qvi-vp-service-path", b"QVISERVICEPATH01") as (_hby_qvi, qvi_hab):
+        qvi_signer = HabSigner(qvi_hab)
+        qvi_did = f"did:webs:example.com:dws:{acdc['i']}"
+        holder_did = acdc["a"]["DID"]
+        audience = "https://verifier.example/isomer"
+        nonce = "nonce-1"
+        vc_token, _vc = _issue_projected_fixture(
+            acdc,
+            issuer_did=qvi_did,
+            status_base_url="http://status.example",
+            signer=qvi_signer,
+        )
+        prepared_vc = engine.prepare_vc_token(vc_token)
+        vc_result = engine.evaluate_prepared_vc(
+            prepared_vc,
+            method=_method_for(_did_document(qvi_did, qvi_signer), prepared_vc.header["kid"]),
+            status_doc={"credSaid": acdc["d"], "revoked": False, "status": "iss"},
+            expected_issuer=qvi_did,
+            expected_subject=holder_did,
+        )
+        vp_token, _vp = issue_vp_jwt(
+            [vc_token],
+            holder_did=qvi_did,
+            signer=qvi_signer,
+            audience=audience,
+            nonce=nonce,
+        )
+
+        prepared_vp = engine.prepare_vp_token(vp_token)
+        result = engine.evaluate_prepared_vp(
+            prepared_vp,
+            method=_method_for(_did_document(qvi_did, qvi_signer), prepared_vp.header["kid"]),
+            nested_results=[vc_result],
+            expected_audience=audience,
+            expected_nonce=nonce,
+        )
+
+        assert vc_result.ok is True
+        assert result.ok is False
+        assert result.checks["signatureValid"] is True
+        assert result.checks["embeddedCredentialSubjectsMatchHolder"] is False
+        assert "embedded credential subject DID does not match VP holder" in result.errors
+
+
 def test_engine_rejects_le_as_issuer_vc_even_when_signature_is_valid():
     """Reject a VC-JWT signed by LE when verifier policy expects the QVI issuer DID."""
     acdc = load_json_file(FIXTURES / "vrd-acdc.json")
@@ -290,7 +340,7 @@ def test_engine_rejects_le_as_issuer_vc_even_when_signature_is_valid():
 
     with open_test_hab("le-vc-issuer-hab", b"LEVCLEVCLEVCLEVC") as (_hby_le, le_hab):
         le_signer = HabSigner(le_hab)
-        qvi_did = "did:webs:example.com:dws:EQVIAID0000000000000000000000000000000000000000001"
+        qvi_did = f"did:webs:example.com:dws:{acdc['i']}"
         le_did = "did:webs:example.com:dws:ELEAID00000000000000000000000000000000000000000001"
         token, _vc = _issue_projected_fixture(
             acdc,
@@ -311,7 +361,36 @@ def test_engine_rejects_le_as_issuer_vc_even_when_signature_is_valid():
         assert result.checks["signatureValid"] is True
         assert result.checks["expectedIssuerMatches"] is False
         assert result.checks["expectedSubjectMatches"] is True
+        assert result.checks["isomerSourceIssuerMatches"] is False
         assert "VC issuer DID does not match expected DID" in result.errors
+
+
+def test_engine_rejects_le_as_issuer_vc_from_isomer_profile_metadata():
+    """Reject LE-as-issuer from the live service VC contract without external policy input."""
+    acdc = load_json_file(FIXTURES / "vrd-acdc.json")
+    engine = VerificationEngine()
+
+    with open_test_hab("le-vc-service-path", b"LEISSUERSERVICE1") as (_hby_le, le_hab):
+        le_signer = HabSigner(le_hab)
+        le_did = "did:webs:example.com:dws:ELEAID00000000000000000000000000000000000000000001"
+        token, _vc = _issue_projected_fixture(
+            acdc,
+            issuer_did=le_did,
+            status_base_url="http://status.example",
+            signer=le_signer,
+        )
+        prepared = engine.prepare_vc_token(token)
+        result = engine.evaluate_prepared_vc(
+            prepared,
+            method=_method_for(_did_document(le_did, le_signer), prepared.header["kid"]),
+            status_doc={"credSaid": acdc["d"], "revoked": False, "status": "iss"},
+            expected_subject=acdc["a"]["DID"],
+        )
+
+        assert result.ok is False
+        assert result.checks["signatureValid"] is True
+        assert result.checks["isomerSourceIssuerMatches"] is False
+        assert "VC issuer DID does not match isomer source issuer AID" in result.errors
 
 
 @pytest.mark.parametrize(

@@ -177,7 +177,8 @@ local-test:
 		--go-verifier-url http://127.0.0.1:8790 \
 		--python-verifier-submission-url http://isomer-python:8788 \
 		--node-verifier-submission-url http://isomer-node:8788 \
-		--go-verifier-submission-url http://isomer-go:8788
+		--go-verifier-submission-url http://isomer-go:8788 \
+		--dashboard-url http://127.0.0.1:8791
 
 local-down:
 	@test -f "$(ENV_FILE)" || cp .env.example "$(ENV_FILE)"

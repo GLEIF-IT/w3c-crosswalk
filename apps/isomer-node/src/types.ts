@@ -26,6 +26,8 @@ export interface VcChecks {
   dataIntegrityProofValid: boolean;
   /** Projected credential status did not mark the credential revoked. */
   statusActive: boolean;
+  /** Isomer source issuer AID metadata matched the W3C issuer DID. */
+  isomerSourceIssuerMatches: boolean;
 }
 
 /**
@@ -36,6 +38,8 @@ export interface VpChecks {
   jwtEnvelopeValid: boolean;
   /** `did-jwt-vc` accepted the JWT signature and envelope. */
   signatureValid: boolean;
+  /** Every successful nested VC subject DID matched the VP holder DID. */
+  embeddedCredentialSubjectsMatchHolder: boolean;
   /** Number of nested VC-JWTs that completed successfully. */
   embeddedCredentialsVerified: number;
 }

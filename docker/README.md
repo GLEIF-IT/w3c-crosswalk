@@ -33,7 +33,9 @@ The images expose:
 
 - `GET /healthz`
 - `POST /verify/vc`
-- `POST /verify/vp` for Node and Go
+- `POST /verify/vp`
+- `GET /operations`
+- `GET /operations/{name}`
 - dashboard `GET /` and `POST /webhooks/presentations`
 
 Future cleanup should publish `webs-did-resolver` as an NPM package and factor
@@ -51,10 +53,17 @@ make local-test
 make local-down
 ```
 
+Use `make local-reset` to tear down services and remove generated local-stack
+state before reseeding.
+
 `make local-test` consumes `.tmp/local-stack/w3c-vrd-chain-manifest.json` from
 `make local-seed`, drives KERIA holder presentation transactions with edge
 wallet signing, and collects live verifier evidence from the Python, Node, and
 Go services.
+
+The harness polls verifier host URLs such as `http://127.0.0.1:8788`. KERIA
+submits VP-JWTs from inside the compose network, so descriptors use service DNS
+submission URLs such as `http://isomer-python:8788`.
 
 Default host ports:
 
@@ -68,9 +77,11 @@ Default host ports:
 ## Required Contract
 
 - Configure image tags in `.env`; `.env.example` is the template.
+- Prefer published packages, pinned Git SHAs, or OCI images. Do not make the
+  default local stack require sibling source-tree dependencies.
 - Use `DID_WEBS_REGISTRY_NAME_PREFIX=didwebs-designated-aliases`.
 - Keep generated AID and registry names colonless.
 - Keep actual DID strings such as `did:webs:...` unchanged.
-- Run the React wallet browser smoke from the checked-out
-  `signify-react-ts` source so it uses the local `signify-ts` dependency and
-  current holder-presentation code.
+- Run the React wallet browser smoke from the intended `signify-react-ts`
+  branch/image, using a package or Git SHA dependency for `signify-ts` unless
+  you are doing an explicit local developer override.

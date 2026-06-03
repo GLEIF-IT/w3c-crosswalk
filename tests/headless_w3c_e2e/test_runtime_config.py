@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 from headless_w3c_e2e import HeadlessLiveRunConfig
+from headless_w3c_e2e.runtime import _match_dashboard_presentations, _strip_raw_tokens
 
 
 def test_config_reads_signifypy_seed_manifest(tmp_path):
@@ -112,4 +113,86 @@ def test_config_separates_host_verifier_urls_from_keria_submission_urls(tmp_path
         "python": "http://isomer-python:8788",
         "node": "http://isomer-node:8788",
         "go": "http://isomer-go:8788",
+    }
+
+
+def test_config_reads_dashboard_url_from_manifest(tmp_path):
+    """Dashboard evidence is optional but must be configurable for live runs."""
+    manifest = {
+        "qviWallet": {"name": "qvi", "passcode": "qvi-passcode-000000"},
+        "holderWallet": {"name": "holder", "passcode": "holder-passcode-00"},
+        "sourceCredentialSaid": "EVrd",
+        "dashboardUrl": "http://127.0.0.1:8791",
+        "verifierUrls": {
+            "python": "http://127.0.0.1:8788",
+            "node": "http://127.0.0.1:8789",
+            "go": "http://127.0.0.1:8790",
+        },
+    }
+    path = tmp_path / "manifest.json"
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    config = HeadlessLiveRunConfig.from_sources(
+        stack="attach",
+        manifest_path=str(path),
+        environ={},
+        overrides={},
+    )
+
+    assert config.dashboard_url == "http://127.0.0.1:8791"
+
+
+def test_dashboard_evidence_matches_presentations_by_verifier_and_tx_id():
+    """Dashboard events must correspond to the current KERIA presentation txs."""
+    events = [
+        {
+            "eventId": "event-python",
+            "verifiedAt": "2026-06-02T00:00:00Z",
+            "verifier": {"id": "isomer-python"},
+            "presentation": {"id": "urn:said:EPython", "credentialTypes": ["VRDCredential"]},
+            "verification": {"ok": True},
+        },
+        {
+            "eventId": "event-node",
+            "verifiedAt": "2026-06-02T00:00:01Z",
+            "verifier": {"id": "isomer-node"},
+            "presentation": {"id": "urn:said:ENode", "credentialTypes": ["VRDCredential"]},
+            "verification": {"ok": True},
+        },
+    ]
+    expected = [
+        {"verifier": "python", "presentTxId": "EPython"},
+        {"verifier": "node", "presentTxId": "ENode"},
+    ]
+
+    assert _match_dashboard_presentations(events, expected) == [
+        {
+            "verifier": "python",
+            "presentTxId": "EPython",
+            "eventId": "event-python",
+            "verifiedAt": "2026-06-02T00:00:00Z",
+            "verificationOk": True,
+            "credentialTypes": ["VRDCredential"],
+        },
+        {
+            "verifier": "node",
+            "presentTxId": "ENode",
+            "eventId": "event-node",
+            "verifiedAt": "2026-06-02T00:00:01Z",
+            "verificationOk": True,
+            "credentialTypes": ["VRDCredential"],
+        },
+    ]
+
+
+def test_strip_raw_tokens_redacts_nested_compact_jwt_strings():
+    """Default manifests should not leak compact JWTs from nested VP payloads."""
+    compact = (
+        "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9."
+        "eyJpc3MiOiJkaWQ6d2ViczpleeGFtcGxlOmR3czpFSVNTVUVSIiwianRpIjoidXJuOnNhaWQ6RUFiYyJ9."
+        "z2RsXHJxs7h6t74tum3wkHnfkNwqSwnctC2hDxkUVhxaNngTcmdjNKL6yqSJdfArVD54FW5vHkSxGmud"
+    )
+
+    assert _strip_raw_tokens({"payload": {"verifiableCredential": [compact]}}) == {
+        "payload": {"verifiableCredential": ["[redacted-jwt]"]}
     }

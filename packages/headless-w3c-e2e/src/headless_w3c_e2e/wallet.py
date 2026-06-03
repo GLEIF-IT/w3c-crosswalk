@@ -1,11 +1,16 @@
-"""In-memory wallet actor wrappers for KERIA W3C holder workflows."""
+"""In-memory wallet actor wrappers for KERIA W3C holder workflows.
+
+The wrapper stores local evidence for the scenario manifest, but every workflow
+transition goes through live KERIA routes and a real SignifyPy edge automator.
+It is not a fake wallet or a substitute verifier seam.
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any
 
-from keri.core import coring
+from signify.app.w3cing import W3C as SignifyW3C
 
 
 class KeriaW3CApi:
@@ -55,9 +60,9 @@ class KeriaW3CApi:
             json={"importRequestId": import_request_id},
         ).json()
 
-    def create_import_request(self, grant: dict[str, Any]) -> dict[str, Any]:
-        """Deliver one W3C grant to KERIA's live holder import endpoint."""
-        return self.client.post("/w3c/vc/grant", json=grant).json()
+    def deliver_issuance(self, name: str, issuance: dict[str, Any]) -> dict[str, Any]:
+        """Send the issuer-signed W3C grant EXN through KERIA exchange delivery."""
+        return SignifyW3C(self.client).deliverIssuance(name, issuance)
 
     def credentials(self, name: str) -> list[dict[str, Any]]:
         """Return holder W3C credential inventory."""
@@ -95,7 +100,13 @@ class KeriaW3CApi:
 
 @dataclass
 class HeadlessW3CWallet:
-    """In-memory actor wrapper around one SignifyPy/KERIA W3C client."""
+    """In-memory actor wrapper around one SignifyPy/KERIA W3C client.
+
+    The wallet mirrors the browser actor boundary: it starts or reads KERIA
+    workflow state, drains edge automation locally, and records evidence for the
+    manifest. Private-key operations still happen through the configured
+    SignifyPy automator.
+    """
 
     name: str
     w3c: Any
@@ -125,9 +136,11 @@ class HeadlessW3CWallet:
         return refreshed
 
     def deliver_issuance_to_holder(self, holder_wallet: "HeadlessW3CWallet", issuance: dict[str, Any]) -> dict[str, Any]:
-        """Deliver a finalized issuer W3C issuance through KERIA's grant route."""
-        grant = _grant_from_issuance(holder_wallet.name, issuance)
-        return holder_wallet.w3c.create_import_request(grant)
+        """Deliver a finalized issuer W3C issuance as a real issuer-signed EXN."""
+        _ = holder_wallet
+        delivered = self.w3c.deliver_issuance(self.name, issuance)
+        self.issuances.append(delivered)
+        return delivered
 
     def handle_signal(self, envelope: dict[str, Any]) -> dict[str, Any]:
         """Verify and handle one signed W3C signal through the configured automator."""
@@ -219,37 +232,3 @@ def _record_id(record: dict[str, Any], preferred: str) -> str:
         raise RuntimeError(f"W3C record has no {preferred}: {record!r}")
     return record_id
 
-
-def _grant_from_issuance(holder_name: str, issuance: dict[str, Any]) -> dict[str, Any]:
-    """Build the live grant body consumed by KERIA's W3C holder import route."""
-    required = (
-        "holderAid",
-        "holderDid",
-        "issuerAid",
-        "issuerDid",
-        "sourceCredentialSaid",
-        "schemaSaid",
-        "vcJwt",
-        "statusUrl",
-    )
-    missing = [key for key in required if not issuance.get(key)]
-    if missing:
-        raise RuntimeError(f"W3C issuance is not deliverable; missing {', '.join(missing)}")
-
-    body = {
-        "holderName": holder_name,
-        "holderAid": issuance["holderAid"],
-        "holderDid": issuance["holderDid"],
-        "issuerAid": issuance["issuerAid"],
-        "issuerDid": issuance["issuerDid"],
-        "sourceCredentialSaid": issuance["sourceCredentialSaid"],
-        "schemaSaid": issuance["schemaSaid"],
-        "issuanceId": _record_id(issuance, "issuanceId"),
-        "vcJwt": issuance["vcJwt"],
-        "statusUrl": issuance["statusUrl"],
-        "profile": issuance.get("profile"),
-    }
-    said_input = {"d": "", **body}
-    _saider, saided = coring.Saider.saidify(said_input)
-    body["grantSaid"] = saided["d"]
-    return body

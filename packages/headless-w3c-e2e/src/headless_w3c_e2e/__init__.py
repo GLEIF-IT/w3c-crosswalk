@@ -8,6 +8,8 @@ from .runtime import (
     run_live_headless,
     write_manifest,
 )
+from .docker_stack import DockerStackError, ManagedDockerStack
+from .process_stack import ManagedProcessStack, ProcessStackError, ProcessStackPorts
 from .scenario import HeadlessW3CE2E, ScenarioManifest
 from .verifiers import (
     LiveVerifierService,
@@ -27,6 +29,11 @@ __all__ = [
     "KeriaW3CApi",
     "LiveVerifierService",
     "LiveVerifierServiceSet",
+    "DockerStackError",
+    "ManagedDockerStack",
+    "ManagedProcessStack",
+    "ProcessStackError",
+    "ProcessStackPorts",
     "ScenarioManifest",
     "VerifierEvidence",
     "VerifierServiceClient",
