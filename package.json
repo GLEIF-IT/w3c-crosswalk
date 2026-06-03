@@ -1,0 +1,28 @@
+{
+  "name": "signify-w3c",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Edge-owned W3C VC-JWT and VP-JWT artifact helpers for Signify wallets",
+  "exports": {
+    ".": {
+      "types": "./packages/signify-w3c/dist/index.d.ts",
+      "default": "./packages/signify-w3c/dist/index.js"
+    }
+  },
+  "types": "./packages/signify-w3c/dist/index.d.ts",
+  "files": [
+    "packages/signify-w3c/dist",
+    "packages/signify-w3c/README.md"
+  ],
+  "scripts": {
+    "prepare": "npm --prefix packages/signify-w3c install && npm --prefix packages/signify-w3c run build"
+  },
+  "dependencies": {
+    "@noble/hashes": "^1.3.3",
+    "jsonld": "^8.3.3"
+  },
+  "peerDependencies": {
+    "signify-ts": "*"
+  }
+}
