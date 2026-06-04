@@ -27,7 +27,7 @@ test = [
 ]
 live = [
     "did-webs-resolver>=0.3.5,<0.4",
-    "signifypy @ git+https://github.com/kentbull/signifypy.git@5fc1ddd9952b39dec7e606c0a81894052cb089cd",
+    "signifypy @ git+https://github.com/kentbull/signifypy.git@52e3fa761d6da5f4c01dc0dd18687af8541fa155",
     "vlei>=1.0.2,<2",
 ]
 
