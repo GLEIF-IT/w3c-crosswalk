@@ -54,9 +54,18 @@ test("canonicalizeDidWebs repairs local host-port DIDs", () => {
 
 test("base64url helpers round-trip raw signature bytes", () => {
   const raw = new Uint8Array(64).fill(7);
-  const qb64 = `0B${base64UrlEncode(raw)}`;
-  assert.deepEqual(rawSignatureFromCesrCigar(qb64), raw);
   assert.deepEqual(base64UrlDecode(base64UrlEncode(raw)), raw);
+});
+
+test("rawSignatureFromCesrCigar decodes a real CESR Cigar", () => {
+  const qb64 =
+    "0BCh4_IqV5tWbvsGa7gkflz6JGFXQrljvTeqYd71FvTVxsY_j44J3r8f_FlVzoYP8vw7L9WKAoxCu847fS6xIjAH";
+  const expectedRaw =
+    "oePyKlebVm77Bmu4JH5c-iRhV0K5Y703qmHe9Rb01cbGP4-OCd6_H_xZVc6GD_L8Oy_VigKMQrvOO30usSIwBw";
+  assert.deepEqual(
+    base64UrlEncode(rawSignatureFromCesrCigar(qb64)),
+    expectedRaw
+  );
 });
 
 test("transposeAcdcToW3cVc projects the Isomer VRD profile", () => {

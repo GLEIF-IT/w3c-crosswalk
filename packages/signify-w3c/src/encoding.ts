@@ -1,3 +1,5 @@
+import { Cigar } from "signify-ts";
+
 const BASE58BTC_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
 export function utf8Bytes(value: string): Uint8Array {
@@ -100,10 +102,7 @@ export function decodeMultibaseBase58btc(value: string): Uint8Array {
 }
 
 export function rawSignatureFromCesrCigar(qb64: string): Uint8Array {
-  if (!qb64.startsWith("0B")) {
-    throw new Error("expected unindexed Ed25519 CESR signature");
-  }
-  const raw = base64UrlDecode(qb64.slice(2));
+  const raw = new Cigar({ qb64 }).raw;
   if (raw.length !== 64) {
     throw new Error(`expected 64-byte Ed25519 signature, got ${raw.length}`);
   }
