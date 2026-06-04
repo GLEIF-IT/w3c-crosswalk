@@ -601,10 +601,30 @@ def _expected_dashboard_presentations(scenario: dict[str, Any]) -> list[dict[str
             continue
         descriptor = tx.get("requestDescriptor")
         verifier = descriptor.get("verifierId") if isinstance(descriptor, dict) else None
-        present_tx_id = tx.get("presentTxId") or tx.get("d")
+        present_tx_id = _dashboard_expected_presentation_id(tx)
         if isinstance(verifier, str) and isinstance(present_tx_id, str):
             expected.append({"verifier": verifier, "presentTxId": present_tx_id})
     return expected
+
+
+def _dashboard_expected_presentation_id(tx: dict[str, Any]) -> str | None:
+    token = tx.get("vpJwt")
+    if isinstance(token, str):
+        try:
+            payload = decode_jwt(token).payload
+        except Exception:
+            payload = {}
+        vp = payload.get("vp") if isinstance(payload, dict) else None
+        for candidate in (
+            payload.get("jti") if isinstance(payload, dict) else None,
+            vp.get("id") if isinstance(vp, dict) else None,
+        ):
+            if isinstance(candidate, str) and candidate:
+                return candidate
+    for candidate in (tx.get("presentTxId"), tx.get("presentationId"), tx.get("d")):
+        if isinstance(candidate, str) and candidate:
+            return candidate
+    return None
 
 
 def _dashboard_presentations(dashboard_url: str) -> list[dict[str, Any]]:

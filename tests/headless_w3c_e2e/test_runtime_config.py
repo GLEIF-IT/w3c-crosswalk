@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import base64
 import json
 
 from headless_w3c_e2e import HeadlessLiveRunConfig
-from headless_w3c_e2e.runtime import _match_dashboard_presentations, _strip_raw_tokens
+from headless_w3c_e2e.runtime import _expected_dashboard_presentations, _match_dashboard_presentations, _strip_raw_tokens
 
 
 def test_config_reads_signifypy_seed_manifest(tmp_path):
@@ -183,6 +184,47 @@ def test_dashboard_evidence_matches_presentations_by_verifier_and_tx_id():
             "credentialTypes": ["VRDCredential"],
         },
     ]
+
+
+def test_dashboard_expected_presentations_use_vp_jwt_id_before_keria_transaction_id():
+    """Dashboard events are keyed by the VP JWT id, not the KERIA transaction id."""
+    scenario = {
+        "presentationTxs": [
+            {
+                "vpJwt": _compact_jwt({"jti": "urn:uuid:vp-id", "vp": {"id": "urn:uuid:vp-id"}}),
+                "presentationId": "EPresentation",
+                "requestDescriptor": {"verifierId": "python"},
+            }
+        ]
+    }
+
+    assert _expected_dashboard_presentations(scenario) == [
+        {"verifier": "python", "presentTxId": "urn:uuid:vp-id"}
+    ]
+
+
+def test_dashboard_expected_presentations_fall_back_to_keria_presentation_id():
+    """KERIA presentationId remains a fallback when the raw VP JWT is unavailable."""
+    scenario = {
+        "presentationTxs": [
+            {
+                "presentationId": "EPresentation",
+                "requestDescriptor": {"verifierId": "python"},
+            }
+        ]
+    }
+
+    assert _expected_dashboard_presentations(scenario) == [
+        {"verifier": "python", "presentTxId": "EPresentation"}
+    ]
+
+
+def _compact_jwt(payload: dict) -> str:
+    def encode(data: dict | bytes) -> str:
+        raw = json.dumps(data, separators=(",", ":"), sort_keys=True).encode("utf-8") if isinstance(data, dict) else data
+        return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("utf-8")
+
+    return f"{encode({'alg': 'EdDSA', 'typ': 'vp+jwt'})}.{encode(payload)}.{encode(b'sig')}"
 
 
 def test_strip_raw_tokens_redacts_nested_compact_jwt_strings():
