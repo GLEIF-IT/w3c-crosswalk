@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import subprocess
 
+import pytest
+
+from headless_w3c_e2e import docker_stack
 from headless_w3c_e2e.docker_stack import ManagedDockerStack
 
 
@@ -50,3 +53,43 @@ def test_docker_stack_start_uses_compose_and_real_seed_service(monkeypatch, tmp_
     assert any(command[-2:] == ["up", "-d"] for command in commands)
     assert any(command[-3:] == ["run", "--rm", "signifypy-seed"] for command in commands)
     assert all("compose" in command for command in commands)
+
+
+def test_witness_oobi_health_requires_endpoint_replies(monkeypatch):
+    """Witness readiness requires curls-derived end-role and loc-scheme replies."""
+    payload = b'{"v":"KERI10JSON0000fd_","t":"icp"}'
+
+    monkeypatch.setattr(docker_stack, "urlopen", lambda *_args, **_kwargs: FakeResponse(payload))
+
+    with pytest.raises(ValueError, match="end role reply, loc scheme reply, Docker witness curl"):
+        docker_stack._check_witness_oobi("wan", "http://127.0.0.1:5642/oobi/test/controller", "http://witness-demo:5642/")
+
+
+def test_witness_oobi_health_accepts_curls_backed_introduction(monkeypatch):
+    """A usable controller OOBI includes KEL, end-role, loc-scheme, and witness URL."""
+    payload = (
+        b'{"v":"KERI10JSON0000fd_","t":"icp"}'
+        b'{"v":"KERI10JSON00011c_","t":"rpy","r":"/loc/scheme","a":{"url":"http://witness-demo:5642/"}}'
+        b'{"v":"KERI10JSON00011c_","t":"rpy","r":"/end/role/add","a":{"role":"controller"}}'
+    )
+
+    monkeypatch.setattr(docker_stack, "urlopen", lambda *_args, **_kwargs: FakeResponse(payload))
+
+    docker_stack._check_witness_oobi("wan", "http://127.0.0.1:5642/oobi/test/controller", "http://witness-demo:5642/")
+
+
+class FakeResponse:
+    status = 200
+    headers = {"Content-Type": "application/json+cesr"}
+
+    def __init__(self, body: bytes):
+        self.body = body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_exc_info):
+        return False
+
+    def read(self) -> bytes:
+        return self.body

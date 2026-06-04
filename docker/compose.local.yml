@@ -27,10 +27,23 @@ services:
     command: ["witness", "demo", "--loglevel", "${WITNESS_LOGLEVEL:-INFO}"]
     volumes:
       - witness-data:/usr/local/var/keri
+      - ./witness/check-witness-oobis.py:/usr/local/bin/check-witness-oobis.py:ro
+      - ./witness/keri/cf/main/wan.json:/keripy/scripts/keri/cf/main/wan.json
+      - ./witness/keri/cf/main/wil.json:/keripy/scripts/keri/cf/main/wil.json
+      - ./witness/keri/cf/main/wes.json:/keripy/scripts/keri/cf/main/wes.json
+      - ./witness/keri/cf/main/wan.json:/root/.keri/cf/main/wan.json
+      - ./witness/keri/cf/main/wil.json:/root/.keri/cf/main/wil.json
+      - ./witness/keri/cf/main/wes.json:/root/.keri/cf/main/wes.json
     ports:
       - "5642:5642"
       - "5643:5643"
       - "5644:5644"
+    healthcheck:
+      test: [ "CMD", "/keripy/venv/bin/python", "/usr/local/bin/check-witness-oobis.py" ]
+      interval: 2s
+      timeout: 5s
+      retries: 60
+      start_period: 5s
 
   vlei:
     image: ${VLEI_IMAGE}
@@ -77,7 +90,8 @@ services:
       KERIA_W3C_STATUS_BASE_URL: ${KERIA_STATUS_BASE_URL}
       KERIA_W3C_SIGNAL_INTERVAL_SECONDS: ${KERIA_W3C_SIGNAL_INTERVAL_SECONDS:-5}
     depends_on:
-      - witness-demo
+      witness-demo:
+        condition: service_healthy
     extra_hosts:
       - "host.docker.internal:host-gateway"
 

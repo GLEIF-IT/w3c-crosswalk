@@ -23,6 +23,25 @@ class DockerStackError(RuntimeError):
     """Raised when the managed Docker stack cannot start cleanly."""
 
 
+WITNESS_OOBIS = (
+    (
+        "wan",
+        "http://127.0.0.1:5642/oobi/BBilc4-L3tFUnfM_wJr4S4OJanAv_VmF_dJNN6vkf2Ha/controller?name=Wan&tag=witness",
+        "http://witness-demo:5642/",
+    ),
+    (
+        "wil",
+        "http://127.0.0.1:5643/oobi/BLskRTInXnMxWaGqcpSyMgo0nYbalW99cGZESrz3zapM/controller?name=Wil&tag=witness",
+        "http://witness-demo:5643/",
+    ),
+    (
+        "wes",
+        "http://127.0.0.1:5644/oobi/BIKKuvBwpmDVA4Ds-EpL5bt9OqPzWPja2LigFYZN2YfX/controller?name=Wes&tag=witness",
+        "http://witness-demo:5644/",
+    ),
+)
+
+
 @dataclass
 class ManagedDockerStack:
     """Own the local compose-backed KERIA plus verifier service stack."""
@@ -132,6 +151,7 @@ class ManagedDockerStack:
         return completed
 
     def _wait_for_stack_health(self) -> None:
+        _wait_for_witness_oobis()
         for url in [
             "http://127.0.0.1:3903/health",
             "http://127.0.0.1:8788/healthz",
@@ -159,3 +179,44 @@ def _wait_for_http(url: str, *, timeout: float = 120.0) -> None:
             last_error = exc
             time.sleep(0.5)
     raise DockerStackError(f"Docker stack service did not become healthy at {url}: {last_error}")
+
+
+def _wait_for_witness_oobis(timeout: float = 120.0) -> None:
+    deadline = time.monotonic() + timeout
+    last_error: str | None = None
+    while time.monotonic() < deadline:
+        try:
+            for name, url, expected_curl in WITNESS_OOBIS:
+                _check_witness_oobi(name, url, expected_curl)
+        except (OSError, URLError, ValueError) as exc:
+            last_error = str(exc)
+            time.sleep(0.5)
+            continue
+        return
+    raise DockerStackError(f"Docker witness OOBIs did not become healthy: {last_error}")
+
+
+def _check_witness_oobi(name: str, url: str, expected_curl: str) -> None:
+    request = Request(url, headers={"Accept": "application/json+cesr"}, method="GET")
+    with urlopen(request, timeout=1.0) as response:
+        content_type = response.headers.get("Content-Type", "")
+        if response.status != 200:
+            raise ValueError(f"{name} controller OOBI returned HTTP {response.status}")
+        if "application/json+cesr" not in content_type:
+            raise ValueError(f"{name} controller OOBI returned content-type {content_type!r}")
+        payload = response.read().decode("utf-8", errors="replace")
+
+    missing = [
+        label
+        for label, fragment in (
+            ("end role reply", '"/end/role/add"'),
+            ("loc scheme reply", '"/loc/scheme"'),
+            ("Docker witness curl", expected_curl),
+        )
+        if fragment not in payload
+    ]
+    if missing:
+        raise ValueError(
+            f"{name} controller OOBI is missing {', '.join(missing)}; "
+            "witness curls config is not producing a usable introduction payload"
+        )
