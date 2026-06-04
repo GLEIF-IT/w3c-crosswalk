@@ -26,17 +26,17 @@ class DockerStackError(RuntimeError):
 WITNESS_OOBIS = (
     (
         "wan",
-        "http://127.0.0.1:5642/oobi/BBilc4-L3tFUnfM_wJr4S4OJanAv_VmF_dJNN6vkf2Ha/controller?name=Wan&tag=witness",
+        "http://127.0.0.1:5642/oobi/BBilc4-L3tFUnfM_wJr4S4OJanAv_VmF_dJNN6vkf2Ha",
         "http://witness-demo:5642/",
     ),
     (
         "wil",
-        "http://127.0.0.1:5643/oobi/BLskRTInXnMxWaGqcpSyMgo0nYbalW99cGZESrz3zapM/controller?name=Wil&tag=witness",
+        "http://127.0.0.1:5643/oobi/BLskRTInXnMxWaGqcpSyMgo0nYbalW99cGZESrz3zapM",
         "http://witness-demo:5643/",
     ),
     (
         "wes",
-        "http://127.0.0.1:5644/oobi/BIKKuvBwpmDVA4Ds-EpL5bt9OqPzWPja2LigFYZN2YfX/controller?name=Wes&tag=witness",
+        "http://127.0.0.1:5644/oobi/BIKKuvBwpmDVA4Ds-EpL5bt9OqPzWPja2LigFYZN2YfX",
         "http://witness-demo:5644/",
     ),
 )
@@ -201,9 +201,9 @@ def _check_witness_oobi(name: str, url: str, expected_curl: str) -> None:
     with urlopen(request, timeout=1.0) as response:
         content_type = response.headers.get("Content-Type", "")
         if response.status != 200:
-            raise ValueError(f"{name} controller OOBI returned HTTP {response.status}")
+            raise ValueError(f"{name} witness OOBI returned HTTP {response.status}")
         if "application/json+cesr" not in content_type:
-            raise ValueError(f"{name} controller OOBI returned content-type {content_type!r}")
+            raise ValueError(f"{name} witness OOBI returned content-type {content_type!r}")
         payload = response.read().decode("utf-8", errors="replace")
 
     missing = [
@@ -217,6 +217,6 @@ def _check_witness_oobi(name: str, url: str, expected_curl: str) -> None:
     ]
     if missing:
         raise ValueError(
-            f"{name} controller OOBI is missing {', '.join(missing)}; "
+            f"{name} witness OOBI is missing {', '.join(missing)}; "
             "witness curls config is not producing a usable introduction payload"
         )

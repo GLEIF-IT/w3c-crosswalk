@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate local Docker witness controller OOBIs before KERIA starts."""
+"""Validate local Docker witness OOBIs before KERIA starts."""
 
 from __future__ import annotations
 
@@ -23,11 +23,7 @@ class WitnessProbe:
 
     @property
     def url(self) -> str:
-        display_name = self.name.capitalize()
-        return (
-            f"http://127.0.0.1:{self.port}/oobi/{self.aid}/controller"
-            f"?name={display_name}&tag=witness"
-        )
+        return f"http://127.0.0.1:{self.port}/oobi/{self.aid}"
 
 
 WITNESSES = (
@@ -86,14 +82,14 @@ def validate_witness(witness: WitnessProbe) -> None:
     text = payload.decode("utf-8", errors="replace")
     expected_fragments = {
         "inception event": f'"i":"{witness.aid}"',
-        "controller route": '"/end/role/add"',
+        "end role route": '"/end/role/add"',
         "loc scheme route": '"/loc/scheme"',
         "Docker witness curl": witness.expected_curl,
     }
     missing = [name for name, fragment in expected_fragments.items() if fragment not in text]
     if missing:
         raise ValueError(
-            f"{witness.name} controller OOBI is missing {', '.join(missing)}; "
+            f"{witness.name} witness OOBI is missing {', '.join(missing)}; "
             "witness curls config is not producing a usable introduction payload"
         )
 

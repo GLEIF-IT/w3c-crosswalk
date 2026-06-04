@@ -40,9 +40,6 @@ VRD_SCHEMA = "EAyv2DLocYxJlPrWAfYBuHWDpjCStdQBzNLg0-3qQ-KP"
 DEFAULT_WITNESS_AIDS = [
     "BBilc4-L3tFUnfM_wJr4S4OJanAv_VmF_dJNN6vkf2Ha",
 ]
-DEFAULT_WITNESS_OOBIS = [
-    "http://127.0.0.1:5642/oobi/BBilc4-L3tFUnfM_wJr4S4OJanAv_VmF_dJNN6vkf2Ha/controller?name=Wan&tag=witness",
-]
 
 LEI = "254900OPPU84GM83MG36"
 LEGAL_NAME = "Example Legal Entity LLC"
@@ -95,6 +92,8 @@ def main() -> None:
     create_actor_aid(geda, args)
     create_actor_aid(qvi, args)
     create_actor_aid(le, args)
+    log("resolving actor witness OOBIs")
+    exchange_witness_oobis(actors, timeout=args.operation_timeout)
     log("exchanging agent OOBIs")
     exchange_agent_oobis(actors)
 
@@ -218,7 +217,6 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--output", default=".tmp/w3c-vrd-chain-manifest.json", help="manifest output path")
     p.add_argument("--unwitnessed", action="store_true", help="create non-witnessed AIDs")
     p.add_argument("--witness", action="append", default=None, help="witness AID to use; repeatable")
-    p.add_argument("--witness-oobi", action="append", default=None, help="witness OOBI to resolve; repeatable")
     p.add_argument("--operation-timeout", type=float, default=180.0)
     p.add_argument("--didwebs-timeout", type=float, default=180.0)
     return p
@@ -256,9 +254,6 @@ def connect_actor(label: str, args, name: str) -> Actor:
 
 def create_actor_aid(actor: Actor, args) -> None:
     wits = [] if args.unwitnessed else (args.witness or DEFAULT_WITNESS_AIDS)
-    if wits:
-        for oobi in args.witness_oobi or DEFAULT_WITNESS_OOBIS:
-            wait_for_operation(actor.client, actor.client.oobis().resolve(oobi), timeout=args.operation_timeout)
 
     _, _, operation = actor.client.identifiers().create(
         actor.name,
@@ -289,6 +284,22 @@ def exchange_agent_oobis(actors: list[Actor]) -> None:
                 continue
             oobi = wait_for_oobi(source.client, source.name, role="agent")[0]
             wait_for_operation(target.client, target.client.oobis().resolve(oobi, alias=source.name))
+
+
+def exchange_witness_oobis(actors: list[Actor], *, timeout: float) -> None:
+    """Resolve each actor's generated witness-role OOBIs into every actor."""
+    actor_oobis = {
+        source.name: wait_for_oobi(source.client, source.name, role="witness", timeout=timeout)
+        for source in actors
+    }
+    for source in actors:
+        for target in actors:
+            for oobi in actor_oobis[source.name]:
+                wait_for_operation(
+                    target.client,
+                    target.client.oobis().resolve(oobi, alias=source.name),
+                    timeout=timeout,
+                )
 
 
 def create_registry(client: SignifyClient, name: str, registry_name: str) -> dict:

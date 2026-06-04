@@ -62,11 +62,15 @@ def test_witness_oobi_health_requires_endpoint_replies(monkeypatch):
     monkeypatch.setattr(docker_stack, "urlopen", lambda *_args, **_kwargs: FakeResponse(payload))
 
     with pytest.raises(ValueError, match="end role reply, loc scheme reply, Docker witness curl"):
-        docker_stack._check_witness_oobi("wan", "http://127.0.0.1:5642/oobi/test/controller", "http://witness-demo:5642/")
+        docker_stack._check_witness_oobi(
+            "wan",
+            "http://127.0.0.1:5642/oobi/test",
+            "http://witness-demo:5642/",
+        )
 
 
 def test_witness_oobi_health_accepts_curls_backed_introduction(monkeypatch):
-    """A usable controller OOBI includes KEL, end-role, loc-scheme, and witness URL."""
+    """A usable witness OOBI includes KEL, end-role, loc-scheme, and witness URL."""
     payload = (
         b'{"v":"KERI10JSON0000fd_","t":"icp"}'
         b'{"v":"KERI10JSON00011c_","t":"rpy","r":"/loc/scheme","a":{"url":"http://witness-demo:5642/"}}'
@@ -75,7 +79,11 @@ def test_witness_oobi_health_accepts_curls_backed_introduction(monkeypatch):
 
     monkeypatch.setattr(docker_stack, "urlopen", lambda *_args, **_kwargs: FakeResponse(payload))
 
-    docker_stack._check_witness_oobi("wan", "http://127.0.0.1:5642/oobi/test/controller", "http://witness-demo:5642/")
+    docker_stack._check_witness_oobi(
+        "wan",
+        "http://127.0.0.1:5642/oobi/test",
+        "http://witness-demo:5642/",
+    )
 
 
 class FakeResponse:
