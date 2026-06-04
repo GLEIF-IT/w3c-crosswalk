@@ -50,10 +50,10 @@ interop behavior.
 ### Signing
 
 - Use live KERIpy habitats (`Hab`, `Habery`) for signing.
-- For KERIA W3C holder presentation, signing happens at the Signify edge only.
-  KERIA may stage exact signing inputs over signed SSE or polling fallback and
-  verify returned signatures, but KERIA must not hold private edge keys or sign
-  W3C token material server-side.
+- For KERIA W3C issuance and holder presentation, W3C artifact assembly and
+  signing happen at the Signify edge. KERIA validates edge-provided VC-JWT and
+  VP-JWT artifacts, records state, and forwards traffic, but it must not stage
+  signing inputs or sign W3C token material server-side.
 - Stable salts, passcodes, and aliases are acceptable for deterministic tests.
 - Do not reintroduce deterministic demo signers.
 
@@ -62,6 +62,13 @@ interop behavior.
 - W3C key-state verification goes through `did-webs-resolver`.
 - Do not bypass DID resolution with embedded JWK shortcuts.
 - Preserve query-bearing DID URLs such as `?versionId=...`.
+- KERIA startup `iurls` for local witnessed stacks should use the bare demo
+  witness OOBIs (`/oobi/<witnessAid>`), not the witness controller route
+  (`/controller?name=...&tag=witness`). Those OOBIs must expose KEL plus
+  `/end/role/add` and `/loc/scheme` replies from witness `curls`.
+- Actor-specific witness-role OOBIs (`/oobi/<actorAid>/witness/<witnessAid>`)
+  are generated only after actor AIDs exist and should be exchanged then; they
+  cannot be static KERIA startup `iurls`.
 
 ### Data Integrity And JSON-LD
 
