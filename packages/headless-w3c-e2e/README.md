@@ -3,9 +3,9 @@
 Python-first executable harness for the holder-centered W3C VRD flow.
 
 The package wraps SignifyPy/KERIA-style clients with in-memory wallet actors,
-drives issuer issuance, holder import/admit, presentation transactions, and
-verifier checks, then emits manifests that TypeScript, React, and local-stack
-work can compare against.
+drives issuer edge VC-JWT creation, holder credential materialization, holder
+edge VP-JWT creation, and verifier checks, then emits manifests that
+TypeScript, React, and local-stack work can compare against.
 
 Verifier acceptance is live-service only. The harness expects Python, Node, and
 Go verifier base URLs, builds runtime presentation descriptors for KERIA, lets
@@ -13,9 +13,9 @@ KERIA submit the holder VP-JWT, then polls the verifier service operation that
 KERIA created. CLI-style stdin commands, verifier test doubles, direct verifier
 library calls, and fixture-only verifier responses are not acceptance evidence.
 
-Signing remains an edge operation. KERIA may stage exact signing inputs and
-verify submitted signatures, but wallet automation signs only policy-approved
-requests with the holder or issuer edge key material.
+Signing and W3C artifact assembly remain edge operations. The harness uses
+`signifypy-w3c` to build and sign VC-JWT and VP-JWT artifacts with holder or
+issuer edge key material. KERIA validates those artifacts and forwards them.
 
 It is not a production wallet SDK.
 
@@ -43,7 +43,7 @@ URLs for harness polling and container DNS submission URLs for KERIA.
 
 ## Evidence
 
-The output manifest records issuance, holder import/admit, presentation
-transactions, verifier operation evidence, negative cases, and dashboard
-webhook evidence when configured. Raw JWTs are redacted unless
+The output manifest records issuance, holder credential materialization,
+presentation results, verifier operation evidence, negative cases, and
+dashboard webhook evidence when configured. Raw JWTs are redacted unless
 `--unsafe-raw-tokens` is set for local debugging.

@@ -73,11 +73,11 @@ KERIA W3C workflow work. It is browserless, but it follows the same wallet
 roles as the React app:
 
 1. QVI edge starts W3C issuance from the native VRD.
-2. QVI edge signs issuer VC proof and VC-JWT requests.
-3. Holder receives the W3C grant, imports it, and signs holder admit.
-4. Holder starts KERIA presentation transactions from verifier descriptors.
-5. Holder edge signs VP-JWT requests only after approval binding checks pass.
-6. KERIA submits to live verifier services.
+2. QVI edge builds and signs the VC-JWT through `signifypy-w3c`.
+3. KERIA validates the VC-JWT and forwards the issuer-signed grant.
+4. Holder KERIA validates the grant and materializes the held W3C credential.
+5. Holder edge builds and signs VP-JWTs through `signifypy-w3c`.
+6. KERIA validates and submits to live verifier services.
 7. The harness polls Python, Node, and Go operation resources for evidence.
 
 Stack modes:
@@ -145,7 +145,7 @@ Use this order before collecting broad logs:
 7. status projection
 8. `did:webs` resolution
 9. W3C token issuance and verification
-10. holder import/admit state for headless or browser presentation
+10. holder W3C credential materialization for headless or browser presentation
 11. verifier service operation documents
 
 If you start from the JWT when registry state is wrong, you are debugging the

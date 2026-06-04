@@ -186,7 +186,6 @@ class ManagedProcessStack:
                 "KERIA_DID_WEBS_REGISTRY_NAME_PREFIX": "didwebs-designated-aliases",
                 "KERIA_W3C_ENABLED": "true",
                 "KERIA_W3C_STATUS_BASE_URL": f"http://{self.host}:{self.ports.keria_http}",
-                "KERIA_W3C_SIGNAL_INTERVAL_SECONDS": "1",
                 "PYTHONWARNINGS": "ignore",
             }
         )

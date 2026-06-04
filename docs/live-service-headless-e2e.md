@@ -15,9 +15,10 @@ The harness must validate against live services:
 Verifier test doubles, direct verifier library calls, CLI-only commands, and
 fixture-only verifier responses are not acceptance evidence.
 
-Signing stays at the edge. KERIA stages signing inputs and verifies submitted
-signatures. SignifyPy edge automators sign locally owned, policy-approved
-requests.
+Signing and W3C artifact assembly stay at the edge. The `signifypy-w3c` package
+builds and signs VC-JWT and VP-JWT artifacts with local SignifyPy keys. KERIA
+validates those artifacts, records state, and forwards issuer grants or
+verifier submissions.
 
 ## Stack Modes
 
@@ -40,14 +41,13 @@ requests.
 The happy path is:
 
 1. QVI edge starts W3C issuance from the native VRD credential.
-2. QVI `W3CEdgeAutomator` signs issuer VC proof and VC-JWT requests.
-3. KERIA finalizes the W3C VC-JWT.
-4. Holder receives the W3C grant, imports it, and signs holder admit.
-5. KERIA creates one holder presentation transaction per verifier service.
-6. Holder presentation policy records the approved audience, nonce, holder, and
-   source credential.
-7. Holder `W3CEdgeAutomator` signs the VP-JWT request only if the live KERIA
-   transaction still matches the approval.
+2. QVI edge builds and signs the VC-JWT using `signifypy-w3c`.
+3. KERIA validates and stores the VC-JWT.
+4. QVI edge signs the issuer grant EXN and KERIA forwards it to the holder.
+5. Holder KERIA validates the grant and materializes a held W3C credential.
+6. Holder edge builds and signs one VP-JWT per verifier descriptor using
+   `signifypy-w3c`.
+7. KERIA validates holder, credential, audience, nonce, and response binding.
 8. KERIA submits the VP-JWT to the verifier response URI.
 9. The harness polls the verifier operation documents and records evidence.
 
@@ -70,8 +70,8 @@ Common configuration sources:
 ## Evidence Manifest
 
 The output manifest includes sanitized runtime config, issuance state, holder
-import/admit evidence, presentation transactions, verifier operation evidence,
-negative-case evidence, and optional dashboard webhook evidence.
+credential materialization evidence, presentation results, verifier operation
+evidence, negative-case evidence, and optional dashboard webhook evidence.
 
 Raw JWTs are redacted by default. Use `--unsafe-raw-tokens` only for local
 debugging where signed artifacts are acceptable in logs.
@@ -81,16 +81,13 @@ debugging where signed artifacts are acceptable in logs.
 `missing verifier service URLs`
     All Python, Node, and Go verifier URLs are required.
 
-`pending_signature`
-    The relevant edge automator is not servicing KERIA signing requests, or the
-    signing policy rejected the request.
-
-`blocked_native_vrd`
-    The holder lacks the native VRD ACDC needed to import the W3C grant.
+`W3C issuance has no finalized VC-JWT to grant`
+    The issuer edge did not submit a VC-JWT that KERIA accepted before grant
+    delivery.
 
 `presentation requires exactly one eligible held credential`
-    Holder import/admit did not create exactly one eligible held W3C credential,
-    or duplicate eligible credentials exist.
+    Holder materialization did not create exactly one eligible held W3C
+    credential, or duplicate eligible credentials exist.
 
 `KERIA verifier response did not include a pollable operation name`
     The verifier service is not implementing the shared live-service operation

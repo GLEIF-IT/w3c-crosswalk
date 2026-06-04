@@ -211,7 +211,7 @@ class LiveVerifierService:
         return self.client.health()
 
     def descriptor(self, *, nonce: str | None = None, audience: str | None = None) -> dict[str, Any]:
-        """Build a verifier request descriptor accepted by KERIA ``present-txs``.
+        """Build a verifier request descriptor accepted by KERIA presentations.
 
         ``aud`` is bound into the VP-JWT. ``response_uri`` is where KERIA posts
         the signed VP. In Docker mode that URI may be container-internal while

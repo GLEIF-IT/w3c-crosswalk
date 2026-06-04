@@ -11,6 +11,7 @@ authors = [
 dependencies = [
     "requests>=2,<3",
     "signifypy @ git+https://github.com/kentbull/signifypy.git@5fc1ddd9952b39dec7e606c0a81894052cb089cd",
+    "signifypy-w3c>=0.1.0",
     "vc-isomer>=0.1.0",
 ]
 

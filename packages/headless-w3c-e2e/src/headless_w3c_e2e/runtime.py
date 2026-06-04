@@ -1,10 +1,10 @@
 """Executable live-stack runtime for the headless W3C holder E2E harness.
 
 The runtime is the browserless equivalent of the React holder flow. It connects
-real SignifyPy clients to live KERIA, drives edge automators for QVI issuance
-and LE holder presentation, and collects evidence from live Python, Node, and
-Go verifier HTTP services. It must not be replaced with verifier test doubles
-or CLI-only verification commands.
+real SignifyPy clients to live KERIA, builds W3C VC-JWT and VP-JWT artifacts at
+the edge, and collects evidence from live Python, Node, and Go verifier HTTP
+services. It must not be replaced with verifier test doubles or CLI-only
+verification commands.
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from signifypy_w3c import SignifyEdgeSigner
 from vc_isomer.jwt import decode_jwt, issue_vc_jwt, issue_vp_jwt
 
 from .scenario import HeadlessW3CE2E, ScenarioManifest
@@ -181,10 +182,10 @@ class HeadlessLiveRunConfig:
 def run_live_headless(config: HeadlessLiveRunConfig) -> dict[str, Any]:
     """Run the configured live headless holder presentation flow.
 
-    The flow starts W3C issuance from the QVI edge, imports/admites the holder
-    W3C credential, presents to each live verifier service, then polls verifier
-    operations for evidence. All signing uses SignifyPy keepers through
-    ``W3CEdgeAutomator`` or ``_SignifyEdgeSigner``.
+    The flow starts W3C issuance from the QVI edge, waits for holder W3C
+    credential materialization, presents to each live verifier service, then
+    polls verifier operations for evidence. VC-JWT and VP-JWT signing uses
+    SignifyPy keepers through ``signifypy-w3c``.
     """
     if config.stack not in {"attach", "process", "docker"}:
         raise HeadlessLiveConfigError(f"unsupported stack mode {config.stack!r}")
@@ -192,70 +193,14 @@ def run_live_headless(config: HeadlessLiveRunConfig) -> dict[str, Any]:
     signify = _load_signifypy()
     qvi_client = _connect_client(signify, config.qvi, config)
     holder_client = _connect_client(signify, config.holder, config)
-    holder_aid = _identifier_prefix(holder_client, config.holder.name)
-    approvals: dict[str, dict[str, Any]] = {}
-    holder_w3c = signify.W3C(holder_client)
-
-    def approve_presentation_tx(tx: dict[str, Any], descriptor: dict[str, Any]) -> None:
-        """Record the exact verifier request the holder edge is allowed to sign."""
-        present_tx_id = _present_tx_id(tx)
-        approvals[present_tx_id] = {
-            "aud": tx.get("aud") or descriptor.get("aud") or descriptor.get("client_id"),
-            "nonce": tx.get("nonce") or descriptor.get("nonce"),
-            "sourceCredentialSaid": config.source_credential_said,
-        }
-
-    def holder_signing_policy(request: dict[str, Any]) -> bool:
-        """Approve holder VP signing only for the live approved presentation tx."""
-        if signify.defaultSigningPolicy(request):
-            return True
-        if request.get("purpose") != signify.W3C_PURPOSE_HOLDER_VP_JWT:
-            return False
-        if request.get("name") != config.holder.name or request.get("aid") != holder_aid:
-            return False
-        present_tx_id = request.get("related")
-        if not isinstance(present_tx_id, str):
-            return False
-        approval = approvals.get(present_tx_id)
-        if approval is None:
-            return False
-        tx = holder_w3c.presentTx(config.holder.name, present_tx_id)
-        if tx.get("aud") != approval["aud"] or tx.get("nonce") != approval["nonce"]:
-            return False
-        selected = tx.get("selectedCredentialId")
-        if isinstance(selected, str) and selected:
-            held = holder_w3c.credential(config.holder.name, selected)
-            if held.get("sourceCredentialSaid") != approval["sourceCredentialSaid"]:
-                return False
-        return True
 
     services = LiveVerifierServiceSet.from_urls(
         config.verifier_urls,
         submission_urls=config.verifier_submission_urls,
     )
-    qvi_wallet = HeadlessW3CWallet.from_client(
-        config.qvi.name,
-        qvi_client,
-        automator=signify.W3CEdgeAutomator(
-            qvi_client,
-            store=signify.MemoryW3CAutomationStore(),
-        ),
-    )
-    holder_wallet = HeadlessW3CWallet.from_client(
-        config.holder.name,
-        holder_client,
-        automator=signify.W3CEdgeAutomator(
-            holder_client,
-            store=signify.MemoryW3CAutomationStore(),
-            signingPolicy=holder_signing_policy,
-        ),
-    )
-    scenario = HeadlessW3CE2E(
-        qvi_wallet,
-        holder_wallet,
-        services,
-        presentation_approver=approve_presentation_tx,
-    )
+    qvi_wallet = HeadlessW3CWallet.from_client(config.qvi.name, qvi_client)
+    holder_wallet = HeadlessW3CWallet.from_client(config.holder.name, holder_client)
+    scenario = HeadlessW3CE2E(qvi_wallet, holder_wallet, services)
 
     manifest = scenario.run_happy_path_for_services(config.source_credential_said)
     negative_evidence = _collect_negative_live_evidence(
@@ -422,7 +367,7 @@ def _collect_qvi_signed_vp_negative_cases(
         return [check]
 
     try:
-        signer = _SignifyEdgeSigner(qvi_client, qvi_name)
+        signer = SignifyEdgeSigner(qvi_client, qvi_name)
         token, _vp = issue_vp_jwt(
             [vc_token],
             holder_did=qvi_did,
@@ -480,7 +425,7 @@ def _collect_le_as_issuer_vc_negative_cases(
         return [check]
 
     try:
-        signer = _SignifyEdgeSigner(holder_client, holder_name)
+        signer = SignifyEdgeSigner(holder_client, holder_name)
         decoded = decode_jwt(vc_token)
         source_vc = decoded.payload.get("vc")
         if not isinstance(source_vc, dict):
@@ -737,13 +682,6 @@ def _load_signifypy():
         from keri import kering
         from keri.core.coring import Tiers
         from signify.app.clienting import SignifyClient
-        from signify.app.w3cing import (
-            MemoryW3CAutomationStore,
-            W3C,
-            W3CEdgeAutomator,
-            W3C_PURPOSE_HOLDER_VP_JWT,
-            defaultSigningPolicy,
-        )
     except ImportError as exc:
         raise HeadlessLiveDependencyError(
             "live headless runs require SignifyPy and KERIpy; install signifypy in this environment"
@@ -752,11 +690,6 @@ def _load_signifypy():
         ConfigurationError=kering.ConfigurationError,
         Tiers=Tiers,
         SignifyClient=SignifyClient,
-        W3C=W3C,
-        W3CEdgeAutomator=W3CEdgeAutomator,
-        MemoryW3CAutomationStore=MemoryW3CAutomationStore,
-        W3C_PURPOSE_HOLDER_VP_JWT=W3C_PURPOSE_HOLDER_VP_JWT,
-        defaultSigningPolicy=defaultSigningPolicy,
     )
 
 
@@ -765,33 +698,6 @@ class _SignifyPy:
     ConfigurationError: type[Exception]
     Tiers: Any
     SignifyClient: Any
-    W3C: Any
-    W3CEdgeAutomator: Any
-    MemoryW3CAutomationStore: Any
-    W3C_PURPOSE_HOLDER_VP_JWT: str
-    defaultSigningPolicy: Any
-
-
-class _SignifyEdgeSigner:
-    """SignerLike adapter over one local Signify-managed edge identifier."""
-
-    def __init__(self, client: Any, name: str):
-        """Resolve the local identifier and its current live edge signer."""
-        self.hab = client.identifiers().get(name)
-        self.keeper = client.manager.get(aid=self.hab)
-        signers = self.keeper.signers()
-        if not signers:
-            raise HeadlessLiveConfigError(f"identifier {name!r} did not expose an edge signer")
-        self.signer = signers[0]
-
-    @property
-    def kid(self) -> str:
-        """Return the current public key qb64 used as the JWT `kid` fragment."""
-        return self.signer.verfer.qb64
-
-    def sign(self, message: bytes) -> bytes:
-        """Sign JWT input bytes with the live edge key."""
-        return self.signer.sign(message).raw
 
 
 def _connect_client(signify: _SignifyPy, wallet: WalletConnection, config: HeadlessLiveRunConfig):
@@ -809,21 +715,6 @@ def _connect_client(signify: _SignifyPy, wallet: WalletConnection, config: Headl
         client.boot()
         client.connect()
     return client
-
-
-def _identifier_prefix(client, name: str) -> str:
-    aid = client.identifiers().get(name)
-    prefix = aid.get("prefix")
-    if not isinstance(prefix, str) or not prefix:
-        raise HeadlessLiveConfigError(f"identifier {name!r} did not return a prefix")
-    return prefix
-
-
-def _present_tx_id(tx: dict[str, Any]) -> str:
-    present_tx_id = tx.get("presentTxId") or tx.get("d")
-    if not isinstance(present_tx_id, str) or not present_tx_id:
-        raise HeadlessLiveConfigError(f"presentation transaction did not include an id: {tx!r}")
-    return present_tx_id
 
 
 def _load_manifest(path: str | None) -> dict[str, Any]:

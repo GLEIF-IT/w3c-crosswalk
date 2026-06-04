@@ -18,7 +18,7 @@ from .verifiers import (
     VerifierServiceClient,
     VerifierServiceError,
 )
-from .wallet import HeadlessW3CWallet, KeriaW3CApi
+from .wallet import HeadlessW3CWallet
 
 __all__ = [
     "HeadlessW3CE2E",
@@ -26,7 +26,6 @@ __all__ = [
     "HeadlessLiveDependencyError",
     "HeadlessLiveRunConfig",
     "HeadlessW3CWallet",
-    "KeriaW3CApi",
     "LiveVerifierService",
     "LiveVerifierServiceSet",
     "DockerStackError",

@@ -1,9 +1,9 @@
 """Scenario orchestration for the headless W3C holder E2E harness.
 
-The scenario intentionally follows the browser flow without a browser: QVI
-starts W3C issuance, the holder imports/admites the delivered credential, KERIA
-stages a holder presentation transaction, the edge signs the VP-JWT, and live
-verifier services provide operation evidence.
+The scenario follows the edge-owned browser model without a browser: the QVI
+edge builds and signs the VC-JWT, KERIA validates and forwards the issuer grant,
+the holder edge builds and signs the VP-JWT, and KERIA validates and forwards
+the verifier submission.
 """
 
 from __future__ import annotations
@@ -19,8 +19,6 @@ class ScenarioManifest:
 
     sourceCredentialSaid: str
     issuance: dict[str, Any]
-    holderImportRequest: dict[str, Any]
-    holderImportOutcomes: list[dict[str, Any]]
     holderCredentials: list[dict[str, Any]]
     presentationTx: dict[str, Any]
     verifierEvidence: dict[str, Any]
@@ -43,7 +41,6 @@ class HeadlessW3CE2E:
         qvi_wallet,
         holder_wallet,
         verifier_services,
-        presentation_approver=None,
         *,
         wait_timeout: float = 60.0,
         poll_interval: float = 0.5,
@@ -51,7 +48,6 @@ class HeadlessW3CE2E:
         self.qvi_wallet = qvi_wallet
         self.holder_wallet = holder_wallet
         self.verifier_services = verifier_services
-        self.presentation_approver = presentation_approver
         self.wait_timeout = wait_timeout
         self.poll_interval = poll_interval
 
@@ -64,12 +60,10 @@ class HeadlessW3CE2E:
         vp_jwt: str | None = None,
     ) -> ScenarioManifest:
         """Run the core issuer-holder-verifier flow and return evidence."""
-        issuance, holder_import_request, holder_import_outcomes, holder_credentials = self._issue_deliver_import(
-            source_credential_said
-        )
+        issuance, holder_credentials = self._issue_and_wait_for_holder_credential(source_credential_said)
+        credential_id = self._credential_id_for_source(holder_credentials, source_credential_said)
 
-        presentation_tx = self.holder_wallet.start_presentation(verifier_descriptor)
-        self._approve_presentation_tx(presentation_tx, verifier_descriptor)
+        presentation_tx = self.holder_wallet.present_credential(credential_id, verifier_descriptor)
         presentation_tx = self._wait_for_presentation_submission(presentation_tx)
 
         artifacts = self._artifact_bundle(
@@ -95,8 +89,6 @@ class HeadlessW3CE2E:
         return ScenarioManifest(
             sourceCredentialSaid=source_credential_said,
             issuance=issuance,
-            holderImportRequest=holder_import_request,
-            holderImportOutcomes=holder_import_outcomes,
             holderCredentials=holder_credentials,
             presentationTx=presentation_tx,
             verifierEvidence=verifier_evidence,
@@ -112,15 +104,10 @@ class HeadlessW3CE2E:
         *,
         nonces: dict[str, str] | None = None,
     ) -> ScenarioManifest:
-        """Run one KERIA-submitted holder presentation against each live service.
-
-        This is the acceptance path. The verifier set must expose real HTTP
-        services and pollable operations for Python, Node, and Go.
-        """
+        """Submit one holder-built VP-JWT to each live verifier service."""
         self.verifier_services.healthcheck_all()
-        issuance, holder_import_request, holder_import_outcomes, holder_credentials = self._issue_deliver_import(
-            source_credential_said
-        )
+        issuance, holder_credentials = self._issue_and_wait_for_holder_credential(source_credential_said)
+        credential_id = self._credential_id_for_source(holder_credentials, source_credential_said)
 
         artifacts_by_service: dict[str, dict[str, Any]] = {}
         presentation_txs: list[dict[str, Any]] = []
@@ -129,8 +116,7 @@ class HeadlessW3CE2E:
                 service_name,
                 nonce=None if nonces is None else nonces.get(service_name),
             )
-            presentation_tx = self.holder_wallet.start_presentation(verifier_descriptor)
-            self._approve_presentation_tx(presentation_tx, verifier_descriptor)
+            presentation_tx = self.holder_wallet.present_credential(credential_id, verifier_descriptor)
             presentation_tx = self._wait_for_presentation_submission(presentation_tx)
             presentation_txs.append(presentation_tx)
             artifacts_by_service[service_name] = self._artifact_bundle(
@@ -156,8 +142,6 @@ class HeadlessW3CE2E:
         return ScenarioManifest(
             sourceCredentialSaid=source_credential_said,
             issuance=issuance,
-            holderImportRequest=holder_import_request,
-            holderImportOutcomes=holder_import_outcomes,
             holderCredentials=holder_credentials,
             presentationTx=presentation_txs[-1] if presentation_txs else {},
             verifierEvidence=verifier_evidence,
@@ -170,73 +154,16 @@ class HeadlessW3CE2E:
             failures=failures,
         )
 
-    def _latest_presentation_tx(self, fallback: dict[str, Any]) -> dict[str, Any]:
-        if self.holder_wallet.present_txs:
-            return self.holder_wallet.present_txs[-1]
-        return fallback
+    def _issue_and_wait_for_holder_credential(self, source_credential_said: str):
+        """Run QVI edge issuance and wait for holder KERIA materialization."""
+        issuance = self.qvi_wallet.issue_credential(source_credential_said)
+        holder_credentials = self._wait_for_holder_credential(source_credential_said)
+        return issuance, holder_credentials
 
-    def _refresh_presentation_tx(self, fallback: dict[str, Any]) -> dict[str, Any]:
-        if hasattr(self.holder_wallet, "refresh_presentation"):
-            return self.holder_wallet.refresh_presentation(fallback)
-        return self._latest_presentation_tx(fallback)
-
-    def _approve_presentation_tx(self, presentation_tx: dict[str, Any], verifier_descriptor: dict[str, Any]) -> None:
-        if self.presentation_approver is not None:
-            self.presentation_approver(presentation_tx, verifier_descriptor)
-
-    def _issue_deliver_import(self, source_credential_said: str):
-        """Run QVI issuance and holder import/admit through live KERIA state."""
-        issuance = self.qvi_wallet.start_issuance(source_credential_said)
-        issuance = self._wait_for_issuance(issuance)
-        issuance = self.qvi_wallet.deliver_issuance_to_holder(self.holder_wallet, issuance)
-        holder_import_request = self._wait_for_holder_import_request(source_credential_said)
-        holder_import_outcomes, holder_credentials = self._wait_for_holder_credential(source_credential_said)
-        return issuance, holder_import_request, holder_import_outcomes, holder_credentials
-
-    def _wait_for_issuance(self, issuance: dict[str, Any]) -> dict[str, Any]:
+    def _wait_for_holder_credential(self, source_credential_said: str) -> list[dict[str, Any]]:
         deadline = time.monotonic() + self.wait_timeout
-        current = issuance
-        while True:
-            self.qvi_wallet.drain_automation(max_rounds=3)
-            current = self.qvi_wallet.refresh_issuance(current)
-            if current.get("state") in {"issued", "delivery_pending"} and current.get("vcJwt"):
-                return current
-            if current.get("state") == "failed":
-                raise RuntimeError(f"W3C issuance failed: {current!r}")
-            if time.monotonic() >= deadline:
-                raise TimeoutError(f"timed out waiting for W3C issuance to finalize; last_seen={current!r}")
-            time.sleep(self.poll_interval)
-
-    def _wait_for_holder_import_request(self, source_credential_said: str) -> dict[str, Any]:
-        deadline = time.monotonic() + self.wait_timeout
-        last_requests: list[dict[str, Any]] = []
-        while True:
-            last_requests = self.holder_wallet.w3c.import_requests(
-                self.holder_wallet.name,
-                include_complete=True,
-            )
-            matching = [
-                request
-                for request in last_requests
-                if request.get("sourceCredentialSaid") == source_credential_said
-            ]
-            if len(matching) == 1:
-                return matching[0]
-            if len(matching) > 1:
-                raise RuntimeError(f"holder has multiple W3C import requests for {source_credential_said}: {matching!r}")
-            if time.monotonic() >= deadline:
-                raise TimeoutError(
-                    "timed out waiting for holder W3C import request delivery; "
-                    f"last_requests={last_requests!r}"
-                )
-            time.sleep(self.poll_interval)
-
-    def _wait_for_holder_credential(self, source_credential_said: str):
-        deadline = time.monotonic() + self.wait_timeout
-        outcomes: list[dict[str, Any]] = []
         last_credentials: list[dict[str, Any]] = []
         while True:
-            outcomes.extend(self.holder_wallet.drain_automation(max_rounds=3))
             last_credentials = self.holder_wallet.refresh_credentials()
             matching = [
                 credential
@@ -245,18 +172,15 @@ class HeadlessW3CE2E:
             ]
             admitted = [credential for credential in matching if credential.get("state") == "admitted"]
             if len(admitted) == 1:
-                return outcomes, last_credentials
-
-            blocking = [
-                outcome
-                for outcome in outcomes
-                if outcome.get("outcome") in {"blocked", "failed", "rejected"}
-            ]
-            if blocking:
-                raise RuntimeError(f"W3C holder import failed or was blocked: {blocking!r}")
+                return last_credentials
+            if len(admitted) > 1:
+                raise RuntimeError(f"holder has multiple W3C credentials for {source_credential_said}: {admitted!r}")
+            failures = [credential for credential in matching if credential.get("state") == "failed"]
+            if failures:
+                raise RuntimeError(f"W3C holder credential materialization failed: {failures!r}")
             if time.monotonic() >= deadline:
                 raise TimeoutError(
-                    "timed out waiting for holder W3C credential import/admit; "
+                    "timed out waiting for holder W3C credential materialization; "
                     f"last_credentials={last_credentials!r}"
                 )
             time.sleep(self.poll_interval)
@@ -265,10 +189,8 @@ class HeadlessW3CE2E:
         deadline = time.monotonic() + self.wait_timeout
         current = presentation_tx
         while True:
-            self.holder_wallet.drain_automation(max_rounds=3)
-            current = self._refresh_presentation_tx(current)
             if (
-                current.get("state") == "submitted"
+                current.get("state") in {"submitted", "verified"}
                 and current.get("submissionState") == "submitted"
                 and isinstance(current.get("verifierResponse"), dict)
             ):
@@ -278,6 +200,22 @@ class HeadlessW3CE2E:
             if time.monotonic() >= deadline:
                 raise TimeoutError(f"timed out waiting for holder presentation submission; last_seen={current!r}")
             time.sleep(self.poll_interval)
+            current = self.holder_wallet.refresh_presentation(current)
+
+    @staticmethod
+    def _credential_id_for_source(holder_credentials: list[dict[str, Any]], source_credential_said: str) -> str:
+        matches = [
+            credential
+            for credential in holder_credentials
+            if credential.get("sourceCredentialSaid") == source_credential_said
+            and credential.get("state") == "admitted"
+        ]
+        if len(matches) != 1:
+            raise RuntimeError(f"expected exactly one admitted W3C credential for {source_credential_said}: {matches!r}")
+        credential_id = matches[0].get("credentialId") or matches[0].get("d")
+        if not isinstance(credential_id, str) or not credential_id:
+            raise RuntimeError(f"holder W3C credential has no id: {matches[0]!r}")
+        return credential_id
 
     @staticmethod
     def _artifact_bundle(

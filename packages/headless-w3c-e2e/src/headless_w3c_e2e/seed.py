@@ -5,8 +5,8 @@ This script is intentionally a workflow harness, not a shortcut. It talks to a
 running KERIA instance through SignifyPy, creates managed AIDs, resolves OOBIs,
 creates registries, issues the vLEI chain, admits each grant, waits for the QVI
 and LE did:webs DIDs to become ready, and writes a manifest that live
-holder-presentation acceptance tests can consume. KERIA may later stage W3C
-signing inputs, but the wallet edge remains responsible for every signature.
+holder-presentation acceptance tests can consume. W3C VC-JWT and VP-JWT
+artifacts are assembled later by edge wallet helpers.
 """
 
 from __future__ import annotations
