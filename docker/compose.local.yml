@@ -184,7 +184,10 @@ services:
         "http://vlei:7723",
         "--alias-prefix",
         "w3c-vrd",
-        "--unwitnessed",
+        "--witness",
+        "BBilc4-L3tFUnfM_wJr4S4OJanAv_VmF_dJNN6vkf2Ha",
+        "--witness-oobi",
+        "http://witness-demo:5642/oobi/BBilc4-L3tFUnfM_wJr4S4OJanAv_VmF_dJNN6vkf2Ha/controller?name=Wan&tag=witness",
         "--output",
         "/workspace/.tmp/local-stack/w3c-vrd-chain-manifest.json",
       ]
