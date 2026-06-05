@@ -30,7 +30,7 @@ from keri.help import helping
 from requests import HTTPError
 
 from signify.app.clienting import SignifyClient
-from signify.app.didwebing import DidWebs
+from signifypy_did_webs import ensure_didwebs_setup
 
 QVI_SCHEMA = "EBfdlu8R27Fbx-ehrqwImnK-8Cm79sqbAQ4MmvEAYqao"
 LE_SCHEMA = "ENPXp1vQzRF6JwIuS-mp2U8Uf1MoADoP_GqQ62VsDZWY"
@@ -98,7 +98,8 @@ def main() -> None:
     exchange_agent_oobis(actors)
 
     log("publishing QVI did:webs DID")
-    qvi_did = wait_for_didwebs_ready(qvi.client, qvi.name, qvi.aid, timeout=args.didwebs_timeout)
+    qvi_setup = ensure_didwebs_setup(qvi.client, qvi.name, timeout_seconds=args.didwebs_timeout)
+    qvi_did = didwebs_did(qvi_setup, qvi.name)
 
     log("creating credential registries")
     registries = {
@@ -125,7 +126,8 @@ def main() -> None:
         edges=source_edges("qvi", qvi_cred["received"]),
         rules=le_rules(),
     )
-    le_did = wait_for_didwebs_ready(le.client, le.name, le.aid, timeout=args.didwebs_timeout)
+    le_setup = ensure_didwebs_setup(le.client, le.name, timeout_seconds=args.didwebs_timeout)
+    le_did = didwebs_did(le_setup, le.name)
 
     log("issuing VRD Auth credential from LE to QVI")
     vrd_auth = issue_and_admit(
@@ -178,6 +180,7 @@ def main() -> None:
         },
         "didwebs": {
             "qvi": qvi_did,
+            "le": le_did,
         },
         "qviWallet": {
             "name": qvi.name,
@@ -405,34 +408,12 @@ def submit_admit(client: SignifyClient, *, holder_name: str, issuer_prefix: str,
     return client.ipex().submitAdmit(holder_name, exn=admit, sigs=sigs, atc=atc, recp=[issuer_prefix])
 
 
-def wait_for_didwebs_ready(client: SignifyClient, name: str, aid: str, *, timeout: float) -> str:
-    didwebs = DidWebs(client)
-    seen: set[str] = set()
-
-    def _ready():
-        try:
-            did = client.get(f"/identifiers/{name}/dws").json().get("dws")
-            if did:
-                return did
-        except HTTPError:
-            pass
-
-        for request in didwebs.requests(aid=aid):
-            if request["d"] in seen:
-                continue
-            result = didwebs.approve(request)
-            seen.add(request["d"])
-            if hasattr(result, "op"):
-                wait_for_operation(client, result.op())
-        return None
-
-    return poll_until(
-        _ready,
-        ready=lambda did: isinstance(did, str) and did.startswith("did:webs:"),
-        timeout=timeout,
-        interval=1.0,
-        describe=f"did:webs readiness for {name}",
-    )
+def didwebs_did(setup: dict[str, Any], name: str) -> str:
+    """Return a ready did:webs DID from a setup descriptor."""
+    did = setup.get("dws")
+    if not isinstance(did, str) or not did.startswith("did:webs:"):
+        raise RuntimeError(f"did:webs setup for {name} did not return a ready DID: {setup!r}")
+    return did
 
 
 def wait_for_operation(client: SignifyClient, operation: dict, *, timeout: float = 180.0) -> dict:

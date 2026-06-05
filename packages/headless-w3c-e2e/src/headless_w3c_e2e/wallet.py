@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from signifypy_did_webs import ensure_didwebs_setup
 from signifypy_w3c import W3CKeriaClient, issue_w3c_credential, present_w3c_credential
 
 
@@ -20,17 +21,42 @@ class HeadlessW3CWallet:
     name: str
     client: Any
     w3c: W3CKeriaClient
+    didwebs_timeout_seconds: float = 120.0
+    didwebs_interval_seconds: float = 1.0
     issuances: list[dict[str, Any]] = field(default_factory=list)
     held_credentials: list[dict[str, Any]] = field(default_factory=list)
     presentations: list[dict[str, Any]] = field(default_factory=list)
 
     @classmethod
-    def from_client(cls, name: str, client: Any):
+    def from_client(
+        cls,
+        name: str,
+        client: Any,
+        *,
+        didwebs_timeout_seconds: float = 120.0,
+        didwebs_interval_seconds: float = 1.0,
+    ):
         """Create a wallet actor from a connected SignifyPy-style client."""
-        return cls(name=name, client=client, w3c=W3CKeriaClient(client))
+        return cls(
+            name=name,
+            client=client,
+            w3c=W3CKeriaClient(client),
+            didwebs_timeout_seconds=didwebs_timeout_seconds,
+            didwebs_interval_seconds=didwebs_interval_seconds,
+        )
+
+    def ensure_didwebs(self) -> dict[str, Any]:
+        """Ensure this wallet identifier has ready did:webs assets."""
+        return ensure_didwebs_setup(
+            self.client,
+            self.name,
+            timeout_seconds=self.didwebs_timeout_seconds,
+            interval_seconds=self.didwebs_interval_seconds,
+        )
 
     def issue_credential(self, source_credential_said: str) -> dict[str, Any]:
         """Build, sign, validate, and deliver one issuer W3C credential."""
+        self.ensure_didwebs()
         issuance = issue_w3c_credential(
             client=self.client,
             issuer_name=self.name,
@@ -57,6 +83,7 @@ class HeadlessW3CWallet:
 
     def present_credential(self, credential_id: str, descriptor: dict[str, Any]) -> dict[str, Any]:
         """Build, sign, validate, and submit one holder VP-JWT."""
+        self.ensure_didwebs()
         presentation = present_w3c_credential(
             client=self.client,
             holder_name=self.name,

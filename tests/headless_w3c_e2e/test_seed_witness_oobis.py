@@ -15,6 +15,13 @@ def test_parser_has_no_witness_bootstrap_oobi_argument():
     assert not hasattr(args, "witness_oobi")
 
 
+def test_seed_uses_signifypy_did_webs_package_for_setup():
+    """Seed orchestration should not use old SignifyPy request polling."""
+    assert seed.ensure_didwebs_setup.__module__ == "signifypy_did_webs"
+    assert not hasattr(seed, "DidWebs")
+    assert not hasattr(seed, "wait_for_didwebs_ready")
+
+
 def test_exchange_witness_oobis_resolves_generated_role_oobis_into_every_actor(monkeypatch):
     """Actor witness OOBIs are generated after AID creation and resolved everywhere."""
     seen_gets: list[tuple[str, str]] = []
