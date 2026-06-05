@@ -108,8 +108,10 @@ test: test-cli test-fast test-integration
 smoke:
 	$(PYTHON) -m py_compile $$(find src/$(MODULE) -name '*.py' -print)
 	$(PYTHON) -m py_compile $$(find packages/signifypy-w3c/src/signifypy_w3c -name '*.py' -print)
+	$(PYTHON) -m py_compile $$(find packages/signifypy-did-webs/src/signifypy_did_webs -name '*.py' -print)
 	$(PYTHON) -c "import $(MODULE)"
 	$(PYTHON) -c "import signifypy_w3c"
+	$(PYTHON) -c "import signifypy_did_webs"
 	@if $(PYTHON) -c "import isomer" >/dev/null 2>&1; then \
 		echo 'unexpected importable compatibility package: isomer'; \
 		exit 1; \

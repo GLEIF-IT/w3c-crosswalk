@@ -27,7 +27,7 @@ test = [
 ]
 live = [
     "did-webs-resolver>=0.3.5,<0.4",
-    "signifypy @ git+https://github.com/kentbull/signifypy.git@5fc1ddd9952b39dec7e606c0a81894052cb089cd",
+    "signifypy @ git+https://github.com/kentbull/signifypy.git@b11001d54f9d0d9b8b7a49c0e09307e6252db291",
     "vlei>=1.0.2,<2",
 ]
 
@@ -46,10 +46,10 @@ default-groups = ["dev", "test", "live"]
 vlei = { git = "https://github.com/WebOfTrust/vLEI.git", rev = "f514b9431c5f965b5f7f64a8693e19df2f181564" }
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/vc_isomer", "packages/signifypy-w3c/src/signifypy_w3c"]
+packages = ["src/vc_isomer", "packages/signifypy-w3c/src/signifypy_w3c", "packages/signifypy-did-webs/src/signifypy_did_webs"]
 
 [tool.pytest.ini_options]
-pythonpath = [".", "packages/headless-w3c-e2e/src", "packages/signifypy-w3c/src"]
+pythonpath = [".", "packages/headless-w3c-e2e/src", "packages/signifypy-w3c/src", "packages/signifypy-did-webs/src"]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 addopts = "-q"

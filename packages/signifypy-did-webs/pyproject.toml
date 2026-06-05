@@ -1,0 +1,23 @@
+[project]
+name = "signifypy-did-webs"
+version = "0.1.0"
+description = "Blocking did:webs setup helpers for SignifyPy wallets"
+readme = "README.md"
+requires-python = ">=3.12.6,<3.14"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "Kent Bull", email = "kent@kentbull.com" }
+]
+dependencies = [
+    "signifypy @ git+https://github.com/kentbull/signifypy.git@b11001d54f9d0d9b8b7a49c0e09307e6252db291",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/signifypy_did_webs"]
