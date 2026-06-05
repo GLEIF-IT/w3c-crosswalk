@@ -1,0 +1,33 @@
+{
+  "name": "signify-did-webs",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Promise-based did:webs setup helpers for Signify wallets",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "prepare": "npm run build",
+    "test": "node --import tsx --test \"src/**/*.test.ts\""
+  },
+  "peerDependencies": {
+    "signify-ts": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.0",
+    "signify-ts": "github:kentbull/signify-ts#8bdeb48516b4a9d8d7e6818e0bc37e4b26908ec3",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}
