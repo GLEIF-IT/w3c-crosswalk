@@ -182,14 +182,16 @@ services:
       ISOMER_DASHBOARD_PORT: 8791
 
   signifypy-seed:
-    image: ${SIGNIFYPY_IMAGE}
+    image: ${ISOMER_PYTHON_IMAGE}
     profiles: ["seed"]
+    working_dir: /app/w3c-crosswalk
     extra_hosts:
       - "host.docker.internal:host-gateway"
     command:
       [
         "python",
-        "scripts/setup_vrd_holder_presentation_chain.py",
+        "-m",
+        "headless_w3c_e2e.seed",
         "--admin-url",
         "http://keria:3901",
         "--boot-url",
