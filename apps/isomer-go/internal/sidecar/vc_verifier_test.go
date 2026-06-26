@@ -64,6 +64,33 @@ func TestVerifyVCRejectsRevokedCredential(t *testing.T) {
 	mustError(t, result, "is revoked")
 }
 
+func TestVerifyVCRejectsIsomerSourceIssuerMismatch(t *testing.T) {
+	publicKey, privateKey := testKeyPair()
+	verifier, _ := newVerifierUnderTest(publicKey)
+	payload := validVCPayload("")
+	payload["iss"] = "did:webs:issuer.example:dws:ELEAID"
+	vc := payload["vc"].(map[string]any)
+	vc["issuer"] = "did:webs:issuer.example:dws:ELEAID"
+	vc["isomer"] = map[string]any{"sourceIssuerAid": "EQVIAID"}
+	token := makeSignedJWT(t, map[string]any{"alg": "EdDSA", "kid": "did:webs:issuer.example:dws:ELEAID#key-1"}, payload, privateKey)
+
+	result := verifier.VerifyVC(context.Background(), token)
+
+	mustError(t, result, "VC issuer DID does not match isomer source issuer AID")
+	if result.Checks["signatureValid"] != true {
+		t.Fatalf("expected signatureValid=true, got %#v", result.Checks)
+	}
+	if result.Checks["dataIntegrityProofValid"] != true {
+		t.Fatalf("expected dataIntegrityProofValid=true, got %#v", result.Checks)
+	}
+	if result.Checks["statusActive"] != true {
+		t.Fatalf("expected statusActive=true, got %#v", result.Checks)
+	}
+	if result.Checks["isomerSourceIssuerMatches"] != false {
+		t.Fatalf("expected failed source issuer check, got %#v", result.Checks)
+	}
+}
+
 func TestVerifyVCTreatsMissingStatusURLAsActive(t *testing.T) {
 	publicKey, privateKey := testKeyPair()
 	verifier, status := newVerifierUnderTest(publicKey)

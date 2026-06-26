@@ -9,7 +9,10 @@ import (
 	"time"
 )
 
-// Server owns the HTTP surface for the Go verifier sidecar.
+// Server owns the HTTP surface for the Go verifier sidecar. The live holder
+// E2E harness validates this process through HTTP submissions and pollable
+// operations; test-only injected verifier seams must not replace this service
+// in acceptance runs.
 type Server struct {
 	config     Config
 	verifier   Verifier
@@ -127,24 +130,30 @@ func (s *Server) verifyVP(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "error": "verification request requires token"})
 		return
 	}
-	logVerificationReceived(s.config, "/verify/vp", "vp+jwt", "", request.Token)
-	defer func() {
-		if recovered := recover(); recovered != nil {
-			logVerificationError(s.config, "vp+jwt", "", recovered)
-			panic(recovered)
+	operation := s.operations.submit("verify-vp", func(ctx context.Context, operationName string) *verificationResult {
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				logVerificationError(s.config, "vp+jwt", operationName, recovered)
+				panic(recovered)
+			}
+		}()
+		result := s.verifier.VerifyVP(ctx, request.Token, request.Audience, request.Nonce)
+		if result.OK {
+			if warning := s.webhook.SendPresentation(ctx, result); warning != "" {
+				result.Warnings = append(result.Warnings, warning)
+			}
 		}
-	}()
-	result := s.verifier.VerifyVP(r.Context(), request.Token, request.Audience, request.Nonce)
-	if result.OK {
-		if warning := s.webhook.SendPresentation(r.Context(), result); warning != "" {
-			result.Warnings = append(result.Warnings, warning)
-		}
-	}
-	logVerificationResult(s.config, "vp+jwt", "", result)
-	writeJSON(w, http.StatusOK, result)
+		logVerificationResult(s.config, "vp+jwt", operationName, result)
+		return result
+	})
+	logVerificationReceived(s.config, "/verify/vp", "vp+jwt", operation.Name, request.Token)
+	writeJSON(w, http.StatusAccepted, operation)
 }
 
 func (s *Server) listOperations(w http.ResponseWriter, r *http.Request) {
+	// Operations are the shared live-service evidence contract across Python,
+	// Node, and Go. KERIA posts the VP to /verify/vp; the harness polls here to
+	// prove the Go verifier completed that exact request.
 	writeJSON(w, http.StatusOK, s.operations.list(r.URL.Query().Get("type")))
 }
 

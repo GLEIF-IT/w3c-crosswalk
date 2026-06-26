@@ -21,9 +21,39 @@ interop behavior.
 
 ## Durable Decisions
 
+### Holder Presentation Boundary
+
+- W3C holder presentation verification must bind three separate facts:
+  QVI-issued VC issuer DID, LE-signed VP holder DID, and verifier request
+  binding through `aud` and `nonce`.
+- A verifier accepting a QVI-signed VP is a boundary bug. The QVI issues the
+  VC; the LE holder presents it.
+- A verifier accepting an LE-as-issuer VC is also a boundary bug for VRD W3C
+  credentials. The final VRD W3C VC issuer is QVI did:webs and the subject is
+  LE did:webs.
+- `headless-w3c-e2e` is the Python-first acceptance harness boundary under
+  `packages/headless-w3c-e2e`; it is an integration-style E2E utility. Fake
+  in-process verifier callables, CLI-only verifier commands, and fixture-only
+  verifier responses are not acceptance evidence. Signing artifacts and live
+  acceptance must come from real KERI-backed signers and live verifier services.
+- `headless-w3c-e2e` now exposes live HTTP verifier service clients instead of
+  `CommandVerifier`/callable verifier suites. Acceptance evidence is collected
+  from KERIA-created verifier operations after KERIA submits the holder VP-JWT.
+  Direct harness POSTs are diagnostic only and are not the holder presentation
+  path under test.
+- Python, Node, and Go verifier services enforce holder-role semantics in the
+  W3C service path: successful embedded VC `credentialSubject.id` values must
+  match `vp.holder`, and Isomer `sourceIssuerAid` must match the terminal AID
+  segment of `vc.issuer`. This makes QVI-signed VPs and LE-as-issuer VCs live
+  service rejections, not only Python pair-verifier policy failures.
+
 ### Signing
 
 - Use live KERIpy habitats (`Hab`, `Habery`) for signing.
+- For KERIA W3C issuance and holder presentation, W3C artifact assembly and
+  signing happen at the Signify edge. KERIA validates edge-provided VC-JWT and
+  VP-JWT artifacts, records state, and forwards traffic, but it must not stage
+  signing inputs or sign W3C token material server-side.
 - Stable salts, passcodes, and aliases are acceptable for deterministic tests.
 - Do not reintroduce deterministic demo signers.
 
@@ -32,6 +62,13 @@ interop behavior.
 - W3C key-state verification goes through `did-webs-resolver`.
 - Do not bypass DID resolution with embedded JWK shortcuts.
 - Preserve query-bearing DID URLs such as `?versionId=...`.
+- KERIA startup `iurls` for local witnessed stacks should use the bare demo
+  witness OOBIs (`/oobi/<witnessAid>`), not the witness controller route
+  (`/controller?name=...&tag=witness`). Those OOBIs must expose KEL plus
+  `/end/role/add` and `/loc/scheme` replies from witness `curls`.
+- Actor-specific witness-role OOBIs (`/oobi/<actorAid>/witness/<witnessAid>`)
+  are generated only after actor AIDs exist and should be exchanged then; they
+  cannot be static KERIA startup `iurls`.
 
 ### Data Integrity And JSON-LD
 

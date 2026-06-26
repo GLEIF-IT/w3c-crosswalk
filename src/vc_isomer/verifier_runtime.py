@@ -158,7 +158,13 @@ class VerificationJobDoer(doing.DoDoer):
         for vc_token in prepared.vc_tokens:
             nested_results.append((yield from self._verify_vc_token(vc_token)))
 
-        result = self.engine.evaluate_prepared_vp(prepared, method=method, nested_results=nested_results)
+        result = self.engine.evaluate_prepared_vp(
+            prepared,
+            method=method,
+            nested_results=nested_results,
+            expected_audience=request.get("audience"),
+            expected_nonce=request.get("nonce"),
+        )
         if result.ok:
             warning = yield from self._send_presentation_webhook(result)
             if warning:
@@ -216,7 +222,7 @@ class VerificationJobDoer(doing.DoDoer):
             ) from exc
         return status_doc
 
-    def _request_json(self, *, method: str, url: str, body: Any | None = None, timeout: float = 10.0):
+    def _request_json(self, *, method: str, url: str, body: Any | None = None, timeout: float = 30.0):
         """Run one outbound HTTP request as a child doer and yield until it completes."""
         request_doer = JsonRequestDoer(
             method=method,

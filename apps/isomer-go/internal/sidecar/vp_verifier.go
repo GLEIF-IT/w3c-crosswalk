@@ -3,6 +3,7 @@ package sidecar
 import (
 	"context"
 	"fmt"
+	"strings"
 )
 
 // vpChecks records which VP verification stages completed successfully.
@@ -10,6 +11,7 @@ type vpChecks struct {
 	JWTEnvelopeValid            bool
 	SignatureValid              bool
 	VCGoParsed                  bool
+	EmbeddedSubjectsMatchHolder bool
 	EmbeddedCredentialsVerified int
 }
 
@@ -17,10 +19,11 @@ type vpChecks struct {
 // the sidecar HTTP API.
 func (c vpChecks) mapValue() map[string]any {
 	return map[string]any{
-		"jwtEnvelopeValid":            c.JWTEnvelopeValid,
-		"signatureValid":              c.SignatureValid,
-		"vcGoParsed":                  c.VCGoParsed,
-		"embeddedCredentialsVerified": c.EmbeddedCredentialsVerified,
+		"jwtEnvelopeValid":                      c.JWTEnvelopeValid,
+		"signatureValid":                        c.SignatureValid,
+		"vcGoParsed":                            c.VCGoParsed,
+		"embeddedCredentialSubjectsMatchHolder": c.EmbeddedSubjectsMatchHolder,
+		"embeddedCredentialsVerified":           c.EmbeddedCredentialsVerified,
 	}
 }
 
@@ -95,6 +98,11 @@ func (v *verifier) verifyNestedCredentials(
 		return fmt.Errorf("vp.verifiableCredential must be a list")
 	}
 
+	holder := asString(vp["holder"])
+	if holder == "" {
+		return fmt.Errorf("VP holder DID is missing")
+	}
+	subjectsMatchHolder := true
 	for _, credential := range credentials {
 		token, ok := credential.(string)
 		if !ok {
@@ -110,9 +118,63 @@ func (v *verifier) verifyNestedCredentials(
 			for _, nestedErr := range nested.Errors {
 				result.Errors = append(result.Errors, "nested credential: "+nestedErr)
 			}
+			continue
+		}
+
+		checks.EmbeddedCredentialsVerified += 1
+		if !embeddedSubjectMatchesHolder(holder, nested) {
+			result.Errors = append(result.Errors, "embedded credential subject DID does not match VP holder")
+			subjectsMatchHolder = false
 		}
 	}
 
-	checks.EmbeddedCredentialsVerified = len(result.Nested)
+	checks.EmbeddedSubjectsMatchHolder = subjectsMatchHolder
 	return nil
+}
+
+// embeddedSubjectMatchesHolder binds a successful nested VC subject to the
+// top-level VP holder DID.
+func embeddedSubjectMatchesHolder(holder string, nested *verificationResult) bool {
+	payload := nested.Payload
+	if payload == nil {
+		return false
+	}
+	subject := asMap(payload["credentialSubject"])
+	if subject == nil {
+		return false
+	}
+	subjectID := asString(subject["id"])
+	return subjectID != "" && canonicalizeDIDWebs(subjectID) == canonicalizeDIDWebs(holder)
+}
+
+// canonicalizeDIDWebs repairs the common local-stack did:webs host:port
+// encoding variant before DID comparison.
+func canonicalizeDIDWebs(value string) string {
+	if !strings.HasPrefix(value, "did:webs:") || strings.Contains(strings.ToLower(value), "%3a") {
+		return value
+	}
+
+	body, query, hasQuery := strings.Cut(value, "?")
+	segments := strings.Split(strings.TrimPrefix(body, "did:webs:"), ":")
+	if len(segments) < 3 || !isDecimalPort(segments[1]) {
+		return value
+	}
+
+	normalized := "did:webs:" + segments[0] + "%3A" + segments[1] + ":" + strings.Join(segments[2:], ":")
+	if hasQuery {
+		return normalized + "?" + query
+	}
+	return normalized
+}
+
+func isDecimalPort(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, char := range value {
+		if char < '0' || char > '9' {
+			return false
+		}
+	}
+	return true
 }

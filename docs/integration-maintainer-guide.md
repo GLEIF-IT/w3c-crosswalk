@@ -66,6 +66,30 @@ proceeds through:
 The key boundary is between phase 6 and phase 9. Phase 9 onward is projection,
 not issuance.
 
+## Headless Holder E2E
+
+`packages/headless-w3c-e2e` validates the holder-based W3C VRD path after the
+KERIA W3C workflow work. It is browserless, but it follows the same wallet
+roles as the React app:
+
+1. QVI edge starts W3C issuance from the native VRD.
+2. QVI edge builds and signs the VC-JWT through `signifypy-w3c`.
+3. KERIA validates the VC-JWT and forwards the issuer-signed grant.
+4. Holder KERIA validates the grant and materializes the held W3C credential.
+5. Holder edge builds and signs VP-JWTs through `signifypy-w3c`.
+6. KERIA validates and submits to live verifier services.
+7. The harness polls Python, Node, and Go operation resources for evidence.
+
+Stack modes:
+
+- `attach`: use an already-running service graph.
+- `process`: start real local processes.
+- `docker`: use the portable compose stack.
+
+Do not replace any verifier with an in-process callable for this acceptance
+path. Unit tests may use fakes to cover route contracts, but holder E2E
+evidence must come from live HTTP services.
+
 ## Mailbox Sync Before Admit
 
 `AdmitDoer` expects the referenced `/ipex/grant` exchange message to already
@@ -93,7 +117,9 @@ really mailbox sequencing bugs.
 - `verifier_client.py` is the CLI/integration client for operation flows.
 - `cli/` composes runtime seams by command family.
 
-The CLI package is not the architecture. Runtime modules are the architecture.
+The CLI package is not the architecture. Runtime modules and live services are
+the architecture. The CLI walkthrough is useful diagnostics, not holder
+presentation acceptance evidence.
 
 ## Current Debt
 
@@ -119,6 +145,8 @@ Use this order before collecting broad logs:
 7. status projection
 8. `did:webs` resolution
 9. W3C token issuance and verification
+10. holder W3C credential materialization for headless or browser presentation
+11. verifier service operation documents
 
 If you start from the JWT when registry state is wrong, you are debugging the
 shadow instead of the source.

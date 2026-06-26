@@ -1,5 +1,10 @@
 # CLI End-to-End Walkthrough
 
+This walkthrough is a manual diagnostic runbook for CLI boundaries. It is not
+holder-based W3C VRD presentation acceptance evidence. Use
+`docs/live-service-headless-e2e.md` and the live Python, Node, and Go verifier
+services for that acceptance path.
+
 This is the manual runbook for the Isomer CLI boundary:
 
 - project TEL-backed credential status

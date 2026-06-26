@@ -201,20 +201,28 @@ func TestVerifyVPHandlerPassesAudienceAndNonce(t *testing.T) {
 	}
 	server := newServerWithVerifier(Config{}, verifier)
 
+	var name string
 	logs := captureLogs(t, func() {
 		response := sendRequest(t, server.handler(), http.MethodPost, "/verify/vp", `{"token":"abc","audience":"aud","nonce":"n-1"}`)
-		if response.Code != http.StatusOK {
-			t.Fatalf("expected 200, got %d", response.Code)
+		if response.Code != http.StatusAccepted {
+			t.Fatalf("expected 202, got %d", response.Code)
+		}
+		body := decodeBody(t, response)
+		name, _ = body["name"].(string)
+		completed := waitForOperation(t, server.handler(), name)
+		metadata, _ := completed["metadata"].(map[string]any)
+		if metadata["state"] != "completed" {
+			t.Fatalf("expected completed operation, got %#v", completed)
 		}
 		if verifier.lastVPToken != "abc" || verifier.lastVPAud != "aud" || verifier.lastVPNonce != "n-1" {
 			t.Fatalf("unexpected verifier inputs: token=%q audience=%q nonce=%q", verifier.lastVPToken, verifier.lastVPAud, verifier.lastVPNonce)
 		}
 	})
-	received := findLog(t, logs, "verification.received", map[string]any{"artifactKind": "vp+jwt"})
+	received := findLog(t, logs, "verification.received", map[string]any{"operationName": name})
 	if received["route"] != "/verify/vp" || received["token"] != "abc" {
 		t.Fatalf("unexpected received log: %#v", received)
 	}
-	resultLog := findLog(t, logs, "verification.result", map[string]any{"artifactKind": "vp+jwt"})
+	resultLog := findLog(t, logs, "verification.result", map[string]any{"operationName": name})
 	if resultLog["ok"] != true || resultLog["kind"] != "vp+jwt" {
 		t.Fatalf("unexpected result log: %#v", resultLog)
 	}
@@ -234,8 +242,15 @@ func TestVerifyVPHandlerSendsWebhookAfterSuccess(t *testing.T) {
 	server := newServerWithVerifierAndWebhook(Config{WebhookURL: "http://dashboard.test/webhooks/presentations"}, verifier, webhook)
 
 	response := sendRequest(t, server.handler(), http.MethodPost, "/verify/vp", `{"token":"abc"}`)
-	if response.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", response.Code)
+	if response.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d", response.Code)
+	}
+	body := decodeBody(t, response)
+	name, _ := body["name"].(string)
+	completed := waitForOperation(t, server.handler(), name)
+	metadata, _ := completed["metadata"].(map[string]any)
+	if metadata["state"] != "completed" {
+		t.Fatalf("expected completed operation, got %#v", completed)
 	}
 	if webhook.presentationCalls != 1 {
 		t.Fatalf("expected one presentation webhook call, got %d", webhook.presentationCalls)
@@ -301,20 +316,23 @@ func TestVerifyHandlersRequireToken(t *testing.T) {
 	}
 }
 
-func TestRecoverHandlerReturnsJSONOnVPVerifierPanic(t *testing.T) {
+func TestVerifyVPHandlerStoresFailedOperation(t *testing.T) {
 	server := newServerWithVerifier(Config{}, &fakeVerifier{vpPanic: true})
 
 	response := sendRequest(t, server.handler(), http.MethodPost, "/verify/vp", `{"token":"abc"}`)
-	if response.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d", response.Code)
+	if response.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d", response.Code)
 	}
 	body := decodeBody(t, response)
-	if body["kind"] != "sidecar" {
-		t.Fatalf("expected sidecar panic body, got %#v", body)
+	name, _ := body["name"].(string)
+	failed := waitForOperation(t, server.handler(), name)
+	metadata, _ := failed["metadata"].(map[string]any)
+	if metadata["state"] != "failed" {
+		t.Fatalf("expected failed operation, got %#v", failed)
 	}
-	errors, _ := body["errors"].([]any)
-	if len(errors) != 1 || !strings.Contains(errors[0].(string), "sidecar panic") {
-		t.Fatalf("expected panic error, got %#v", body)
+	errorBody, _ := failed["error"].(map[string]any)
+	if errorBody["code"] != float64(http.StatusInternalServerError) || !strings.Contains(errorBody["message"].(string), "sidecar panic") {
+		t.Fatalf("expected panic operation error, got %#v", failed)
 	}
 }
 

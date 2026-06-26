@@ -149,6 +149,33 @@ test("verifyVcOp fails when status marks the credential revoked", async () => {
   assert.equal(result.checks.statusActive, false);
 });
 
+test("verifyVcOp rejects an Isomer VC whose issuer DID does not match sourceIssuerAid", async () => {
+  const runtime = createTestVerifierRuntime();
+  const vc = {
+    ...cloneValue(VC_PAYLOAD),
+    issuer: "did:webs:issuer.example:dws:ELEAID",
+    isomer: {
+      sourceIssuerAid: "EQVIAID"
+    }
+  };
+
+  const result = await run(() => verifyVcOp(runtime, encodeJwt({
+    iss: "did:webs:issuer.example:dws:ELEAID",
+    sub: "did:webs:holder",
+    jti: "urn:example:vc",
+    iat: 1704067200,
+    nbf: 1704067200,
+    vc
+  }, { kid: "did:webs:issuer.example:dws:ELEAID#key-1" })));
+
+  assert.equal(result.ok, false);
+  assert.equal(result.checks.signatureValid, true);
+  assert.equal(result.checks.dataIntegrityProofValid, true);
+  assert.equal(result.checks.statusActive, true);
+  assert.equal(result.checks.isomerSourceIssuerMatches, false);
+  assert.deepEqual(result.errors, ["VC issuer DID does not match isomer source issuer AID"]);
+});
+
 test("verifyVpOp succeeds for a valid VP with one valid nested VC", async () => {
   const runtime = createTestVerifierRuntime();
   const embedded = encodeJwt({
@@ -176,6 +203,35 @@ test("verifyVpOp succeeds for a valid VP with one valid nested VC", async () => 
   assert.equal(result.checks.embeddedCredentialsVerified, 1);
   assert.equal(result.nested.length, 1);
   assert.equal(result.nested[0]?.ok, true);
+});
+
+test("verifyVpOp rejects a VP whose holder does not match the embedded VC subject", async () => {
+  const runtime = createTestVerifierRuntime();
+  const embedded = encodeJwt({
+    iss: "did:webs:issuer",
+    sub: "did:webs:holder",
+    jti: "urn:example:vc",
+    iat: 1704067200,
+    nbf: 1704067200,
+    vc: cloneValue(VC_PAYLOAD)
+  }, { kid: "did:webs:issuer#key-1" });
+
+  const result = await run(() => verifyVpOp(runtime, encodeJwt({
+    iss: "did:webs:qvi",
+    aud: "https://verifier.example",
+    nonce: "expected-nonce",
+    iat: 1704067200,
+    vp: {
+      holder: "did:webs:qvi",
+      verifiableCredential: [embedded]
+    }
+  }), { audience: "https://verifier.example", nonce: "expected-nonce" }));
+
+  assert.equal(result.ok, false);
+  assert.equal(result.checks.signatureValid, true);
+  assert.equal(result.checks.embeddedCredentialsVerified, 1);
+  assert.equal(result.checks.embeddedCredentialSubjectsMatchHolder, false);
+  assert.deepEqual(result.errors, ["embedded credential subject DID does not match VP holder"]);
 });
 
 test("verifyVpOp fails when audience does not match expected value", async () => {

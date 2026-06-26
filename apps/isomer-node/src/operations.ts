@@ -47,7 +47,7 @@ export class InMemoryOperationMonitor {
   private readonly records = new Map<string, OperationRecord>();
 
   submit(
-    type: "verify-vc",
+    type: "verify-vc" | "verify-vp",
     task: (name: string) => Promise<VerificationResult>
   ): PendingOperationDocument {
     const now = new Date().toISOString();

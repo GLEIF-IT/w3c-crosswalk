@@ -72,7 +72,8 @@ test("vc route returns 202 and stores a pending operation", async () => {
       jwtEnvelopeValid: true,
       signatureValid: true,
       dataIntegrityProofValid: true,
-      statusActive: true
+      statusActive: true,
+      isomerSourceIssuerMatches: true
     }
   };
   let receivedToken: string | undefined;
@@ -171,6 +172,7 @@ test("vp route forwards audience and nonce", async () => {
     checks: {
       jwtEnvelopeValid: true,
       signatureValid: true,
+      embeddedCredentialSubjectsMatchHolder: true,
       embeddedCredentialsVerified: 1
     },
     nested: [{
@@ -183,7 +185,8 @@ test("vp route forwards audience and nonce", async () => {
         jwtEnvelopeValid: true,
         signatureValid: true,
         dataIntegrityProofValid: true,
-        statusActive: true
+        statusActive: true,
+        isomerSourceIssuerMatches: true
       }
     }]
   };
@@ -200,6 +203,7 @@ test("vp route forwards audience and nonce", async () => {
     }
   }));
 
+  let operationName = "";
   const logs = await captureConsoleLogs(async () => {
     const response = await app.fetch(new Request("http://localhost/verify/vp", {
       method: "POST",
@@ -211,19 +215,23 @@ test("vp route forwards audience and nonce", async () => {
       })
     }));
 
+    assert.equal(response.status, 202);
+    const operation = await response.json();
+    operationName = operation.name;
+    const completed = await waitForOperation(app, operation.name);
     assert.deepEqual(received, {
       token: "vp-token",
       audience: "https://verifier.example",
       nonce: "expected-nonce"
     });
-    assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), result);
+    assert.equal(completed.metadata.state, "completed");
+    assert.deepEqual(completed.response, result);
   });
 
-  const receivedLog = findLog(logs, "verification.received", { artifactKind: "vp+jwt" });
+  const receivedLog = findLog(logs, "verification.received", { operationName });
   assert.equal(receivedLog.route, "/verify/vp");
   assert.equal(receivedLog.token, "vp-token");
-  const resultLog = findLog(logs, "verification.result", { artifactKind: "vp+jwt" });
+  const resultLog = findLog(logs, "verification.result", { operationName });
   assert.equal(resultLog.ok, true);
   assert.equal(resultLog.kind, "vp+jwt");
 });
@@ -238,6 +246,7 @@ test("vp route sends webhook only after successful presentation verification", a
     checks: {
       jwtEnvelopeValid: true,
       signatureValid: true,
+      embeddedCredentialSubjectsMatchHolder: true,
       embeddedCredentialsVerified: 0
     },
     nested: []
@@ -254,6 +263,7 @@ test("vp route sends webhook only after successful presentation verification", a
     }
   );
 
+  let operationName = "";
   const logs = await captureConsoleLogs(async () => {
     const response = await app.fetch(new Request("http://localhost/verify/vp", {
       method: "POST",
@@ -261,12 +271,16 @@ test("vp route sends webhook only after successful presentation verification", a
       body: JSON.stringify({ token: "vp-token" })
     }));
 
-    assert.equal(response.status, 200);
+    assert.equal(response.status, 202);
+    const operation = await response.json();
+    operationName = operation.name;
+    const completed = await waitForOperation(app, operation.name);
+    assert.equal(completed.metadata.state, "completed");
     assert.equal(webhookCalls, 1);
-    assert.deepEqual(await response.json(), result);
+    assert.deepEqual(completed.response, result);
   });
-  assert.equal(findLog(logs, "verification.received", { artifactKind: "vp+jwt" }).token, "vp-token");
-  assert.equal(findLog(logs, "verification.result", { artifactKind: "vp+jwt" }).ok, true);
+  assert.equal(findLog(logs, "verification.received", { operationName }).token, "vp-token");
+  assert.equal(findLog(logs, "verification.result", { operationName }).ok, true);
 });
 
 test("vc route sends webhook after successful credential verification", async () => {
@@ -322,7 +336,8 @@ function createStubVerifier(overrides: {
             jwtEnvelopeValid: true,
             signatureValid: true,
             dataIntegrityProofValid: true,
-            statusActive: true
+            statusActive: true,
+            isomerSourceIssuerMatches: true
           }
         };
       }),
@@ -337,6 +352,7 @@ function createStubVerifier(overrides: {
           checks: {
             jwtEnvelopeValid: true,
             signatureValid: true,
+            embeddedCredentialSubjectsMatchHolder: true,
             embeddedCredentialsVerified: 0
           },
           nested: []

@@ -139,7 +139,7 @@ def test_verifier_runtime_completes_vc_operation_via_hio_doers(tmp_path, caplog)
 
     with open_test_hab("runtime-issuer-hab", b"1122334455667788") as (_hby, hab):
         signer = HabSigner(hab)
-        issuer_did = "did:webs:example.com:dws:ELEGALAID000000000000000000000000000000000000000001"
+        issuer_did = f"did:webs:example.com:dws:{acdc['i']}"
         resolver_port = _free_port()
         status_port = _free_port()
         verifier_port = _free_port()
@@ -228,7 +228,7 @@ def test_verifier_runtime_posts_webhook_for_successful_vc_operation(tmp_path, ca
 
     with open_test_hab("runtime-webhook-vc", b"1122334455667788") as (_hby, hab):
         signer = HabSigner(hab)
-        issuer_did = "did:webs:example.com:dws:ELEGALAID000000000000000000000000000000000000000001"
+        issuer_did = f"did:webs:example.com:dws:{acdc['i']}"
         resolver_port = _free_port()
         status_port = _free_port()
         webhook_port = _free_port()
@@ -322,29 +322,55 @@ def test_verifier_runtime_posts_webhook_for_successful_vp_operation(tmp_path, ca
     caplog.set_level(logging.INFO, logger="vc_isomer.verifier")
     acdc = load_json_file(FIXTURES / "vrd-acdc.json")
 
-    with open_test_hab("runtime-webhook-vp", b"1122334455667788") as (_hby, hab):
-        signer = HabSigner(hab)
-        issuer_did = "did:webs:example.com:dws:ELEGALAID000000000000000000000000000000000000000001"
+    with (
+        open_test_hab("runtime-webhook-vp-issuer", b"1122334455667788") as (_hby_issuer, issuer_hab),
+        open_test_hab("runtime-webhook-vp-holder", b"8877665544332211") as (_hby_holder, holder_hab),
+    ):
+        issuer_signer = HabSigner(issuer_hab)
+        holder_signer = HabSigner(holder_hab)
+        issuer_did = f"did:webs:example.com:dws:{acdc['i']}"
+        holder_did = acdc["a"]["DID"]
         resolver_port = _free_port()
         status_port = _free_port()
         webhook_port = _free_port()
         verifier_port = _free_port()
 
-        did_document = {
+        issuer_did_document = {
             "id": issuer_did,
             "verificationMethod": [{
-                "id": f"#{signer.kid}",
+                "id": f"#{issuer_signer.kid}",
                 "type": "JsonWebKey",
                 "controller": issuer_did,
-                "publicKeyJwk": signer.public_jwk,
+                "publicKeyJwk": issuer_signer.public_jwk,
+            }],
+        }
+        holder_did_document = {
+            "id": holder_did,
+            "verificationMethod": [{
+                "id": f"#{holder_signer.kid}",
+                "type": "JsonWebKey",
+                "controller": holder_did,
+                "publicKeyJwk": holder_signer.public_jwk,
             }],
         }
         status_base_url = f"http://127.0.0.1:{status_port}"
-        vc_token, _vc = _issue_projected_fixture(acdc, issuer_did=issuer_did, status_base_url=status_base_url, signer=signer)
-        vp_token, _vp = issue_vp_jwt([vc_token], holder_did=issuer_did, signer=signer)
+        vc_token, _vc = _issue_projected_fixture(acdc, issuer_did=issuer_did, status_base_url=status_base_url, signer=issuer_signer)
+        vp_audience = "https://verifier.example/runtime"
+        vp_nonce = "runtime-vp-nonce"
+        vp_token, _vp = issue_vp_jwt(
+            [vc_token],
+            holder_did=holder_did,
+            signer=holder_signer,
+            audience=vp_audience,
+            nonce=vp_nonce,
+        )
 
         resolver_app = falcon.App()
-        resolver_app.add_route("/1.0/identifiers/{did}", ResolverResource({issuer_did: did_document}))
+        resolver_app.add_route("/1.0/identifiers/{did}", ResolverResource({
+            issuer_did: issuer_did_document,
+            holder_did: holder_did_document,
+            _decode_did_segment(holder_did): holder_did_document,
+        }))
         _resolver_server, resolver_doers = setup_server_doers(host="127.0.0.1", port=resolver_port, app=resolver_app)
 
         statuses = {
@@ -379,6 +405,8 @@ def test_verifier_runtime_posts_webhook_for_successful_vp_operation(tmp_path, ca
         verify_doer = verify_vp_doer(
             base_url=f"http://127.0.0.1:{verifier_port}",
             token=vp_token,
+            audience=vp_audience,
+            nonce=vp_nonce,
             timeout=2.0,
             poll_interval=0.05,
         )
@@ -393,12 +421,14 @@ def test_verifier_runtime_posts_webhook_for_successful_vp_operation(tmp_path, ca
 
         assert verify_doer.error is None
         assert verify_doer.operation["response"]["ok"] is True
+        assert verify_doer.operation["response"]["checks"]["audienceMatches"] is True
+        assert verify_doer.operation["response"]["checks"]["nonceMatches"] is True
         assert len(webhook.events) == 1
         event = webhook.events[0]
         assert event["type"] == "isomer.presentation.verified.v1"
         assert event["verifier"]["id"] == "python-webhook-test"
         assert event["verifier"]["language"] == "Python"
-        assert event["presentation"]["holder"] == issuer_did
+        assert event["presentation"]["holder"] == holder_did
         assert event["presentation"]["credentials"][0]["id"] == _vc["id"]
         assert vc_token not in str(event)
 
@@ -475,7 +505,7 @@ def test_verifier_runtime_surfaces_resolver_failure_details(tmp_path):
 
     with open_test_hab("runtime-resolver-failure", b"1122334455667788") as (_hby, hab):
         signer = HabSigner(hab)
-        issuer_did = "did:webs:example.com:dws:ELEGALAID000000000000000000000000000000000000000001"
+        issuer_did = f"did:webs:example.com:dws:{acdc['i']}"
         resolver_port = _free_port()
         status_port = _free_port()
         verifier_port = _free_port()
@@ -530,7 +560,7 @@ def test_verifier_runtime_surfaces_status_failure_details(tmp_path):
 
     with open_test_hab("runtime-status-failure", b"1122334455667788") as (_hby, hab):
         signer = HabSigner(hab)
-        issuer_did = "did:webs:example.com:dws:ELEGALAID000000000000000000000000000000000000000001"
+        issuer_did = f"did:webs:example.com:dws:{acdc['i']}"
         resolver_port = _free_port()
         status_port = _free_port()
         verifier_port = _free_port()

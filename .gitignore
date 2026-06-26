@@ -14,3 +14,6 @@ apps/isomer-node/node_modules/
 apps/isomer-dashboard/node_modules/
 packages/webs-did-resolver/dist
 packages/webs-did-resolver/node_modules
+packages/signify-did-webs/node_modules
+packages/signify-w3c/dist
+packages/signify-w3c/node_modules

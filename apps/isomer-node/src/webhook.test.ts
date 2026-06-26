@@ -32,6 +32,7 @@ test("buildPresentationVerifiedEvent includes verifier metadata and decoded cred
     checks: {
       jwtEnvelopeValid: true,
       signatureValid: true,
+      embeddedCredentialSubjectsMatchHolder: true,
       embeddedCredentialsVerified: 1
     },
     nested: [{
@@ -49,7 +50,8 @@ test("buildPresentationVerifiedEvent includes verifier metadata and decoded cred
         jwtEnvelopeValid: true,
         signatureValid: true,
         dataIntegrityProofValid: true,
-        statusActive: true
+        statusActive: true,
+        isomerSourceIssuerMatches: true
       }
     }]
   };
@@ -79,7 +81,8 @@ test("buildCredentialVerifiedEvent includes verifier metadata and decoded creden
       jwtEnvelopeValid: true,
       signatureValid: true,
       dataIntegrityProofValid: true,
-      statusActive: true
+      statusActive: true,
+      isomerSourceIssuerMatches: true
     }
   };
 
@@ -171,7 +174,8 @@ function credentialResult(): VcVerificationResult {
       jwtEnvelopeValid: true,
       signatureValid: true,
       dataIntegrityProofValid: true,
-      statusActive: true
+      statusActive: true,
+      isomerSourceIssuerMatches: true
     }
   };
 }

@@ -3,8 +3,10 @@
  *
  * This module owns the small external API used by integration tests and manual
  * verifier-side acceptance checks. It wraps verifier operations behind a Hono
- * app and keeps request validation deliberately narrow: health, VC verify, and
- * VP verify only.
+ * app and keeps request validation deliberately narrow. The live headless
+ * holder E2E harness depends on this HTTP surface, including pollable
+ * operations; replacing it with a CLI command or in-process callable would not
+ * validate KERIA verifier submission compatibility.
  */
 import { serve } from "@hono/node-server";
 import { action, type Operation, run } from "effection";
@@ -89,6 +91,9 @@ export function createApp(
     return context.json(operation, 202);
   });
 
+  // Operations are the shared live-service evidence contract across Python,
+  // Node, and Go. KERIA receives the submission response, while the harness
+  // polls this monitor to prove the verifier finished the same request.
   app.get("/operations", (context) => {
     const type = context.req.query("type");
     return context.json(operations.list(type));
@@ -109,26 +114,30 @@ export function createApp(
     }
     const audience = typeof body.audience === "string" ? body.audience : undefined;
     const nonce = typeof body.nonce === "string" ? body.nonce : undefined;
+    const operation = operations.submit("verify-vp", async (operationName) => {
+      try {
+        const result = await run(() => requestVerifier.verifyVp(body.token, { audience, nonce }));
+        if (result.ok) {
+          const warning = await webhook.sendPresentation(result);
+          if (warning) {
+            result.warnings.push(warning);
+          }
+        }
+        logVerificationResult(config, "vp+jwt", result, operationName);
+        return result;
+      } catch (error) {
+        logVerificationError(config, "vp+jwt", error, operationName);
+        throw error;
+      }
+    });
     logVerifierEvent("verification.received", {
       verifier: config.verifierId,
       route: "/verify/vp",
       artifactKind: "vp+jwt",
+      operationName: operation.name,
       ...tokenObservability(body.token)
     });
-    try {
-      const result = await run(() => requestVerifier.verifyVp(body.token, { audience, nonce }));
-      if (result.ok) {
-        const warning = await webhook.sendPresentation(result);
-        if (warning) {
-          result.warnings.push(warning);
-        }
-      }
-      logVerificationResult(config, "vp+jwt", result);
-      return context.json(result);
-    } catch (error) {
-      logVerificationError(config, "vp+jwt", error);
-      throw error;
-    }
+    return context.json(operation, 202);
   });
 
   return app;

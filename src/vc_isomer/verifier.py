@@ -191,9 +191,25 @@ class VerificationEngine:
         *,
         method: dict[str, Any] | None,
         status_doc: dict[str, Any] | None,
+        expected_issuer: str | None = None,
+        expected_subject: str | None = None,
     ) -> VerificationResult:
         """Evaluate one prepared VC-JWT using resolved DID and status material."""
         errors = list(prepared.errors)
+        issuer_ok = self._check_expected_did(
+            actual=prepared.issuer,
+            expected=expected_issuer,
+            label="VC issuer DID",
+            errors=errors,
+        )
+        subject = prepared.payload.get("credentialSubject", {})
+        subject_did = subject.get("id") if isinstance(subject, dict) else None
+        subject_ok = self._check_expected_did(
+            actual=subject_did,
+            expected=expected_subject,
+            label="VC subject DID",
+            errors=errors,
+        )
         signature_ok = self._verify_signature(
             token=prepared.token,
             method=method,
@@ -202,6 +218,7 @@ class VerificationEngine:
         )
         proof_ok = self._verify_proof(prepared.payload, method, errors)
         status_ok = self._check_status_doc(status_doc, errors)
+        isomer_source_issuer_ok = self._check_isomer_source_issuer_matches_issuer(prepared, errors)
 
         return VerificationResult(
             ok=not errors,
@@ -213,6 +230,9 @@ class VerificationEngine:
                 "signatureValid": signature_ok,
                 "dataIntegrityProofValid": proof_ok,
                 "statusActive": status_ok,
+                "expectedIssuerMatches": issuer_ok,
+                "expectedSubjectMatches": subject_ok,
+                "isomerSourceIssuerMatches": isomer_source_issuer_ok,
                 "credentialTypes": prepared.payload.get("type", []),
             },
         )
@@ -223,9 +243,30 @@ class VerificationEngine:
         *,
         method: dict[str, Any] | None,
         nested_results: list[VerificationResult],
+        expected_holder: str | None = None,
+        expected_audience: str | None = None,
+        expected_nonce: str | None = None,
     ) -> VerificationResult:
         """Evaluate one prepared VP-JWT using resolved holder state and nested VC results."""
         errors = list(prepared.errors)
+        holder_ok = self._check_expected_did(
+            actual=prepared.holder,
+            expected=expected_holder,
+            label="VP holder DID",
+            errors=errors,
+        )
+        audience_ok = self._check_expected_claim(
+            actual=prepared.jwt_payload.get("aud"),
+            expected=expected_audience,
+            label="JWT aud",
+            errors=errors,
+        )
+        nonce_ok = self._check_expected_claim(
+            actual=prepared.jwt_payload.get("nonce"),
+            expected=expected_nonce,
+            label="JWT nonce",
+            errors=errors,
+        )
         signature_ok = self._verify_signature(
             token=prepared.token,
             method=method,
@@ -234,6 +275,11 @@ class VerificationEngine:
         )
 
         nested = []
+        embedded_subjects_match_holder = self._check_embedded_subjects_match_holder(
+            holder=prepared.holder,
+            nested_results=nested_results,
+            errors=errors,
+        )
         for result in nested_results:
             nested.append(result.to_dict())
             if not result.ok:
@@ -247,6 +293,10 @@ class VerificationEngine:
             checks={
                 "holderResolved": bool(prepared.holder and method is not None),
                 "signatureValid": signature_ok,
+                "expectedHolderMatches": holder_ok,
+                "audienceMatches": audience_ok,
+                "nonceMatches": nonce_ok,
+                "embeddedCredentialSubjectsMatchHolder": embedded_subjects_match_holder,
                 "embeddedCredentialCount": len(prepared.vc_tokens),
             },
             nested=nested,
@@ -383,3 +433,87 @@ class VerificationEngine:
             credential = status_doc.get("credSaid", status_doc.get("credentialSaid"))
             errors.append(f"credential {credential} is revoked")
         return status_ok
+
+    @staticmethod
+    def _check_embedded_subjects_match_holder(
+        *,
+        holder: str | None,
+        nested_results: list[VerificationResult],
+        errors: list[str],
+    ) -> bool:
+        """Require each successful embedded VC subject DID to match the VP holder."""
+        if not holder:
+            errors.append("VP holder DID is missing")
+            return False
+
+        ok = True
+        normalized_holder = canonicalize_did_webs(holder)
+        for result in nested_results:
+            if not result.ok:
+                continue
+
+            payload = result.payload or {}
+            subject = payload.get("credentialSubject", {})
+            subject_did = subject.get("id") if isinstance(subject, dict) else None
+            if not isinstance(subject_did, str) or canonicalize_did_webs(subject_did) != normalized_holder:
+                errors.append("embedded credential subject DID does not match VP holder")
+                ok = False
+        return ok
+
+    @staticmethod
+    def _check_isomer_source_issuer_matches_issuer(prepared: PreparedVcToken, errors: list[str]) -> bool:
+        """Require Isomer source issuer AID metadata to match the W3C issuer DID."""
+        isomer = prepared.payload.get("isomer", {})
+        expected_aid = isomer.get("sourceIssuerAid") if isinstance(isomer, dict) else None
+        if not expected_aid:
+            return True
+
+        issuer_aid = _did_webs_aid(prepared.issuer)
+        if issuer_aid != expected_aid:
+            errors.append("VC issuer DID does not match isomer source issuer AID")
+            return False
+        return True
+
+    @staticmethod
+    def _check_expected_did(
+        *,
+        actual: Any,
+        expected: str | None,
+        label: str,
+        errors: list[str],
+    ) -> bool:
+        """Check an optional expected DID against an artifact DID."""
+        if expected is None:
+            return True
+        if not isinstance(actual, str):
+            errors.append(f"{label} is missing")
+            return False
+        if canonicalize_did_webs(actual) != canonicalize_did_webs(expected):
+            errors.append(f"{label} does not match expected DID")
+            return False
+        return True
+
+    @staticmethod
+    def _check_expected_claim(
+        *,
+        actual: Any,
+        expected: str | None,
+        label: str,
+        errors: list[str],
+    ) -> bool:
+        """Check an optional expected JWT request-binding claim."""
+        if expected is None:
+            return True
+        if actual != expected:
+            errors.append(f"{label} does not match expected value")
+            return False
+        return True
+
+
+def _did_webs_aid(did: str | None) -> str | None:
+    """Extract the terminal AID path segment from a did:webs DID."""
+    if not did:
+        return None
+    body = canonicalize_did_webs(did).split("?", 1)[0].split("#", 1)[0]
+    segments = [segment for segment in body.split(":") if segment]
+    return segments[-1] if segments else None

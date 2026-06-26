@@ -309,6 +309,7 @@ def _issue_and_verify_w3c_twin(live_stack: dict, state, *, issuer_did: str, vrd:
 
     vp_audience = "https://verifier.example/isomer-e2e"
     vp_nonce = "isomer-e2e-nonce"
+    holder_did = _did_for(live_stack, state.le_prefix)
 
     with patched_home(Path(live_stack["home"])):
         runtime = open_isomer_runtime(name=state.qvi.name, base="", alias=state.qvi.alias, passcode=state.qvi.passcode)
@@ -321,9 +322,15 @@ def _issue_and_verify_w3c_twin(live_stack: dict, state, *, issuer_did: str, vrd:
                 status_base_url=live_stack["status_base_url"],
             )
             token, vc = issue_vc_jwt(vc, signer=signer, verification_method=verification_method)
+        finally:
+            runtime.close()
+
+        runtime = open_isomer_runtime(name=state.le.name, base="", alias=state.le.alias, passcode=state.le.passcode)
+        try:
+            signer = runtime.signer
             vp_token, _vp = issue_vp_jwt(
                 [token],
-                holder_did=issuer_did,
+                holder_did=holder_did,
                 signer=signer,
                 audience=vp_audience,
                 nonce=vp_nonce,
@@ -378,6 +385,8 @@ def _issue_and_verify_w3c_twin(live_stack: dict, state, *, issuer_did: str, vrd:
     vp_doer = verify_vp_doer(
         base_url=live_stack["verifier_base_url"],
         token=vp_token,
+        audience=vp_audience,
+        nonce=vp_nonce,
         timeout=45.0,
         poll_interval=0.1,
     )
@@ -393,6 +402,7 @@ def _issue_and_verify_w3c_twin(live_stack: dict, state, *, issuer_did: str, vrd:
     )
     vp_rendered = _assert_verifier_ok(vp_doer, label="verify VP-JWT presentation")
     assert vp_doer.operation["response"]["ok"] is True, vp_rendered
+    assert vp_doer.operation["response"]["checks"]["embeddedCredentialSubjectsMatchHolder"] is True, vp_rendered
 
     _verify_external_sidecars(
         live_stack,
@@ -428,6 +438,7 @@ def _verify_external_sidecars(
             vp_result = verifier.verify_vp(vp_token, audience=audience, nonce=nonce)
             assert_external_result_ok(kind, "VP-JWT", vp_result, verifier.log_path)
             assert vp_result["checks"]["embeddedCredentialsVerified"] == 1
+            assert vp_result["checks"]["embeddedCredentialSubjectsMatchHolder"] is True
 
 
 def test_single_sig_vrd_isomer_live(live_stack):

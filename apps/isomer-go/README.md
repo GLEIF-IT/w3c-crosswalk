@@ -79,6 +79,12 @@ Optional webhook settings:
 - `POST /verify/vc` with `{ "token": "<vc-jwt>" }`
 - `POST /verify/vp` with
   `{ "token": "<vp-jwt>", "audience"?: "...", "nonce"?: "..." }`
+- `GET /operations`
+- `GET /operations/{name}`
+
+Verify submissions return `202` operation stubs. Poll the operation resource
+for the shared Isomer verifier result shape. This live operation surface is
+what KERIA and the headless holder E2E harness validate.
 
 VP JSON-LD checks remain the active gap tracked in
 `../../plans/isomer-go-vp-vc-go-jsonld-fix.md`.

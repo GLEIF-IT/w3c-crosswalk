@@ -98,7 +98,8 @@ export function* verifyVcOp(
     jwtEnvelopeValid: false,
     signatureValid: false,
     dataIntegrityProofValid: false,
-    statusActive: false
+    statusActive: false,
+    isomerSourceIssuerMatches: false
   };
 
   try {
@@ -123,6 +124,7 @@ export function* verifyVcOp(
 
     const status = yield* runtime.fetchStatusOp(statusUrl(payload));
     checks.statusActive = checkStatus(status, errors);
+    checks.isomerSourceIssuerMatches = requireIsomerSourceIssuerMatches(payload, errors);
   } catch (error) {
     errors.push(error instanceof Error ? error.message : String(error));
   }
@@ -153,6 +155,7 @@ export function* verifyVpOp(
   const checks: VpChecks = {
     jwtEnvelopeValid: false,
     signatureValid: false,
+    embeddedCredentialSubjectsMatchHolder: false,
     embeddedCredentialsVerified: 0
   };
   const nested: VcVerificationResult[] = [];
@@ -181,6 +184,11 @@ export function* verifyVpOp(
         errors.push(...result.errors.map((item) => `nested credential: ${item}`));
       }
     }
+    checks.embeddedCredentialSubjectsMatchHolder = requireEmbeddedSubjectsMatchHolder(
+      payload,
+      nested,
+      errors
+    );
     checks.embeddedCredentialsVerified = nested.filter(isSuccessfulVcVerification).length;
   } catch (error) {
     errors.push(error instanceof Error ? error.message : String(error));
@@ -234,6 +242,9 @@ function validateVpClaims(
   options: { audience?: string; nonce?: string }
 ): void {
   const holder = asString(vp.holder);
+  if (!holder) {
+    throw new Error("missing vp.holder");
+  }
   const holderMatches = !holder || jwtPayload.iss === holder;
   const audienceMatches = !options.audience || jwtPayload.aud === options.audience;
   const nonceMatches = !options.nonce || jwtPayload.nonce === options.nonce;
@@ -259,6 +270,27 @@ function validateVpClaims(
 function statusUrl(vc: Record<string, unknown>): string | undefined {
   const status = vc.credentialStatus;
   return isRecord(status) ? asString(status.id) : undefined;
+}
+
+/**
+ * Require Isomer source issuer AID metadata to match the W3C issuer DID.
+ */
+function requireIsomerSourceIssuerMatches(
+  vc: Record<string, unknown>,
+  errors: string[]
+): boolean {
+  const isomer = asRecord(vc.isomer);
+  const expectedAid = asString(isomer?.sourceIssuerAid);
+  if (!expectedAid) {
+    return true;
+  }
+
+  const issuerAid = didWebsAid(asString(vc.issuer));
+  if (issuerAid !== expectedAid) {
+    errors.push("VC issuer DID does not match isomer source issuer AID");
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -291,6 +323,69 @@ function requireNestedCredentialList(vp: Record<string, unknown>): unknown[] {
     throw new Error("vp.verifiableCredential must be a list");
   }
   return vp.verifiableCredential;
+}
+
+/**
+ * Bind a holder presentation to the embedded VC subject DID.
+ */
+function requireEmbeddedSubjectsMatchHolder(
+  vp: Record<string, unknown>,
+  nested: VcVerificationResult[],
+  errors: string[]
+): boolean {
+  const holder = asString(vp.holder);
+  if (!holder) {
+    errors.push("VP holder DID is missing");
+    return false;
+  }
+
+  const normalizedHolder = canonicalizeDidWebs(holder);
+  let ok = true;
+  for (const result of nested) {
+    if (!result.ok) {
+      continue;
+    }
+
+    const subject = asRecord(result.payload?.credentialSubject);
+    const subjectId = asString(subject?.id);
+    if (!subjectId || canonicalizeDidWebs(subjectId) !== normalizedHolder) {
+      errors.push("embedded credential subject DID does not match VP holder");
+      ok = false;
+    }
+  }
+  return ok;
+}
+
+/**
+ * Repair the common local-stack did:webs host:port encoding variant before comparison.
+ */
+function canonicalizeDidWebs(value: string): string {
+  if (!value.startsWith("did:webs:") || value.toLowerCase().includes("%3a")) {
+    return value;
+  }
+
+  const queryStart = value.indexOf("?");
+  const body = queryStart >= 0 ? value.slice(0, queryStart) : value;
+  const query = queryStart >= 0 ? value.slice(queryStart + 1) : "";
+  const segments = body.slice("did:webs:".length).split(":");
+  if (segments.length < 3 || !/^\d+$/.test(segments[1] ?? "")) {
+    return value;
+  }
+
+  const normalized = `did:webs:${segments[0]}%3A${segments[1]}:${segments.slice(2).join(":")}`;
+  return query ? `${normalized}?${query}` : normalized;
+}
+
+/**
+ * Extract the terminal AID path segment from a did:webs DID.
+ */
+function didWebsAid(value: string | undefined): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const did = canonicalizeDidWebs(value).split("?", 1)[0]?.split("#", 1)[0];
+  const segments = did.split(":").filter((segment) => segment.length > 0);
+  return segments.at(-1);
 }
 
 /**

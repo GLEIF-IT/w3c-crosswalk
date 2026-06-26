@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+import pytest
 from falcon import testing
 
 from vc_isomer.common import load_json_file
@@ -78,5 +79,54 @@ def test_verifier_service_submits_and_manages_operations(tmp_path):
         deleted = client.simulate_delete(f"/operations/{name}")
         assert deleted.status_code == 204
         assert client.simulate_get(f"/operations/{name}").status_code == 404
+    finally:
+        monitor.close()
+
+
+def test_verifier_service_preserves_vp_request_binding_constraints(tmp_path):
+    """Store VP audience and nonce so the worker can enforce request binding."""
+    monitor = OperationMonitor(head_dir_path=str(tmp_path), name="service-vp-ops")
+    try:
+        client = testing.TestClient(create_verifier_app(operation_service=VerifierOperationService(monitor=monitor)))
+
+        submitted = client.simulate_post(
+            "/verify/vp",
+            json={
+                "token": "abc",
+                "audience": "https://verifier.example/isomer",
+                "nonce": "nonce-1",
+            },
+        )
+
+        assert submitted.status_code == 202
+        assert submitted.json["name"].startswith("verify-vp.")
+        assert submitted.json == {"name": submitted.json["name"], "done": False}
+        assert client.simulate_get(f"/operations/{submitted.json['name']}").status_code == 200
+        listed = client.simulate_get("/operations", params={"type": "verify-vp"})
+        assert listed.status_code == 200
+        assert [operation["name"] for operation in listed.json] == [submitted.json["name"]]
+        record = monitor.require_record(submitted.json["name"])
+        assert record.type == "verify-vp"
+        assert record.metadata["request"] == {
+            "token": "abc",
+            "audience": "https://verifier.example/isomer",
+            "nonce": "nonce-1",
+        }
+    finally:
+        monitor.close()
+
+
+@pytest.mark.parametrize("field", ["audience", "nonce"])
+def test_verifier_service_rejects_empty_vp_request_binding_constraints(tmp_path, field):
+    """Reject empty VP constraint fields instead of silently disabling policy."""
+    monitor = OperationMonitor(head_dir_path=str(tmp_path), name=f"service-vp-{field}")
+    try:
+        client = testing.TestClient(create_verifier_app(operation_service=VerifierOperationService(monitor=monitor)))
+        body = {"token": "abc", field: ""}
+
+        result = client.simulate_post("/verify/vp", json=body)
+
+        assert result.status_code == 400
+        assert f"verification request `{field}` must be a non-empty string" in result.json["description"]
     finally:
         monitor.close()

@@ -16,9 +16,10 @@ Read these in order:
 
 1. `docs/isomer-profile.md` - the current W3C projection contract.
 2. `docs/verifier-contract.md` - Python, Node, and Go verifier boundaries.
-3. `docs/integration-maintainer-guide.md` - live-stack and maintainer mental model.
-4. `docs/cli-e2e-walkthrough.md` - manual CLI runbook.
-5. `plans/w3c-vrd-isomer-plan.md` - current roadmap.
+3. `docs/live-service-headless-e2e.md` - holder wallet E2E runbook.
+4. `docs/integration-maintainer-guide.md` - live-stack and maintainer mental model.
+5. `docs/cli-e2e-walkthrough.md` - manual CLI diagnostic runbook.
+6. `plans/w3c-vrd-isomer-plan.md` - current roadmap.
 
 Everything else is either implementation-specific setup, an ADR, a fixture
 note, or a future/issue plan.
@@ -33,6 +34,7 @@ Implemented:
 - `did:webs` issuer and holder verification
 - Python verifier operation service
 - Node and Go external verifier sidecars
+- live-service headless QVI/holder W3C VRD presentation harness
 - dashboard webhook target for successful verification events
 - fixture contract for JSON ACDCs and export-equivalent CESR streams
 - live single-sig integration flow from KERI issuance through W3C verification
@@ -54,6 +56,8 @@ Still active work:
 - `apps/isomer-go/` - Go verifier sidecar.
 - `apps/isomer-dashboard/` - dashboard/webhook target.
 - `packages/webs-did-resolver/` - JavaScript `did:webs` resolver package.
+- `packages/headless-w3c-e2e/` - browserless live-service holder wallet
+  harness.
 - `docker/` - local verifier and wallet stack wiring.
 - `adrs/` - accepted implementation decisions.
 
@@ -104,6 +108,11 @@ make local-seed
 make local-test
 make local-down
 ```
+
+`make local-test` is live-service validation. It drives KERIA holder
+presentation with edge wallet signing and polls Python, Node, and Go verifier
+operation resources. CLI-only verifier commands are diagnostics, not acceptance
+evidence for holder presentation.
 
 ## Boundaries
 
