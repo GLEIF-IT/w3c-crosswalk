@@ -40,6 +40,9 @@ At session start:
 9. Nested ACDC SAIDs that become W3C `id` values use `urn:said:<SAID>`.
 10. Default scripts, Dockerfiles, and compose files must not require sibling
     source checkouts.
+11. JavaScript and Python helper packages are first-class registry artifacts;
+    default consumers should use published package versions instead of Git SHA,
+    path, or editable helper installs.
 
 ## Handoff Template
 

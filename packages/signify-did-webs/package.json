@@ -1,9 +1,23 @@
 {
   "name": "signify-did-webs",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "description": "Promise-based did:webs setup helpers for Signify wallets",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GLEIF-IT/w3c-crosswalk.git",
+    "directory": "packages/signify-did-webs"
+  },
+  "bugs": {
+    "url": "https://github.com/GLEIF-IT/w3c-crosswalk/issues"
+  },
+  "homepage": "https://github.com/GLEIF-IT/w3c-crosswalk/tree/master/packages/signify-did-webs#readme",
+  "keywords": [
+    "did-webs",
+    "keri",
+    "signify"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -18,15 +32,19 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc --noEmit -p tsconfig.json",
-    "prepare": "npm run build",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm run check && npm test",
     "test": "node --import tsx --test \"src/**/*.test.ts\""
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "peerDependencies": {
-    "signify-ts": "*"
+    "signify-ts": "^0.4.0"
   },
   "devDependencies": {
     "@types/node": "^25.0.0",
-    "signify-ts": "github:kentbull/signify-ts#8bdeb48516b4a9d8d7e6818e0bc37e4b26908ec3",
+    "signify-ts": "^0.4.0",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }

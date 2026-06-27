@@ -27,19 +27,24 @@ class _Result:
         return {"name": self.name, "done": False}
 
 
+class _Response:
+    def __init__(self, body: dict[str, object]):
+        self.body = body
+
+    def json(self) -> dict[str, object]:
+        return self.body
+
+
 class _Client:
     def __init__(self, setups: list[dict[str, object]]):
         self.setups = list(setups)
         self.calls: list[tuple] = []
 
-    def didwebs(self):
-        return self
-
-    def setup(self, name: str):
-        self.calls.append(("setup", name))
+    def fetch(self, path: str, method: str, data: object | None):
+        self.calls.append(("fetch", path, method, data))
         if len(self.setups) > 1:
-            return self.setups.pop(0)
-        return self.setups[0]
+            return _Response(self.setups.pop(0))
+        return _Response(self.setups[0])
 
     def registries(self):
         return self
@@ -105,11 +110,11 @@ def instant_clock(monkeypatch):
     return clock
 
 
-def test_get_didwebs_setup_delegates_to_client_didwebs_setup():
+def test_get_didwebs_setup_fetches_keria_setup_state():
     client = _Client([_setup()])
 
     assert get_didwebs_setup(client, "aid1") == _setup()
-    assert client.calls == [("setup", "aid1")]
+    assert client.calls == [("fetch", "/identifiers/aid1/dws/setup", "GET", None)]
 
 
 def test_ensure_didwebs_setup_returns_immediately_when_ready():
@@ -118,7 +123,7 @@ def test_ensure_didwebs_setup_returns_immediately_when_ready():
     result = ensure_didwebs_setup(client, "aid1")
 
     assert result["ready"] is True
-    assert client.calls == [("setup", "aid1")]
+    assert client.calls == [("fetch", "/identifiers/aid1/dws/setup", "GET", None)]
 
 
 def test_ensure_didwebs_setup_creates_registry_issues_da_and_waits_ready():
@@ -133,11 +138,11 @@ def test_ensure_didwebs_setup_creates_registry_issues_da_and_waits_ready():
     result = ensure_didwebs_setup(client, "aid1")
 
     assert result["ready"] is True
-    assert client.calls[0] == ("setup", "aid1")
+    assert client.calls[0] == ("fetch", "/identifiers/aid1/dws/setup", "GET", None)
     assert client.calls[1] == ("registry.create", "aid1", "didwebs-designated-aliases")
     assert client.calls[2][0] == "operation.wait"
     assert client.calls[2][1] == {"name": "registry-op", "done": False}
-    assert client.calls[3] == ("setup", "aid1")
+    assert client.calls[3] == ("fetch", "/identifiers/aid1/dws/setup", "GET", None)
     assert client.calls[4] == (
         "credential.issue",
         "aid1",
@@ -148,7 +153,7 @@ def test_ensure_didwebs_setup_creates_registry_issues_da_and_waits_ready():
     )
     assert client.calls[5][0] == "operation.wait"
     assert client.calls[5][1] == {"name": "credential-op", "done": False}
-    assert client.calls[6] == ("setup", "aid1")
+    assert client.calls[6] == ("fetch", "/identifiers/aid1/dws/setup", "GET", None)
 
 
 def test_ensure_didwebs_setup_waits_for_pending_registry_before_issuing(instant_clock):

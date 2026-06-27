@@ -10,6 +10,6 @@
     "lib": ["ES2022", "DOM"],
     "outDir": "dist"
   },
-  "include": ["src/index.ts"],
+  "include": ["src/**/*.ts"],
   "exclude": ["src/**/*.test.ts"]
 }

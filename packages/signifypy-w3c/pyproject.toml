@@ -9,9 +9,13 @@ authors = [
     { name = "Kent Bull", email = "kent@kentbull.com" }
 ]
 dependencies = [
-    "signifypy>=0.3.0",
-    "vc-isomer>=0.1.0",
+    "signifypy>=0.4.2,<0.5.0",
+    "vc-isomer>=0.1.0,<0.2.0",
 ]
+
+[project.urls]
+Repository = "https://github.com/GLEIF-IT/w3c-crosswalk"
+Issues = "https://github.com/GLEIF-IT/w3c-crosswalk/issues"
 
 [build-system]
 requires = ["hatchling"]

@@ -1,28 +1,11 @@
 {
-  "name": "signify-w3c",
+  "name": "w3c-crosswalk",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Edge-owned W3C VC-JWT and VP-JWT artifact helpers for Signify wallets",
-  "exports": {
-    ".": {
-      "types": "./packages/signify-w3c/dist/index.d.ts",
-      "default": "./packages/signify-w3c/dist/index.js"
-    }
-  },
-  "types": "./packages/signify-w3c/dist/index.d.ts",
-  "files": [
-    "packages/signify-w3c/dist",
-    "packages/signify-w3c/README.md"
-  ],
+  "description": "W3C VC-JWT, VP-JWT, and did:webs crosswalk packages and verifier tooling",
   "scripts": {
-    "prepare": "npm --prefix packages/signify-w3c install && npm --prefix packages/signify-w3c run build"
-  },
-  "dependencies": {
-    "@noble/hashes": "^1.3.3",
-    "jsonld": "^8.3.3"
-  },
-  "peerDependencies": {
-    "signify-ts": "*"
+    "check:js": "npm --prefix packages/signify-w3c run check && npm --prefix packages/signify-did-webs run check && npm --prefix packages/webs-did-resolver run check",
+    "test:js": "npm --prefix packages/signify-w3c test && npm --prefix packages/signify-did-webs test && npm --prefix packages/webs-did-resolver test"
   }
 }
