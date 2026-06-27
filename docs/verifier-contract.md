@@ -89,8 +89,8 @@ JWTs only as local demo/debug observability, not as production posture.
 
 - Python consumes `keri`, `did-webs-resolver`, and `vlei` through package or
   pinned Git metadata.
-- Node consumes `did-jwt-vc` through a pinned Git dependency and uses the
-  in-repo `packages/webs-did-resolver` package.
+- Node consumes `did-jwt-vc` through a pinned Git dependency and
+  `webs-did-resolver` through the NPM registry.
 - Go consumes `vc-go` through a pinned non-local Go module replacement.
 - Default scripts, Dockerfiles, and compose files must not require sibling
   source checkouts.

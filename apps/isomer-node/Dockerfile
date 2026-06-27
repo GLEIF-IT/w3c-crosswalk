@@ -10,8 +10,6 @@ WORKDIR /app
 COPY . /app/w3c-crosswalk
 
 RUN corepack enable \
-    && npm --prefix /app/w3c-crosswalk/packages/webs-did-resolver ci \
-    && npm --prefix /app/w3c-crosswalk/packages/webs-did-resolver run build \
     && npm --prefix /app/w3c-crosswalk/apps/isomer-node ci \
     && npm --prefix /app/w3c-crosswalk/apps/isomer-node run build:pinned-deps
 
