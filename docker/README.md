@@ -14,9 +14,8 @@ stack remains image-only and consumes the resulting tags through `.env`.
 The Node, Go, and dashboard Dockerfiles live with their app source under
 `apps/`. The Python verifier Dockerfile remains under `docker/isomer-python/`
 because Python Isomer is currently the root package. Build commands still use
-the `w3c-crosswalk` repo root as the Docker context so Node can consume the
-local `packages/webs-did-resolver` package and Go can copy
-`src/vc_isomer/resources`.
+the `w3c-crosswalk` repo root as the Docker context so Go can copy
+`src/vc_isomer/resources` and verifier images can share local fixtures.
 
 ```bash
 make docker-verifiers-build
@@ -38,9 +37,8 @@ The images expose:
 - `GET /operations/{name}`
 - dashboard `GET /` and `POST /webhooks/presentations`
 
-Future cleanup should publish `webs-did-resolver` as an NPM package and factor
-Go verifier resources into `apps/isomer-go`; those are not required for the
-current local stack.
+Future cleanup should factor Go verifier resources into `apps/isomer-go`; that
+is not required for the current local stack.
 
 ## Full Local Stack
 

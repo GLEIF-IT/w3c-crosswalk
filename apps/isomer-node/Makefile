@@ -3,7 +3,6 @@ SHELL := /bin/bash
 
 APP_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 REPO_ROOT := $(abspath $(APP_DIR)/../..)
-WEBS_DID_RESOLVER_ROOT := $(REPO_ROOT)/packages/webs-did-resolver
 
 CONTAINER_ENGINE ?= docker
 DOCKER_TAG ?= local
@@ -19,15 +18,13 @@ ISOMER_RESOURCE_ROOT ?= $(REPO_ROOT)
 help:
 	@printf '%s\n' \
 		'isomer-node app targets:' \
-		'  make sync   Install dependencies and build pinned local packages' \
+		'  make sync   Install dependencies and build pinned Git packages' \
 		'  make check  Run TypeScript checks' \
 		'  make test   Run Node tests' \
 		'  make serve  Run the verifier sidecar locally' \
 		'  make image  Build the verifier container image'
 
 sync:
-	npm --prefix "$(WEBS_DID_RESOLVER_ROOT)" install
-	npm --prefix "$(WEBS_DID_RESOLVER_ROOT)" run build
 	npm install
 	npm run build:pinned-deps
 

@@ -13,7 +13,7 @@ For shared verifier semantics, see `../../docs/verifier-contract.md`.
 Owns:
 
 - VC-JWT and VP-JWT envelope verification through `did-jwt-vc`
-- `did:webs` resolution through `packages/webs-did-resolver`
+- `did:webs` resolution through the published `webs-did-resolver` package
 - embedded `DataIntegrityProof` verification
 - projected `credentialStatus` fetch/check
 - optional dashboard webhook emission for successful top-level verification
@@ -50,9 +50,8 @@ make test
 From the repo root, `make external-node-sync` and `make external-node-check`
 delegate to these app-local targets.
 
-`make sync` installs sidecar dependencies, builds the pinned `did-jwt-vc` Git
-dependency, and builds the in-repo `webs-did-resolver` package. The local
-`webs-did-resolver` dependency should eventually be replaced by an NPM package.
+`make sync` installs sidecar dependencies and builds the pinned `did-jwt-vc`
+Git dependency.
 
 ## Manual Run
 
@@ -71,8 +70,8 @@ cd apps/isomer-node
 make image
 ```
 
-The image target keeps the repo root as Docker context so the current local
-`packages/webs-did-resolver` dependency is available.
+The image target keeps the repo root as Docker context so verifier resources
+and shared local fixtures are available.
 
 Optional webhook settings:
 
