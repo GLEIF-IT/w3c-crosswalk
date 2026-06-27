@@ -1,10 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type {
-  DidWebsSetupInfo,
-  SignifyClient
-} from "signify-ts";
 import {
+  type DidWebsClient,
+  type DidWebsSetupInfo,
   ensureDidWebsSetup,
   getDidWebsSetup,
   waitForDidWebsReady
@@ -72,14 +70,13 @@ function clientFixture(setups: DidWebsSetupInfo[]) {
   let last = setups[setups.length - 1] ?? setup();
   const pending = [...setups];
   const client = {
-    didwebs() {
-      return {
-        async setup(name: string) {
-          calls.push(["setup", name]);
-          last = pending.shift() ?? last;
-          return last;
-        }
-      };
+    async fetch(path: string, method: string, data: unknown) {
+      calls.push(["fetch", path, method, data]);
+      last = pending.shift() ?? last;
+      return new Response(JSON.stringify(last), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      });
     },
     registries() {
       return {
@@ -110,17 +107,17 @@ function clientFixture(setups: DidWebsSetupInfo[]) {
         }
       };
     }
-  } as unknown as SignifyClient;
+  } satisfies DidWebsClient;
 
   return { client, calls };
 }
 
-test("getDidWebsSetup delegates to client.didwebs().setup", async () => {
+test("getDidWebsSetup fetches KERIA did:webs setup state", async () => {
   const fixture = setup();
   const { client, calls } = clientFixture([fixture]);
 
   assert.deepEqual(await getDidWebsSetup({ client, name: "aid1" }), fixture);
-  assert.deepEqual(calls, [["setup", "aid1"]]);
+  assert.deepEqual(calls, [["fetch", "/identifiers/aid1/dws/setup", "GET", null]]);
 });
 
 test("ensureDidWebsSetup returns immediately when ready", async () => {
@@ -128,7 +125,7 @@ test("ensureDidWebsSetup returns immediately when ready", async () => {
   const { client, calls } = clientFixture([ready]);
 
   assert.deepEqual(await ensureDidWebsSetup({ client, name: "aid1" }), ready);
-  assert.deepEqual(calls, [["setup", "aid1"]]);
+  assert.deepEqual(calls, [["fetch", "/identifiers/aid1/dws/setup", "GET", null]]);
 });
 
 test("ensureDidWebsSetup creates missing registry, issues DA ACDC, and waits ready", async () => {
@@ -141,14 +138,14 @@ test("ensureDidWebsSetup creates missing registry, issues DA ACDC, and waits rea
 
   assert.deepEqual(await ensureDidWebsSetup({ client, name: "aid1", pollMs: 3 }), ready);
   assert.deepEqual(calls.map(call => call[0]), [
-    "setup",
+    "fetch",
     "create-registry",
     "registry-op",
     "wait",
-    "setup",
+    "fetch",
     "issue-credential",
     "wait",
-    "setup"
+    "fetch"
   ]);
   assert.deepEqual(calls[1], [
     "create-registry",
@@ -204,7 +201,7 @@ test("waitForDidWebsReady polls until ready", async () => {
   ]);
 
   assert.deepEqual(await waitForDidWebsReady({ client, name: "aid1", pollMs: 1 }), ready);
-  assert.deepEqual(calls.map(call => call[0]), ["setup", "setup"]);
+  assert.deepEqual(calls.map(call => call[0]), ["fetch", "fetch"]);
 });
 
 test("waitForDidWebsReady honors abort signals", async () => {

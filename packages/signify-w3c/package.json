@@ -1,9 +1,27 @@
 {
   "name": "signify-w3c",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "description": "Edge-owned W3C VC-JWT and VP-JWT artifact helpers for Signify wallets",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GLEIF-IT/w3c-crosswalk.git",
+    "directory": "packages/signify-w3c"
+  },
+  "bugs": {
+    "url": "https://github.com/GLEIF-IT/w3c-crosswalk/issues"
+  },
+  "homepage": "https://github.com/GLEIF-IT/w3c-crosswalk/tree/master/packages/signify-w3c#readme",
+  "keywords": [
+    "acdc",
+    "did-webs",
+    "keri",
+    "signify",
+    "vc-jwt",
+    "vp-jwt",
+    "w3c"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -18,20 +36,24 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc --noEmit -p tsconfig.json",
-    "prepare": "npm run build",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm run check && npm test",
     "test": "node --import tsx --test \"src/**/*.test.ts\""
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "dependencies": {
     "@noble/hashes": "^1.3.3",
     "jsonld": "^8.3.3"
   },
   "peerDependencies": {
-    "signify-ts": "*"
+    "signify-ts": "^0.4.0"
   },
   "devDependencies": {
     "@types/jsonld": "^1.5.15",
     "@types/node": "^25.0.0",
-    "signify-ts": "github:kentbull/signify-ts#4857945",
+    "signify-ts": "^0.4.0",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }

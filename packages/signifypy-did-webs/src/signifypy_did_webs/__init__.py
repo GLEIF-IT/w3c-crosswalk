@@ -5,6 +5,7 @@ from __future__ import annotations
 import time
 from collections.abc import Callable
 from typing import Any
+from urllib.parse import quote
 
 DEFAULT_TIMEOUT_SECONDS = 120.0
 DEFAULT_INTERVAL_SECONDS = 1.0
@@ -14,7 +15,8 @@ CheckAbort = Callable[[dict[str, Any] | None], None]
 
 def get_didwebs_setup(client: Any, name: str) -> dict[str, Any]:
     """Return KERIA did:webs setup state for one managed identifier."""
-    return client.didwebs().setup(name)
+    response = client.fetch(f"/identifiers/{quote(name, safe='')}/dws/setup", "GET", None)
+    return response.json()
 
 
 def ensure_didwebs_setup(

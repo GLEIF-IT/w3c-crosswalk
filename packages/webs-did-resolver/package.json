@@ -1,9 +1,24 @@
 {
   "name": "webs-did-resolver",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "description": "JavaScript did:webs resolver package for use with did-resolver",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GLEIF-IT/w3c-crosswalk.git",
+    "directory": "packages/webs-did-resolver"
+  },
+  "bugs": {
+    "url": "https://github.com/GLEIF-IT/w3c-crosswalk/issues"
+  },
+  "homepage": "https://github.com/GLEIF-IT/w3c-crosswalk/tree/master/packages/webs-did-resolver#readme",
+  "keywords": [
+    "did",
+    "did-resolver",
+    "did-webs",
+    "keri"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -18,7 +33,12 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc --noEmit -p tsconfig.json",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm run check && npm test",
     "test": "node --import tsx --test \"src/**/*.test.ts\""
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "dependencies": {
     "did-resolver": "^4.1.0"

@@ -9,15 +9,16 @@ authors = [
     { name = "Kent Bull", email = "kent@kentbull.com" }
 ]
 dependencies = [
-    "signifypy @ git+https://github.com/kentbull/signifypy.git@b11001d54f9d0d9b8b7a49c0e09307e6252db291",
+    "signifypy>=0.4.2,<0.5.0",
 ]
+
+[project.urls]
+Repository = "https://github.com/GLEIF-IT/w3c-crosswalk"
+Issues = "https://github.com/GLEIF-IT/w3c-crosswalk/issues"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
-
-[tool.hatch.metadata]
-allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/signifypy_did_webs"]

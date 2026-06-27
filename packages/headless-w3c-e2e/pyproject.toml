@@ -10,11 +10,15 @@ authors = [
 ]
 dependencies = [
     "requests>=2,<3",
-    "signifypy @ git+https://github.com/kentbull/signifypy.git@b11001d54f9d0d9b8b7a49c0e09307e6252db291",
-    "signifypy-did-webs @ git+https://github.com/GLEIF-IT/w3c-crosswalk.git@6a38ca7f87deaa3be49173009aa9151704345503#subdirectory=packages/signifypy-did-webs",
-    "signifypy-w3c>=0.1.0",
-    "vc-isomer>=0.1.0",
+    "signifypy>=0.4.2,<0.5.0",
+    "signifypy-did-webs>=0.1.0,<0.2.0",
+    "signifypy-w3c>=0.1.0,<0.2.0",
+    "vc-isomer>=0.1.0,<0.2.0",
 ]
+
+[project.urls]
+Repository = "https://github.com/GLEIF-IT/w3c-crosswalk"
+Issues = "https://github.com/GLEIF-IT/w3c-crosswalk/issues"
 
 [project.scripts]
 headless-w3c-e2e = "headless_w3c_e2e.cli:main"
@@ -22,9 +26,6 @@ headless-w3c-e2e = "headless_w3c_e2e.cli:main"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
-
-[tool.hatch.metadata]
-allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/headless_w3c_e2e"]

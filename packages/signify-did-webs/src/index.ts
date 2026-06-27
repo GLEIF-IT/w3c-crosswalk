@@ -1,10 +1,58 @@
-import type {
-  DidWebsSetupInfo,
-  SignifyClient
-} from "signify-ts";
+export interface DidWebsIssueArgs {
+  ri: string;
+  s: string;
+  a: Record<string, unknown>;
+  r: Record<string, unknown>;
+}
+
+export interface DidWebsRegistrySetupInfo {
+  name: string;
+  registryId: string | null;
+  ready: boolean;
+  createArgs: {
+    name: string;
+    registryName: string;
+  };
+}
+
+export interface DidWebsDesignatedAliasSetupInfo {
+  schema: string;
+  credentialSaid: string | null;
+  ready: boolean;
+  issueArgs: DidWebsIssueArgs | null;
+}
+
+export interface DidWebsSetupInfo {
+  name: string;
+  aid: string;
+  did: string;
+  dws: string | null;
+  didJsonUrl: string;
+  keriCesrUrl: string;
+  ready: boolean;
+  registry: DidWebsRegistrySetupInfo;
+  designatedAlias: DidWebsDesignatedAliasSetupInfo;
+}
+
+export interface DidWebsClient {
+  fetch(path: string, method: string, data: unknown, extraHeaders?: Headers): Promise<Response>;
+  registries(): {
+    create(args: DidWebsRegistrySetupInfo["createArgs"]): Promise<{
+      op(): Promise<unknown>;
+    }>;
+  };
+  credentials(): {
+    issue(name: string, args: DidWebsIssueArgs): Promise<{
+      op: unknown;
+    }>;
+  };
+  operations(): {
+    wait(op: unknown, options: ReturnType<typeof waitOptions>): Promise<unknown>;
+  };
+}
 
 export interface DidWebsSetupOptions {
-  client: SignifyClient;
+  client: DidWebsClient;
   name: string;
 }
 
@@ -21,7 +69,12 @@ export async function getDidWebsSetup({
   client,
   name
 }: DidWebsSetupOptions): Promise<DidWebsSetupInfo> {
-  return await client.didwebs().setup(name);
+  const response = await client.fetch(
+    `/identifiers/${encodeURIComponent(name)}/dws/setup`,
+    "GET",
+    null
+  );
+  return await response.json() as DidWebsSetupInfo;
 }
 
 export async function ensureDidWebsSetup(

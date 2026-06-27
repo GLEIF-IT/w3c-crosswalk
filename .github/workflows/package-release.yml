@@ -1,0 +1,126 @@
+name: Package Release
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - ".github/workflows/package-release.yml"
+      - "package.json"
+      - "packages/**/package.json"
+      - "packages/**/package-lock.json"
+      - "packages/**/*.ts"
+      - "packages/**/pyproject.toml"
+      - "packages/**/*.py"
+      - "pyproject.toml"
+      - "uv.lock"
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  npm-packages:
+    name: NPM ${{ matrix.package }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package: signify-w3c
+            path: packages/signify-w3c
+          - package: signify-did-webs
+            path: packages/signify-did-webs
+          - package: webs-did-resolver
+            path: packages/webs-did-resolver
+    defaults:
+      run:
+        working-directory: w3c-crosswalk/${{ matrix.path }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          path: w3c-crosswalk
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: npm
+          cache-dependency-path: w3c-crosswalk/${{ matrix.path }}/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check package
+        run: npm run check
+
+      - name: Test package
+        run: npm test
+
+      - name: Verify packed files
+        run: |
+          pack_json="$(npm pack --dry-run --json)"
+          PACK_JSON="$pack_json" PACKAGE_NAME="${{ matrix.package }}" node - <<'NODE'
+          const pack = JSON.parse(process.env.PACK_JSON)[0];
+          const files = new Set(pack.files.map((entry) => entry.path));
+          const required = ["package.json", "README.md", "dist/index.js", "dist/index.d.ts"];
+          if (process.env.PACKAGE_NAME === "signify-w3c") {
+            required.push("dist/common.js", "dist/common.d.ts");
+          }
+          const missing = required.filter((file) => !files.has(file));
+          if (missing.length > 0) {
+            console.error(`Missing packed files: ${missing.join(", ")}`);
+            process.exit(1);
+          }
+          console.log(`${pack.name}@${pack.version} packs ${pack.entryCount} files`);
+          NODE
+
+      - name: Publish package
+        if: startsWith(github.ref, 'refs/tags/')
+        run: npm publish --provenance --access public
+
+  python-packages:
+    name: PyPI ${{ matrix.package }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package: signifypy-w3c
+            path: packages/signifypy-w3c
+          - package: signifypy-did-webs
+            path: packages/signifypy-did-webs
+          - package: headless-w3c-e2e
+            path: packages/headless-w3c-e2e
+    defaults:
+      run:
+        working-directory: w3c-crosswalk/${{ matrix.path }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          path: w3c-crosswalk
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: w3c-crosswalk/pyproject.toml
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Build distributions
+        run: uv build
+
+      - name: Check distributions
+        run: uvx --from twine twine check dist/*
+
+      - name: Publish package
+        if: startsWith(github.ref, 'refs/tags/')
+        run: uv publish --trusted-publishing always dist/*

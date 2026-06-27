@@ -390,6 +390,8 @@ class ManagedProcessStack:
         env = os.environ.copy()
         paths = [
             str(self.repo_root / "packages" / "headless-w3c-e2e" / "src"),
+            str(self.repo_root / "packages" / "signifypy-w3c" / "src"),
+            str(self.repo_root / "packages" / "signifypy-did-webs" / "src"),
             str(self.repo_root / "src"),
         ]
         existing = env.get("PYTHONPATH")

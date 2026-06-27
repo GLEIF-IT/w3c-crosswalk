@@ -107,6 +107,10 @@ interop behavior.
 
 - Default local setup consumes packages, pinned refs, or images.
 - Editable installs are developer overrides only.
+- `signify-w3c`, `signify-did-webs`, `webs-did-resolver`,
+  `signifypy-w3c`, `signifypy-did-webs`, and `headless-w3c-e2e` are intended
+  to be consumed as registry packages at `0.1.0`; do not depend on
+  `w3c-crosswalk` Git subdirectories for default flows.
 - Default commands must not require sibling source checkouts.
 
 ## Current Follow-Ups

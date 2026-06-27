@@ -5,7 +5,8 @@ from __future__ import annotations
 import base64
 from typing import Any
 
-from vc_isomer.data_integrity import public_key_multibase_from_jwk
+BASE58_BTC_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+ED25519_MULTIKEY_PREFIX = bytes([0xED, 0x01])
 
 
 class SignifyEdgeSigner:
@@ -39,7 +40,7 @@ class SignifyEdgeSigner:
     @property
     def public_key_multibase(self) -> str:
         """Expose the current signing key as an Ed25519 Multikey value."""
-        return public_key_multibase_from_jwk(self.public_jwk)
+        return _public_key_multibase_from_jwk(self.public_jwk)
 
     def sign(self, message: bytes) -> bytes:
         """Sign raw bytes with the live edge key."""
@@ -60,3 +61,24 @@ def signer_for_identifier(client: Any, name: str, kid: str | None = None) -> Sig
 
 def _b64url_encode(data: bytes) -> str:
     return base64.urlsafe_b64encode(data).rstrip(b"=").decode("utf-8")
+
+
+def _b64url_decode(value: str) -> bytes:
+    padding = "=" * (-len(value) % 4)
+    return base64.urlsafe_b64decode((value + padding).encode("utf-8"))
+
+
+def _public_key_multibase_from_jwk(jwk: dict[str, str]) -> str:
+    if jwk.get("kty") != "OKP" or jwk.get("crv") != "Ed25519":
+        raise ValueError("expected an Ed25519 OKP public JWK")
+    return _encode_multibase_base58btc(ED25519_MULTIKEY_PREFIX + _b64url_decode(jwk["x"]))
+
+
+def _encode_multibase_base58btc(data: bytes) -> str:
+    value = int.from_bytes(data, "big")
+    encoded = ""
+    while value > 0:
+        value, remainder = divmod(value, 58)
+        encoded = BASE58_BTC_ALPHABET[remainder] + encoded
+    leading_zeroes = len(data) - len(data.lstrip(b"\x00"))
+    return "z" + (BASE58_BTC_ALPHABET[0] * leading_zeroes) + (encoded or BASE58_BTC_ALPHABET[0])
