@@ -90,3 +90,33 @@ def test_run_doers_until_calls_cleanup_on_success_and_timeout():
         )
 
     assert timeout_cleanup_calls == [[timeout_doer]]
+
+
+def test_background_runner_paces_network_timeouts_and_closes_doers():
+    """One virtual second must not expire during the first 50 ms of real I/O."""
+    import threading
+
+    from tests.integration.helpers import BackgroundDoistRunner
+
+    expired = threading.Event()
+    closed = threading.Event()
+
+    def deadline(tymth=None, tock=0.0, **kwa):
+        start = tymth()
+        try:
+            while tymth() - start < 1.0:
+                yield tock
+            expired.set()
+            yield tock
+        finally:
+            closed.set()
+
+    runner = BackgroundDoistRunner(
+        name="paced-timeout", doers=[doing.doify(deadline)], tock=0.01
+    )
+    runner.start()
+    try:
+        assert not expired.wait(0.05)
+    finally:
+        runner.close()
+    assert closed.is_set()

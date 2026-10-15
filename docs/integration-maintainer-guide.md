@@ -150,3 +150,24 @@ Use this order before collecting broad logs:
 
 If you start from the JWT when registry state is wrong, you are debugging the
 shadow instead of the source.
+
+## GLEIF dependency validation
+
+The locked live environment uses `gleif_keri==1.2.16` and
+`gleif_hio==0.6.21`. SignifyPy and the vLEI schema server are pinned to
+GLEIF-specific commits in the existing `kentbull/signifypy` and
+`kentbull/vLEI` forks. Those commits declare the GLEIF package names;
+installing upstream `keri` or `hio` as well would overwrite the same imports.
+
+The live group also pins the GLEIF dependency update for did-webs-resolver.
+The resolver PR remains open upstream; this immutable commit is an explicit
+integration dependency, not a claim that the resolver PR has merged.
+Missing resolver imports fail acceptance instead of skipping it.
+
+Run `uv sync --locked`, `uv pip check`, `make smoke`, `make test`, and
+`make test-external-w3c-all`. Helper processes use the same interpreter as
+pytest. `tests/test_dependency_ownership.py` rejects overlapping upstream
+installations and verifies imported runtime versions.
+
+The Node and Go verifiers consume their own pinned package/module inputs.
+CI does not require separately checked-out sibling source repositories.

@@ -21,6 +21,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 
 import pytest
 
@@ -49,9 +50,9 @@ VLEI_SCHEMA_ROOT = VLEI_ASSET_ROOT / "schema" / "acdc"
 VLEI_CRED_ROOT = VLEI_ASSET_ROOT / "samples" / "acdc"
 VLEI_OOBI_ROOT = VLEI_ASSET_ROOT / "samples" / "oobis"
 
-# Local venv Python and binary setup
-PYTHON_BIN = W3C_ISOMER_ROOT / ".venv" / "bin" / "python"
-VLEI_SVR_BIN = W3C_ISOMER_ROOT / ".venv" / "bin" / "vLEI-server"
+# Run helpers with the same dependency environment as pytest.
+PYTHON_BIN = Path(sys.executable)
+VLEI_SVR_BIN = PYTHON_BIN.parent / "vLEI-server"
 
 # Witness and other service config and script names
 WITNESS_CONFIG_NAMES = ("wan", "wil", "wes")
@@ -245,8 +246,7 @@ def _didwebs_launcher(live_stack: dict, *, name: str, alias: str, passcode: str)
         artifact_module = importlib.import_module("dws.app.cli.commands.did.webs.service")
         resolver_module = importlib.import_module("dws.app.cli.commands.did.webs.resolver-service")
     except Exception as exc:
-        pytest.skip(f"did:webs in-process modules are unavailable: {exc}")
-        raise exc
+        raise RuntimeError("Install the locked live dependency group for did:webs acceptance") from exc
 
     artifact_home = _prepare_didwebs_home_snapshot(live_stack, label="artifact")
     with patched_home(artifact_home):

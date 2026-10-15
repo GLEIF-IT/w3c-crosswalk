@@ -48,3 +48,37 @@ def test_json_request_doer_round_trips_against_hio_server():
     assert request_doer.response is not None
     assert request_doer.response.status == 200
     assert request_doer.response.data == {"echo": {"hello": "world"}}
+
+
+def test_json_request_reports_disconnect_before_response():
+    """A peer closing without HTTP headers must retain the transport error."""
+    import threading
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
+        server.bind(("127.0.0.1", 0))
+        server.listen(1)
+        server.settimeout(2)
+
+        def close_after_request():
+            with server.accept()[0] as peer:
+                peer.settimeout(2)
+                peer.recv(4096)
+
+        peer_thread = threading.Thread(target=close_after_request)
+        peer_thread.start()
+        clienter = Clienter()
+        request = JsonRequestDoer(
+            method="GET", url=f"http://127.0.0.1:{server.getsockname()[1]}/",
+            clienter=clienter,
+        )
+        try:
+            run_doers_until(
+                "peer disconnect", [clienter, request], timeout=1.5,
+                ready=lambda: request.error is not None,
+                observe=lambda: {"error": str(request.error)},
+            )
+        finally:
+            peer_thread.join(timeout=3)
+        assert not peer_thread.is_alive()
+        assert request.response is None
+        assert "Connection closed before HTTP message" in str(request.error)

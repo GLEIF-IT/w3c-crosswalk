@@ -89,6 +89,7 @@ test-cli:
 
 test-fast:
 	$(PYTHON) -m pytest \
+		tests/test_dependency_ownership.py \
 		tests/test_cesr_fixtures.py \
 		tests/test_profile.py \
 		tests/test_jwt.py \

@@ -335,8 +335,13 @@ class BackgroundDoistRunner:
         try:
             deeds = doist.enter(doers=self.doers)
             self._ready.set()
+            doist.timer.start()
             while not self._stop.is_set():
                 doist.recur(deeds=deeds)
+                # Manual recur advances virtual time; pace it like Doist.do so
+                # network timeouts do not expire ahead of wall-clock I/O.
+                self._stop.wait(max(0.0, doist.timer.remaining))
+                doist.timer.restart()
         except BaseException as exc:
             self._error = exc
             self._ready.set()
