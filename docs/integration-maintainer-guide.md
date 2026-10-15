@@ -153,9 +153,9 @@ shadow instead of the source.
 
 ## GLEIF dependency validation
 
-The locked live environment uses `gleif_keri==1.2.16` and
+The locked live environment uses `gleif_keri==1.2.17` and
 `gleif_hio==0.6.21`. SignifyPy is pinned to a GLEIF-specific commit in `kentbull/signifypy`,
-and the schema server uses the published `vlei==1.0.4` package.
+and the schema server uses the published `vlei==1.0.5` package.
 Both declare the GLEIF package names;
 installing upstream `keri` or `hio` as well would overwrite the same imports.
 
