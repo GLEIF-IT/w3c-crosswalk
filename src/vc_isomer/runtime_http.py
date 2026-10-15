@@ -62,7 +62,7 @@ class OpenedServerDoer(http.ServerDoer):
     port timeout.
     """
 
-    def enter(self):
+    def enter(self, *, temp=None):
         """Skip reopen because setup already bound the socket."""
         return
 
@@ -192,6 +192,8 @@ class JsonRequestDoer(doing.DoDoer):
                 yield self.tock
 
             response = self.client.respond()
+            if response.errored:
+                raise RuntimeError(response.error or "HTTP transport failed")
             self.response = JsonResponse(
                 status=response.status,
                 reason=response.reason,

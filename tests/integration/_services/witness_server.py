@@ -36,8 +36,8 @@ def install_harness_patches() -> None:
     """
     original_create_http_server = indirecting.createHttpServer
 
-    def create_loopback_http_server(host, port, app, keypath=None, certpath=None, cafilepath=None):
-        return original_create_http_server("127.0.0.1", port, app, keypath, certpath, cafilepath)
+    def create_loopback_http_server(host, port, app, keypath=None, certpath=None, cafilepath=None, **kwa):
+        return original_create_http_server("127.0.0.1", port, app, keypath, certpath, cafilepath, **kwa)
 
     indirecting.createHttpServer = create_loopback_http_server
 

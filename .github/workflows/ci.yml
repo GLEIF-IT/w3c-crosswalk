@@ -31,18 +31,6 @@ jobs:
         with:
           path: w3c-crosswalk
 
-      - name: Checkout did-jwt-vc sibling
-        uses: actions/checkout@v6
-        with:
-          repository: decentralized-identity/did-jwt-vc
-          path: did-jwt-vc
-
-      - name: Checkout vc-go sibling
-        uses: actions/checkout@v6
-        with:
-          repository: trustbloc/vc-go
-          path: vc-go
-
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
@@ -61,24 +49,8 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: 22
-          cache: yarn
-          cache-dependency-path: did-jwt-vc/yarn.lock
-
-      - name: Enable Corepack Yarn
-        run: |
-          corepack enable
-          corepack prepare yarn@1.22.22 --activate
-
-      - name: Restore did-jwt-vc workspace cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            did-jwt-vc/node_modules
-            did-jwt-vc/lib
-            did-jwt-vc/dist
-          key: ${{ runner.os }}-did-jwt-vc-workspace-${{ hashFiles('did-jwt-vc/package.json', 'did-jwt-vc/yarn.lock', 'did-jwt-vc/src/**/*.ts') }}
-          restore-keys: |
-            ${{ runner.os }}-did-jwt-vc-workspace-
+          cache: npm
+          cache-dependency-path: w3c-crosswalk/apps/isomer-node/package-lock.json
 
       - name: Restore isomer-node workspace cache
         uses: actions/cache@v4
@@ -94,7 +66,6 @@ jobs:
           go-version-file: w3c-crosswalk/apps/isomer-go/go.mod
           cache-dependency-path: |
             w3c-crosswalk/apps/isomer-go/go.sum
-            vc-go/go.sum
 
       - name: Cache npm downloads for isomer-node
         uses: actions/cache@v4
@@ -108,12 +79,15 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}/.cache/isomer-go-build
-          key: ${{ runner.os }}-isomer-go-build-${{ hashFiles('w3c-crosswalk/apps/isomer-go/go.sum', 'vc-go/go.sum') }}
+          key: ${{ runner.os }}-isomer-go-build-${{ hashFiles('w3c-crosswalk/apps/isomer-go/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-isomer-go-build-
 
       - name: Sync locked environment
         run: uv sync --locked
+
+      - name: Check installed dependencies
+        run: uv pip check
 
       - name: Run smoke checks
         run: make smoke

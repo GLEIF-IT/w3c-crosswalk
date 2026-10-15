@@ -161,7 +161,7 @@ class IsomerRuntimeDoer(_IsomerRuntimeOwner, doing.Doer):
         _IsomerRuntimeOwner.__init__(self, name=name, base=base, alias=alias, passcode=passcode)
         doing.Doer.__init__(self, **kwa)
 
-    def enter(self):
+    def enter(self, *, temp=None):
         """Open local KERI state when the doer enters the scheduler."""
         self.open_runtime()
 
@@ -181,14 +181,14 @@ class IsomerRuntimeDoDoer(_IsomerRuntimeOwner, doing.DoDoer):
         """Return child doers after runtime opens; subclasses may override."""
         return None
 
-    def enter(self, doers=None):
+    def enter(self, doers=None, *, temp=None):
         """Open runtime, allow subclasses to build child doers, then enter children."""
         self.open_runtime()
         if doers is None:
             built = self.build_doers()
             if built is not None:
                 self.doers = list(built)
-        return doing.DoDoer.enter(self, doers=doers)
+        return doing.DoDoer.enter(self, doers=doers, temp=temp)
 
     def exit(self, deeds=None):
         """Close children first, then close the owned runtime."""
@@ -205,7 +205,7 @@ class IsomerSignerRuntimeDoer(_IsomerSignerRuntimeOwner, doing.Doer):
         _IsomerSignerRuntimeOwner.__init__(self, name=name, base=base, alias=alias, passcode=passcode)
         doing.Doer.__init__(self, **kwa)
 
-    def enter(self):
+    def enter(self, *, temp=None):
         """Open local KERI signer state when the doer enters the scheduler."""
         self.open_runtime()
 

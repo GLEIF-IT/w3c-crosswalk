@@ -95,7 +95,8 @@ class ExternalVerifierProcess:
             body["audience"] = audience
         if nonce is not None:
             body["nonce"] = nonce
-        return self._post_json("/verify/vp", body)
+        operation = self._post_json("/verify/vp", body)
+        return self._await_operation_response(operation)
 
     def _post_json(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
         request = Request(
@@ -201,10 +202,9 @@ def requested_external_verifiers(value: str | None = None) -> list[str]:
 def ensure_prerequisites(kind: str, repo_root: Path) -> None:
     """Fail early with a useful setup hint when a sidecar is not ready."""
     if kind == "node":
-        shared_resolver = repo_root / "packages" / "webs-did-resolver"
         node_modules = repo_root / "apps" / "isomer-node" / "node_modules"
-        if not (shared_resolver / "dist" / "index.js").exists():
-            raise RuntimeError("packages/webs-did-resolver is not built; run `make external-node-sync`")
+        if not (node_modules / "webs-did-resolver" / "dist" / "index.js").exists():
+            raise RuntimeError("webs-did-resolver package is missing; run `make external-node-sync`")
         if not node_modules.exists():
             raise RuntimeError("apps/isomer-node dependencies are missing; run `make external-node-sync`")
         return
