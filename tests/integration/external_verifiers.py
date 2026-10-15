@@ -95,7 +95,8 @@ class ExternalVerifierProcess:
             body["audience"] = audience
         if nonce is not None:
             body["nonce"] = nonce
-        return self._post_json("/verify/vp", body)
+        operation = self._post_json("/verify/vp", body)
+        return self._await_operation_response(operation)
 
     def _post_json(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
         request = Request(
