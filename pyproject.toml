@@ -27,7 +27,7 @@ test = [
 ]
 live = [
     "signifypy>=0.4.2,<0.5.0",
-    "vlei>=1.0.2,<2",
+    "vlei==1.0.4",
     "did-webs-resolver==0.3.7",
 ]
 
@@ -40,9 +40,6 @@ build-backend = "hatchling.build"
 
 [tool.uv]
 default-groups = ["dev", "test", "live"]
-
-[tool.uv.sources]
-vlei = { git = "https://github.com/kentbull/vLEI.git", rev = "8d295223759a4bfe63b3d615b6c785f5b9b2950e" }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/vc_isomer"]

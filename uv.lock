@@ -882,7 +882,7 @@ dev = [{ name = "pytest", specifier = ">=8.4,<9" }]
 live = [
     { name = "did-webs-resolver", git = "https://github.com/kentbull/did-webs-resolver.git?rev=471d78b963b0205806ef22a165ac9578532b0e6d" },
     { name = "signifypy", git = "https://github.com/kentbull/signifypy.git?rev=4ba4c2231302a914f44fd1b03e4610a0a93d84c6" },
-    { name = "vlei", git = "https://github.com/kentbull/vLEI.git?rev=8d295223759a4bfe63b3d615b6c785f5b9b2950e" },
+    { name = "vlei", specifier = "==1.0.4" },
 ]
 test = [
     { name = "jsonschema", specifier = ">=4.0,<5" },
@@ -892,13 +892,17 @@ test = [
 
 [[package]]
 name = "vlei"
-version = "1.0.2"
-source = { git = "https://github.com/kentbull/vLEI.git?rev=8d295223759a4bfe63b3d615b6c785f5b9b2950e#8d295223759a4bfe63b3d615b6c785f5b9b2950e" }
+version = "1.0.4"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "falcon" },
     { name = "gleif-hio" },
     { name = "gleif-keri" },
     { name = "multicommand" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/85/fe/f6c02257483f95cfed31b864592a31edea1185d465e5b9a4920ce4dfee57/vlei-1.0.4.tar.gz", hash = "sha256:f283cc30c683aeee88b1ea2b903d4fee545b270f96e872c5e61be390da17b3fc", size = 19545, upload-time = "2026-10-15T02:11:09.009Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7a/a2/5a14398863f16788088550ad4c6202dbcf03defc4730885b6eb2b1d535bf/vlei-1.0.4-py3-none-any.whl", hash = "sha256:4e3f64b7aab29e6fa1826d0d7611380c9beb5b74c3d12557cbadee8f433eb4ab", size = 17198, upload-time = "2026-10-15T02:11:07.608Z" },
 ]
 
 [[package]]
