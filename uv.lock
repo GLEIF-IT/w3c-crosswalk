@@ -235,7 +235,7 @@ wheels = [
 [[package]]
 name = "did-webs-resolver"
 version = "0.3.7"
-source = { git = "https://github.com/kentbull/did-webs-resolver.git?rev=471d78b963b0205806ef22a165ac9578532b0e6d#471d78b963b0205806ef22a165ac9578532b0e6d" }
+source = { git = "https://github.com/kentbull/did-webs-resolver.git?rev=e09619c448f75529f4ae45894f30609706446d24#e09619c448f75529f4ae45894f30609706446d24" }
 dependencies = [
     { name = "falcon" },
     { name = "gleif-hio" },
@@ -295,7 +295,7 @@ wheels = [
 
 [[package]]
 name = "gleif-keri"
-version = "1.2.16"
+version = "1.2.17"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "apispec" },
@@ -319,9 +319,9 @@ dependencies = [
     { name = "qrcode" },
     { name = "semver" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/5e/f3/d4639582616a4eb444dccd41404b519f71d3cfc0317dca087cf23f2f473a/gleif_keri-1.2.16.tar.gz", hash = "sha256:e94ef093b32bb12664ce7fb6be46c743cba969850ee4d559f3b1e05e4e6e3f25", size = 501420, upload-time = "2026-10-15T01:20:07.438Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/be/74/5b1ee5d0b3fd3d17d7936188f206b65c5022010103f45fe6a3186e4a7a7f/gleif_keri-1.2.17.tar.gz", hash = "sha256:e097e0fc19580b72b9f6594f4ffc1149e33ed088aae3b130b132b64e1f86818b", size = 501433, upload-time = "2026-10-15T20:22:37.083Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ff/a7/9d9c7b17361b91d3d5405d5013b9e7a185b8d172c528cf355aef123563f7/gleif_keri-1.2.16-py3-none-any.whl", hash = "sha256:3a8caf11168cadf4d6294831c928d8c4ec260cba6ab2c9da9e504b3793bbc498", size = 619056, upload-time = "2026-10-15T01:20:05.403Z" },
+    { url = "https://files.pythonhosted.org/packages/53/7f/59a53924ad814f875c5ad25fe943aa0049637fe4933da3556a41f7c727de/gleif_keri-1.2.17-py3-none-any.whl", hash = "sha256:5d0ee816794cd4af99117669061552caefc9aae0ad6eba2b294182a6d8b7de2a", size = 619059, upload-time = "2026-10-15T20:22:35.538Z" },
 ]
 
 [[package]]
@@ -392,22 +392,22 @@ wheels = [
 
 [[package]]
 name = "lmdb"
-version = "2.1.1"
+version = "1.8.1"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/5a/4e/d78a06af228216102fcb4b703f4b6a2f565978224d5623e20e02d90aeed3/lmdb-2.1.1.tar.gz", hash = "sha256:0317062326ae2f66e3bbde6400907651ea58c27a250097511a28d13c467fa5f1", size = 913160, upload-time = "2026-03-19T13:56:26.139Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/23/19/392f028e7ebcc1cc8212fe8a315a909b7a556278456f0bab9234d3a3b665/lmdb-1.8.1.tar.gz", hash = "sha256:44ef24033929e9cc227a7e17287473c452b462d716f118db885c667c80f57429", size = 886349, upload-time = "2026-03-12T23:21:48.42Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/9d/1f/cebdd737ef4a60faeeeac8d2e5b364f39e308e0aaa25adbc1a628f2a925e/lmdb-2.1.1-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:76b7a379d4b3a190a03785831a5ac8bd8d15d2c2a3df1ae516de3110aa47ea14", size = 108624, upload-time = "2026-03-19T13:55:49.846Z" },
-    { url = "https://files.pythonhosted.org/packages/b7/04/4f5fa29e8426ae3d1611a65be7298534e81761bf35672d1e361f966155b7/lmdb-2.1.1-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:67fe077a5d6fbd3c25661438e2f004734235ee3458058f09f69553fbebf8a2b2", size = 107300, upload-time = "2026-03-19T13:55:51.146Z" },
-    { url = "https://files.pythonhosted.org/packages/02/a3/d35b03946f9d890728d789fc6755b381ccebb478e603b7df7d43dcab97d8/lmdb-2.1.1-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:b50c6f5f6e4ef08d52dc9405ff78365a06ab97812d33546750be6004a6202136", size = 322804, upload-time = "2026-03-19T13:55:52.681Z" },
-    { url = "https://files.pythonhosted.org/packages/d4/6d/2d82900a45943b5c682a96edabd0b07b2ad14ef90d6d0358ed0e9d9164aa/lmdb-2.1.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:ffb05029ddf806ae6a8a2d3a40ebff11a1d336c9098b4fe9349d5ab0243cc534", size = 325856, upload-time = "2026-03-19T13:55:54.21Z" },
-    { url = "https://files.pythonhosted.org/packages/9d/ef/6231e5a30190eae5afc1e97727e3b005708f06b4bc1aab23ebead895d52a/lmdb-2.1.1-cp312-cp312-win_amd64.whl", hash = "sha256:32ca84270bf33809af1131ee3940f595668bf477e1a705239eccef5cb1252c71", size = 104874, upload-time = "2026-03-19T13:55:55.639Z" },
-    { url = "https://files.pythonhosted.org/packages/13/59/adf0fe1722db877da8f2fc4a0af7da97033eb6928fbfdeca77087f31eb63/lmdb-2.1.1-cp312-cp312-win_arm64.whl", hash = "sha256:41e4540d1ad05d46f863c4802062dafed48ae19fff85090e876f535ba9f676cb", size = 99047, upload-time = "2026-03-19T13:55:57.206Z" },
-    { url = "https://files.pythonhosted.org/packages/af/64/0ad40c3d06f89d7e5b6894537a0bd2829b592ef191f61b704157ad641f33/lmdb-2.1.1-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:f43f7a7907fa726597d235dd83febe7ec47b45b78952b848f0bdf50b58fe1bf1", size = 109123, upload-time = "2026-03-19T13:55:58.522Z" },
-    { url = "https://files.pythonhosted.org/packages/a6/62/86257b169acc61282110166581167f099c08bbb76aea7bc4da0c0b64c8b2/lmdb-2.1.1-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:24382db5cd139866d222471f4fb14fb511b16bf1ed0686bdf7fc808bf07ed8a4", size = 107803, upload-time = "2026-03-19T13:55:59.907Z" },
-    { url = "https://files.pythonhosted.org/packages/26/2d/8889fa81eb232dd5fec10f3178e22f3ae4f385c46be6124e29709f3bfdbb/lmdb-2.1.1-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:76e8c14a76bb7695c1778181dce9c352fb565b5e113c74981ec692d5d6820efb", size = 324703, upload-time = "2026-03-19T13:56:01.309Z" },
-    { url = "https://files.pythonhosted.org/packages/dc/d9/ec2e2370d35214e12abd1c9dada369c460e694f0c6fe385a200a2a25eaf3/lmdb-2.1.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:7700999c4fa7762577d4b3deedd48f6c25ce396dfb17f61dd48f50dcf99f78d6", size = 328101, upload-time = "2026-03-19T13:56:02.806Z" },
-    { url = "https://files.pythonhosted.org/packages/24/c7/e65ca28f46479e92dfc7250dab5259ae6eaa0e5075db47f52a4a1462adb1/lmdb-2.1.1-cp313-cp313-win_amd64.whl", hash = "sha256:74e4442102423e185347108cc67933411ec13e41866f57f6e9868c6ef5642b88", size = 104800, upload-time = "2026-03-19T13:56:04.173Z" },
-    { url = "https://files.pythonhosted.org/packages/33/51/e8f12e4b7a0ef82b42d8a37201db99f8dd7d26113a6b0cbf5c441692e2ad/lmdb-2.1.1-cp313-cp313-win_arm64.whl", hash = "sha256:26b0412a38fffd8587becde3c2b0ee606b8906ae0ee5060b0ed6d44610703dec", size = 99048, upload-time = "2026-03-19T13:56:05.499Z" },
+    { url = "https://files.pythonhosted.org/packages/b6/17/7db47d229942227ba8820367b3037caa86e807e872c3da59a7a604f6346f/lmdb-1.8.1-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:10fd1724501d99877776388acf1281daa31769b1c489a3c5d59089dcba9eafde", size = 101240, upload-time = "2026-03-12T23:21:05.766Z" },
+    { url = "https://files.pythonhosted.org/packages/24/d0/6e2f602fb992219838ea536c0037cdd6c65354e1fcca147e6ea368e1810b/lmdb-1.8.1-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:e788ed20d9b2b42c6bace69154ae519b2b47a40f20af71ee521c6eafb2e009f1", size = 99709, upload-time = "2026-03-12T23:21:06.95Z" },
+    { url = "https://files.pythonhosted.org/packages/28/da/e918a71554465eb57b8c9fd6f2c7f7861cc693e08323ff5ca0f19810de0d/lmdb-1.8.1-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:b92d77c9f04f36765ea243b5bc5e8bc74d3131b109b13349df7e59e30bc3d854", size = 300317, upload-time = "2026-03-12T23:21:08.497Z" },
+    { url = "https://files.pythonhosted.org/packages/ee/b8/2dc7a763b6c1678b76c92671ffdb0cc9c0d664593320944faec3d993be0c/lmdb-1.8.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:627fc28278e459d8e6d2324a1dbf50b23a2be4ab5f062f4c6a0e2d922e27e8b5", size = 301237, upload-time = "2026-03-12T23:21:09.895Z" },
+    { url = "https://files.pythonhosted.org/packages/56/a9/be03241917a8daa323badcf4b4c51ddebf205b8fe3625d1f8d26521146ac/lmdb-1.8.1-cp312-cp312-win_amd64.whl", hash = "sha256:24594ec0939a76060a722734aa3c7f52cbb65d36827ca7bde98d2989c0824093", size = 99649, upload-time = "2026-03-12T23:21:10.949Z" },
+    { url = "https://files.pythonhosted.org/packages/57/9d/33d69326b6ddf9debd20a89d41d5082701c2df7f5850059923488ae3d485/lmdb-1.8.1-cp312-cp312-win_arm64.whl", hash = "sha256:3c3fa2d721f6f7b517982f85b2ffb3560c0044e0e6194b5c9e035baf29e65389", size = 94556, upload-time = "2026-03-12T23:21:11.952Z" },
+    { url = "https://files.pythonhosted.org/packages/75/5f/ec2fe6bb0986fae28db80292ffe5146ed7cc4d478d683d67050d2691a538/lmdb-1.8.1-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:8b197007a5762411b7484e533ed1d03dca1b8ba1eee390233ac6e62ff45bd417", size = 101865, upload-time = "2026-03-12T23:21:12.902Z" },
+    { url = "https://files.pythonhosted.org/packages/75/35/1e43bba9658292c2ac787f5d003baa5ed37cad1b52666526edf4c908fb7d/lmdb-1.8.1-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:a9454649e62bc6f4a45f9aed175fcdd6fc2e91922bf970fd561053c616281d0a", size = 100462, upload-time = "2026-03-12T23:21:14.369Z" },
+    { url = "https://files.pythonhosted.org/packages/64/8e/2b1a0caa42b6f980a8b8663a272b9a52d4fd51ef0ca36cdec768cea02978/lmdb-1.8.1-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:a51881d284116d82ead233b20ae7f6dbec8624dd7b0593a755c84e0d0bc4cc29", size = 303313, upload-time = "2026-03-12T23:21:15.636Z" },
+    { url = "https://files.pythonhosted.org/packages/40/51/8061694cf7b883d2a166965cbaa961ea1ce692ce1782ac58091b5aa0fdb5/lmdb-1.8.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:04c5472bfc38377a2b32ae3b494d82d9c8db7c64e9053ca1b7c86aa862ebaaf9", size = 303895, upload-time = "2026-03-12T23:21:16.769Z" },
+    { url = "https://files.pythonhosted.org/packages/7f/0f/c189c40d833ecd64f3e375a0bb02378110fc958916053ee687ec2c7d5079/lmdb-1.8.1-cp313-cp313-win_amd64.whl", hash = "sha256:fe0e34b2b20f47a108c3e04b397d1e27f080a7b0256c33efb5aef7bd1bccb923", size = 99707, upload-time = "2026-03-12T23:21:17.862Z" },
+    { url = "https://files.pythonhosted.org/packages/6c/c3/3c87bede5b62163b768e6a4bca893f59d3996cb6fc4052bfd67847c0efd7/lmdb-1.8.1-cp313-cp313-win_arm64.whl", hash = "sha256:c3550849cdbaf0ead6265cb5b10134b223c2cede7ce7a1f3390a55975e3a06d4", size = 94605, upload-time = "2026-03-12T23:21:19.102Z" },
 ]
 
 [[package]]
@@ -796,7 +796,7 @@ wheels = [
 [[package]]
 name = "signifypy"
 version = "0.4.2"
-source = { git = "https://github.com/kentbull/signifypy.git?rev=4ba4c2231302a914f44fd1b03e4610a0a93d84c6#4ba4c2231302a914f44fd1b03e4610a0a93d84c6" }
+source = { git = "https://github.com/kentbull/signifypy.git?rev=e5ed41838a3eeb0bdfeb3b38ee756930db4d221b#e5ed41838a3eeb0bdfeb3b38ee756930db4d221b" }
 dependencies = [
     { name = "gleif-hio" },
     { name = "gleif-keri" },
@@ -873,16 +873,16 @@ test = [
 requires-dist = [
     { name = "falcon", specifier = ">=4.0.2" },
     { name = "gleif-hio", specifier = "==0.6.21" },
-    { name = "gleif-keri", specifier = "==1.2.16" },
+    { name = "gleif-keri", specifier = "==1.2.17" },
     { name = "pyld", specifier = ">=2.0.4,<3" },
 ]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=8.4,<9" }]
 live = [
-    { name = "did-webs-resolver", git = "https://github.com/kentbull/did-webs-resolver.git?rev=471d78b963b0205806ef22a165ac9578532b0e6d" },
-    { name = "signifypy", git = "https://github.com/kentbull/signifypy.git?rev=4ba4c2231302a914f44fd1b03e4610a0a93d84c6" },
-    { name = "vlei", specifier = "==1.0.4" },
+    { name = "did-webs-resolver", git = "https://github.com/kentbull/did-webs-resolver.git?rev=e09619c448f75529f4ae45894f30609706446d24" },
+    { name = "signifypy", git = "https://github.com/kentbull/signifypy.git?rev=e5ed41838a3eeb0bdfeb3b38ee756930db4d221b" },
+    { name = "vlei", specifier = "==1.0.5" },
 ]
 test = [
     { name = "jsonschema", specifier = ">=4.0,<5" },
@@ -892,7 +892,7 @@ test = [
 
 [[package]]
 name = "vlei"
-version = "1.0.4"
+version = "1.0.5"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "falcon" },
@@ -900,9 +900,9 @@ dependencies = [
     { name = "gleif-keri" },
     { name = "multicommand" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/85/fe/f6c02257483f95cfed31b864592a31edea1185d465e5b9a4920ce4dfee57/vlei-1.0.4.tar.gz", hash = "sha256:f283cc30c683aeee88b1ea2b903d4fee545b270f96e872c5e61be390da17b3fc", size = 19545, upload-time = "2026-10-15T02:11:09.009Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/dc/a0/21a12d049d537b82e5f0d7ba1f46af7c292b8abb7ceba7ab6aa85862fad8/vlei-1.0.5.tar.gz", hash = "sha256:80654a1a40ae528402f4c3dfac4889121d8cd16cdc54e7245383175ed6d52b51", size = 19550, upload-time = "2026-10-15T20:27:34.038Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/7a/a2/5a14398863f16788088550ad4c6202dbcf03defc4730885b6eb2b1d535bf/vlei-1.0.4-py3-none-any.whl", hash = "sha256:4e3f64b7aab29e6fa1826d0d7611380c9beb5b74c3d12557cbadee8f433eb4ab", size = 17198, upload-time = "2026-10-15T02:11:07.608Z" },
+    { url = "https://files.pythonhosted.org/packages/14/93/94270c0769cdba74f148314dfad3d64d3e967f7eca83848daf38e1c4834a/vlei-1.0.5-py3-none-any.whl", hash = "sha256:38e3dff727ca9a4f2f9d9785da36ece4943181a12d1dfcdb890eebd144bec480", size = 17202, upload-time = "2026-10-15T20:27:32.933Z" },
 ]
 
 [[package]]

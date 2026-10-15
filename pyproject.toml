@@ -12,7 +12,7 @@ keywords = ["keri", "vlei", "acdc", "w3c", "vc-jwt", "did:webs"]
 dependencies = [
     "falcon>=4.0.2",
     "gleif_hio==0.6.21",
-    "gleif_keri==1.2.16",
+    "gleif_keri==1.2.17",
     "PyLD>=2.0.4,<3",
 ]
 
@@ -27,7 +27,7 @@ test = [
 ]
 live = [
     "signifypy>=0.4.2,<0.5.0",
-    "vlei==1.0.4",
+    "vlei==1.0.5",
     "did-webs-resolver==0.3.7",
 ]
 
@@ -52,8 +52,8 @@ addopts = "-q"
 
 [tool.uv.sources.signifypy]
 git = "https://github.com/kentbull/signifypy.git"
-rev = "4ba4c2231302a914f44fd1b03e4610a0a93d84c6"
+rev = "e5ed41838a3eeb0bdfeb3b38ee756930db4d221b"
 
 [tool.uv.sources.did-webs-resolver]
 git = "https://github.com/kentbull/did-webs-resolver.git"
-rev = "471d78b963b0205806ef22a165ac9578532b0e6d"
+rev = "e09619c448f75529f4ae45894f30609706446d24"
