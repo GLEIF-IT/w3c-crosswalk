@@ -52,8 +52,8 @@ addopts = "-q"
 
 [tool.uv.sources.signifypy]
 git = "https://github.com/kentbull/signifypy.git"
-rev = "34ba0dd25ee8fca21404e1237d8f441addfc68e6"
+rev = "1e2971a16c7a3fa528562a57015f2b269f989469"
 
 [tool.uv.sources.did-webs-resolver]
 git = "https://github.com/kentbull/did-webs-resolver.git"
-rev = "733242767e05db656b0a39f934d6b81dfd01ef5b"
+rev = "572fcfebc5c4e80a1b7846fe2d6d27ba15fa12d6"
