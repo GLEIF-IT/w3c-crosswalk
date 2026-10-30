@@ -16,7 +16,8 @@ on:
       - "uv.lock"
   push:
     tags:
-      - "v*"
+      # Component tags such as vc-isomer-* do not release sibling packages.
+      - "v[0-9]*"
   workflow_dispatch:
 
 permissions:
