@@ -1,6 +1,6 @@
 [project]
 name = "vc-isomer"
-version = "0.1.0"
+version = "0.1.1"
 description = "W3C isomer services and tooling for vLEI VRD credentials"
 readme = "README.md"
 requires-python = ">=3.12.6,<3.14"
@@ -11,31 +11,31 @@ authors = [
 keywords = ["keri", "vlei", "acdc", "w3c", "vc-jwt", "did:webs"]
 dependencies = [
     "falcon>=4.0.2",
-    "gleif_hio==0.6.21",
-    "gleif_keri==1.2.17",
+    "gleif_hio==0.6.22",
+    "gleif_keri==1.2.18",
     "PyLD>=2.0.4,<3",
 ]
 
 [dependency-groups]
 dev = [
-    "pytest>=8.4,<9",
+    "pytest>=9.0.3,<10",
 ]
 test = [
     "jsonschema>=4.0,<5",
     "mockito>=1.5,<2",
-    "pytest>=8.4,<9",
+    "pytest>=9.0.3,<10",
 ]
 live = [
     "signifypy>=0.4.2,<0.5.0",
-    "vlei==1.0.5",
-    "did-webs-resolver==0.3.7",
+    "vlei==1.0.6",
+    "did-webs-resolver==0.3.8",
 ]
 
 [project.scripts]
 isomer = "vc_isomer.cli:main"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.31,<1.32"]
 build-backend = "hatchling.build"
 
 [tool.uv]
@@ -52,8 +52,8 @@ addopts = "-q"
 
 [tool.uv.sources.signifypy]
 git = "https://github.com/kentbull/signifypy.git"
-rev = "e5ed41838a3eeb0bdfeb3b38ee756930db4d221b"
+rev = "8a46dd21bc4bc830188674c52222dc89cae00620"
 
 [tool.uv.sources.did-webs-resolver]
 git = "https://github.com/kentbull/did-webs-resolver.git"
-rev = "e09619c448f75529f4ae45894f30609706446d24"
+rev = "79a96771b2cc61c2246e550e9a053961750f37e5"

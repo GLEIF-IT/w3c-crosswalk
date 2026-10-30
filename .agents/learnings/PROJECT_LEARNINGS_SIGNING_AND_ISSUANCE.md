@@ -106,6 +106,9 @@ interop behavior.
 ### Portability
 
 - Default local setup consumes packages, pinned refs, or images.
+- The `vc-isomer` 0.1.1 live baseline uses `gleif_keri==1.2.18`,
+  `gleif_hio==0.6.22`, `vlei==1.0.6`, and immutable GLEIF-compatible
+  SignifyPy and did:webs resolver revisions.
 - Editable installs are developer overrides only.
 - `signify-w3c`, `signify-did-webs`, `webs-did-resolver`,
   `signifypy-w3c`, `signifypy-did-webs`, and `headless-w3c-e2e` are intended
