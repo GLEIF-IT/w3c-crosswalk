@@ -246,7 +246,7 @@ wheels = [
 [[package]]
 name = "did-webs-resolver"
 version = "0.3.8"
-source = { git = "https://github.com/kentbull/did-webs-resolver.git?rev=79a96771b2cc61c2246e550e9a053961750f37e5#79a96771b2cc61c2246e550e9a053961750f37e5" }
+source = { git = "https://github.com/kentbull/did-webs-resolver.git?rev=572fcfebc5c4e80a1b7846fe2d6d27ba15fa12d6#572fcfebc5c4e80a1b7846fe2d6d27ba15fa12d6" }
 dependencies = [
     { name = "falcon" },
     { name = "gleif-hio" },
@@ -306,7 +306,7 @@ wheels = [
 
 [[package]]
 name = "gleif-keri"
-version = "1.2.18"
+version = "1.2.19"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "apispec" },
@@ -330,9 +330,9 @@ dependencies = [
     { name = "qrcode" },
     { name = "semver" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f7/01/bf543ff2ddcfbc24596bb760dfd4a84d290c7f2f005398fc21f858825219/gleif_keri-1.2.18.tar.gz", hash = "sha256:6bf7bf0f12700b60bf067cd54dab087c9e3183b7580303408e4fb78cf32bd88a", size = 502696, upload-time = "2026-10-30T02:52:06.639Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/71/07/aedf7027b776d19951f4f1c2b5aa4a57dcb82c2f6ca851828a72312855ec/gleif_keri-1.2.19.tar.gz", hash = "sha256:490b12379571a0989c58a1b4c8f6ff472db95ca672232c1098ceb53c5a73e4eb", size = 502935, upload-time = "2026-10-30T22:23:27.771Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d2/60/b0dbfd84cc63cda635a58e3c6c7e23906e914724da0673d8d2e370da3657/gleif_keri-1.2.18-py3-none-any.whl", hash = "sha256:fb70375a6449076b80c16f49dce0c94d9c9823c0bc43f5c4821bdd919335a878", size = 619076, upload-time = "2026-10-30T02:52:05.311Z" },
+    { url = "https://files.pythonhosted.org/packages/3f/73/adc6cc99266e262fd6ab04e34a00e38def2099d7cc90300e42cf97648006/gleif_keri-1.2.19-py3-none-any.whl", hash = "sha256:9e0bc6adc1dd5a9289bbfaeb0a6e5b75f888feccac349a3a46c63a82af247206", size = 620447, upload-time = "2026-10-30T22:23:26.331Z" },
 ]
 
 [[package]]
@@ -801,7 +801,7 @@ wheels = [
 [[package]]
 name = "signifypy"
 version = "0.4.2"
-source = { git = "https://github.com/kentbull/signifypy.git?rev=8a46dd21bc4bc830188674c52222dc89cae00620#8a46dd21bc4bc830188674c52222dc89cae00620" }
+source = { git = "https://github.com/kentbull/signifypy.git?rev=1e2971a16c7a3fa528562a57015f2b269f989469#1e2971a16c7a3fa528562a57015f2b269f989469" }
 dependencies = [
     { name = "gleif-hio" },
     { name = "gleif-keri" },
@@ -850,7 +850,7 @@ wheels = [
 
 [[package]]
 name = "vc-isomer"
-version = "0.1.1"
+version = "0.1.2"
 source = { editable = "." }
 dependencies = [
     { name = "falcon" },
@@ -878,16 +878,16 @@ test = [
 requires-dist = [
     { name = "falcon", specifier = ">=4.0.2" },
     { name = "gleif-hio", specifier = "==0.6.22" },
-    { name = "gleif-keri", specifier = "==1.2.18" },
+    { name = "gleif-keri", specifier = "==1.2.19" },
     { name = "pyld", specifier = ">=2.0.4,<3" },
 ]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=9.0.3,<10" }]
 live = [
-    { name = "did-webs-resolver", git = "https://github.com/kentbull/did-webs-resolver.git?rev=79a96771b2cc61c2246e550e9a053961750f37e5" },
-    { name = "signifypy", git = "https://github.com/kentbull/signifypy.git?rev=8a46dd21bc4bc830188674c52222dc89cae00620" },
-    { name = "vlei", specifier = "==1.0.6" },
+    { name = "did-webs-resolver", git = "https://github.com/kentbull/did-webs-resolver.git?rev=572fcfebc5c4e80a1b7846fe2d6d27ba15fa12d6" },
+    { name = "signifypy", git = "https://github.com/kentbull/signifypy.git?rev=1e2971a16c7a3fa528562a57015f2b269f989469" },
+    { name = "vlei", specifier = "==1.0.7" },
 ]
 test = [
     { name = "jsonschema", specifier = ">=4.0,<5" },
@@ -897,7 +897,7 @@ test = [
 
 [[package]]
 name = "vlei"
-version = "1.0.6"
+version = "1.0.7"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "falcon" },
@@ -905,9 +905,9 @@ dependencies = [
     { name = "gleif-keri" },
     { name = "multicommand" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/fd/96/051e035fe53c057254ee59aeeed8d975306e4eb19fd05e374c415ecb9d80/vlei-1.0.6.tar.gz", hash = "sha256:724b70adae06e5eb1fc5727396212963c8a082e4446a6fed1d3a749de30d55d9", size = 19692, upload-time = "2026-10-30T04:55:17.99Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f5/dc/6c17fe0cc0d3f7af0cad2f002fdefed46c63f16749b2a4bfca02bd278b86/vlei-1.0.7.tar.gz", hash = "sha256:a58690bf919f2885b0d1f4e5fe735e5b511ac7bb93d3f21b42e51a807fafcfa1", size = 19550, upload-time = "2026-10-30T22:46:23.848Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/12/0d/cee5f705745b3bb9418f213927e7f209ca657fcbba96eb6f71985ab678c6/vlei-1.0.6-py3-none-any.whl", hash = "sha256:c8e52e79fae49ee51772f5e4dc3d257bf5ff369c23d9642f7ce2cc07a7985e1a", size = 17200, upload-time = "2026-10-30T04:55:17.087Z" },
+    { url = "https://files.pythonhosted.org/packages/28/6d/a406f9e57aad84a75d708c17b46ab9017ad6dd5370cd275b59f979dff970/vlei-1.0.7-py3-none-any.whl", hash = "sha256:48ce33b509ae7d99287bfef25c671e0adb59675431b7025617db2644105857db", size = 17201, upload-time = "2026-10-30T22:46:22.869Z" },
 ]
 
 [[package]]
