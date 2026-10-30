@@ -1,6 +1,6 @@
 [project]
 name = "vc-isomer"
-version = "0.1.1"
+version = "0.1.2"
 description = "W3C isomer services and tooling for vLEI VRD credentials"
 readme = "README.md"
 requires-python = ">=3.12.6,<3.14"
@@ -12,7 +12,7 @@ keywords = ["keri", "vlei", "acdc", "w3c", "vc-jwt", "did:webs"]
 dependencies = [
     "falcon>=4.0.2",
     "gleif_hio==0.6.22",
-    "gleif_keri==1.2.18",
+    "gleif_keri==1.2.19",
     "PyLD>=2.0.4,<3",
 ]
 
@@ -27,7 +27,7 @@ test = [
 ]
 live = [
     "signifypy>=0.4.2,<0.5.0",
-    "vlei==1.0.6",
+    "vlei==1.0.7",
     "did-webs-resolver==0.3.8",
 ]
 
@@ -52,8 +52,8 @@ addopts = "-q"
 
 [tool.uv.sources.signifypy]
 git = "https://github.com/kentbull/signifypy.git"
-rev = "8a46dd21bc4bc830188674c52222dc89cae00620"
+rev = "34ba0dd25ee8fca21404e1237d8f441addfc68e6"
 
 [tool.uv.sources.did-webs-resolver]
 git = "https://github.com/kentbull/did-webs-resolver.git"
-rev = "79a96771b2cc61c2246e550e9a053961750f37e5"
+rev = "733242767e05db656b0a39f934d6b81dfd01ef5b"
