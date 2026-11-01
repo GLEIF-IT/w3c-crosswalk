@@ -352,11 +352,13 @@ class ManagedProcessStack:
             )
 
     def _keria_binary(self) -> str:
-        if self.keria_bin:
-            return self.keria_bin
-        sibling = Path("/Users/kbull/code/keri/kentbull/core/python/keria/.venv/bin/keria")
-        if sibling.exists():
-            return str(sibling)
+        configured = self.keria_bin or os.environ.get("KERIA_BIN")
+        if configured:
+            return configured
+        for ancestor in (self.repo_root, *self.repo_root.parents):
+            sibling = ancestor / "core" / "python" / "keria" / ".venv" / "bin" / "keria"
+            if sibling.exists():
+                return str(sibling)
         return _required_binary("keria")
 
     def _repo_binary(self, name: str) -> str:

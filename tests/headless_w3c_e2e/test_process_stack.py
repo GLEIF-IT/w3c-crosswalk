@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from urllib.parse import quote
 
 from headless_w3c_e2e.did_webs_resolver_service import did_webs_artifact_url, normalize_document
@@ -98,6 +99,27 @@ def test_process_stack_start_uses_real_service_commands(monkeypatch, tmp_path):
         argv[:3] == [stack.python_bin, "-m", "headless_w3c_e2e.did_webs_resolver_service"]
         for _name, argv in started
     )
+
+
+def test_keria_binary_uses_environment_override(monkeypatch, tmp_path):
+    """Process mode should honor an explicit environment override."""
+    monkeypatch.setenv("KERIA_BIN", "/opt/keria/bin/keria")
+    stack = ManagedProcessStack(repo_root=tmp_path, runtime_root=tmp_path / "runtime")
+
+    assert stack._keria_binary() == "/opt/keria/bin/keria"
+
+
+def test_keria_binary_discovers_workspace_sibling(monkeypatch, tmp_path):
+    """Process mode should find KERIA from the semantic KERI workspace root."""
+    monkeypatch.delenv("KERIA_BIN", raising=False)
+    repo_root = tmp_path / "keri" / "interop" / "w3c-crosswalk"
+    sibling = tmp_path / "keri" / "core" / "python" / "keria" / ".venv" / "bin" / "keria"
+    repo_root.mkdir(parents=True)
+    sibling.parent.mkdir(parents=True)
+    sibling.touch()
+    stack = ManagedProcessStack(repo_root=repo_root, runtime_root=tmp_path / "runtime")
+
+    assert Path(stack._keria_binary()) == sibling
 
 
 def test_process_resolver_preserves_encoded_host_port_separator():
